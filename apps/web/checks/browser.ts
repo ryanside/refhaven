@@ -17,8 +17,8 @@ export function assert(condition: unknown, message: string): asserts condition {
   console.log(`ok   ${message}`)
 }
 
-export async function openPageWithPasskeyDevice() {
-  const browser = await chromium.launch()
+export async function openPageWithPasskeyDevice(args: string[] = []) {
+  const browser = await chromium.launch({ args })
   const context = await browser.newContext()
   const page = await context.newPage()
   const cdp = await context.newCDPSession(page)

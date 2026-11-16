@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "check:auth": "bun --env-file=../../packages/backend/.env.local checks/auth.ts",
-    "check:confect": "bun --env-file=../../packages/backend/.env.local checks/confect.ts"
+    "check:confect": "bun --env-file=../../packages/backend/.env.local checks/confect.ts",
+    "check:canvas-sync": "bun --env-file=../../packages/backend/.env.local checks/canvas-sync.ts"
   },
   "dependencies": {
     "@confect/core": "10.6.0",
