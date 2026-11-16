@@ -134,7 +134,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | ID | Decision | Choice | Status | Note |
 |---|---|---|---|---|
 | H1 | API | The S3 API | Settled | |
-| H2 | Store | Cloudflare R2, through Convex's R2 component | Default | Convex's own file storage charges $0.12 per GB served ([pricing](https://www.convex.dev/pricing)). R2 serves for free. |
+| H2 | Store | Cloudflare R2, through Convex's R2 component | Default | Convex's own file storage charges $0.12 per GB served ([pricing](https://www.convex.dev/pricing)). R2 serves for free. Test 4 passed. |
 | H3 | Originals | Kept byte-exact | Default, lock | |
 | H4 | Keys | `w/{workspaceId}/o/{sha256}` and `w/{workspaceId}/v/{sha256}/{spec}.webp` | Default, lock | |
 | H5 | De-duplication | Per workspace, never global | Default, lock | |
@@ -142,7 +142,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | H7 | Upload limit | 50 MB per image | Your call | |
 | H8 | Variants | A 512 px WebP thumbnail, a 2048 px WebP display copy, and a ThumbHash | Default | |
 | H9 | Who makes variants | The browser, at upload. For CLI and agent saves, the app makes them the first time it shows the image. | Default | No server image code. |
-| H10 | Serving | Signed URLs from R2 | Default | |
+| H10 | Serving | Signed URLs from R2 | Default | Test 4 passed with the bucket's CORS policy listing the app's origin. The component signs a URL for 15 minutes unless told otherwise, so a canvas that stays open needs fresh URLs. |
 
 ## I. Hosting, runtime, and repository
 
@@ -250,7 +250,14 @@ Each test has a script in `apps/web/checks`. The scripts drive headless Chromium
 	Most of the time is server function time. `convex logs` for the same run gives these medians: `canvas.moveItems` takes 63 ms, and the query that reruns after it takes 215 ms through Confect, 175 ms as a plain Convex function, and 59 ms for the change list. The other 60 to 90 ms cover the network round trip, the transfer, and the browser, and the test does not split them further. From the WebSocket frame that carries the items to the React update, the browser takes 14 ms through Confect, 10 ms for the plain function, and 3 ms for the change list.
 
 	Each rerun of a live query reads 1,002 documents and 403 KB from the database. A rerun of the change list reads 2 to 7 documents.
-4. **Not run yet.** It waits for an R2 bucket and an API token. The page at `/lab/texture` and the script `apps/web/checks/texture.ts` are written. `check:renderer` shows that the PixiJS renderer draws a locally made bitmap as a WebGL texture with the right pixel color, so the open question is only R2 and its CORS policy. H2 and H10 are unchanged.
+4. **Passed.** An image uploaded through the R2 component was fetched through a signed URL and drawn by the PixiJS renderer. The canvas pixel at the item's center matched the image's color, and the console showed no error. R2 answered with `access-control-allow-origin: http://localhost:3000`. The same signed URL was refused from an origin that the CORS policy does not list. The browser loads the image with `fetch`, then `createImageBitmap`, then a texture upload.
+
+	The R2 settings it needed:
+
+	- A private bucket. It needs no public access.
+	- A CORS policy on the bucket with `AllowedOrigins` set to the app's origin, `AllowedMethods` set to `GET` and `PUT`, and `AllowedHeaders` set to `Content-Type`. The test shows the origin matters. It does not test each of the other fields alone.
+	- An API token with **Object Read & Write**, limited to the bucket.
+	- Four environment variables on the Convex deployment: `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. `R2_ENDPOINT` is the account URL, `https://<account-id>.r2.cloudflarestorage.com`, without the bucket name after it. The component does not need `R2_TOKEN`.
 
 ## The backend that was not chosen
 
