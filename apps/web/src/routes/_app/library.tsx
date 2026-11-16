@@ -83,11 +83,6 @@ function Library() {
       <h2 className="font-medium">Lab</h2>
       <ul>
         <li>
-          <Link to="/lab/canvas-sync" search={{ mode: "live" }} className="underline">
-            Canvas sync with 1,000 items
-          </Link>
-        </li>
-        <li>
           <Link to="/lab/texture" className="underline">
             R2 image as a WebGL texture
           </Link>

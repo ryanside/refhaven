@@ -6,7 +6,6 @@
   "scripts": {
     "build": "vite build",
     "check:auth": "bun --env-file=../../packages/backend/.env.local checks/auth.ts",
-    "check:canvas-sync": "bun --env-file=../../packages/backend/.env.local checks/canvas-sync.ts",
     "check:confect": "bun --env-file=../../packages/backend/.env.local checks/confect.ts",
     "check:library": "bun --env-file=../../packages/backend/.env.local checks/library.ts",
     "check:renderer": "bun checks/renderer.ts",
