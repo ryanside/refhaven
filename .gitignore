@@ -13,3 +13,6 @@ dist
 
 # Local working notes
 .audit
+
+# Throwaway drive scripts for the verify-refhaven skill
+apps/web/checks/scratch
