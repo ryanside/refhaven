@@ -10,6 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "fractional-indexing": "4.0.0"
+  },
   "devDependencies": {
     "typescript": "catalog:",
     "vitest": "catalog:"
