@@ -1,0 +1,20 @@
+{
+  "name": "@refhaven/renderer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pixi": "./src/pixi.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@refhaven/scene": "workspace:*",
+    "pixi.js": "8.23.0"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}
