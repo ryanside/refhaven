@@ -8,9 +8,7 @@ import RequireUser, { CurrentUser, NotSignedIn } from "./RequireUser.spec";
 const signedInUser = (ctx: Parameters<typeof getAuthUserId>[0]) =>
   Effect.promise(() => getAuthUserId(ctx)).pipe(
     Effect.flatMap((userId) =>
-      userId === null
-        ? Effect.fail(new NotSignedIn())
-        : Effect.succeed({ userId }),
+      userId === null ? Effect.fail(new NotSignedIn()) : Effect.succeed({ userId }),
     ),
   );
 

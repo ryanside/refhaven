@@ -11,23 +11,17 @@ import type {
 
 export default GroupSpec.make()
   .addFunction(FunctionSpec.convexPublicMutation<typeof signOut>()("signOut"))
-  .addFunction(
-    FunctionSpec.convexPublicMutation<typeof refreshSession>()(
-      "refreshSession",
-    ),
-  )
-  .addFunction(
-    FunctionSpec.convexPublicQuery<typeof isAuthenticated>()("isAuthenticated"),
-  )
+  .addFunction(FunctionSpec.convexPublicMutation<typeof refreshSession>()("refreshSession"))
+  .addFunction(FunctionSpec.convexPublicQuery<typeof isAuthenticated>()("isAuthenticated"))
   .addFunction(
     FunctionSpec.convexPublicMutation<typeof startSignInWithUsernamePasskey>()(
       "startSignInWithUsernamePasskey",
     ),
   )
   .addFunction(
-    FunctionSpec.convexPublicMutation<
-      typeof startAutofillSignInWithUsernamePasskey
-    >()("startAutofillSignInWithUsernamePasskey"),
+    FunctionSpec.convexPublicMutation<typeof startAutofillSignInWithUsernamePasskey>()(
+      "startAutofillSignInWithUsernamePasskey",
+    ),
   )
   .addFunction(
     FunctionSpec.convexPublicMutation<typeof finishSignUpWithUsernamePasskey>()(

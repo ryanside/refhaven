@@ -5,25 +5,9 @@ import * as fns from "./session";
 import session from "./session.spec";
 
 export default GroupImpl.make(databaseSchema, session).pipe(
-  Layer.provide(
-    FunctionImpl.make(databaseSchema, session, "signOut", fns.signOut),
-  ),
-  Layer.provide(
-    FunctionImpl.make(
-      databaseSchema,
-      session,
-      "refreshSession",
-      fns.refreshSession,
-    ),
-  ),
-  Layer.provide(
-    FunctionImpl.make(
-      databaseSchema,
-      session,
-      "isAuthenticated",
-      fns.isAuthenticated,
-    ),
-  ),
+  Layer.provide(FunctionImpl.make(databaseSchema, session, "signOut", fns.signOut)),
+  Layer.provide(FunctionImpl.make(databaseSchema, session, "refreshSession", fns.refreshSession)),
+  Layer.provide(FunctionImpl.make(databaseSchema, session, "isAuthenticated", fns.isAuthenticated)),
   Layer.provide(
     FunctionImpl.make(
       databaseSchema,

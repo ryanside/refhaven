@@ -20,10 +20,7 @@ export default GroupSpec.make()
     FunctionSpec.publicQuery({
       name: "whoAmI",
       args: () => ({
-        greeting: Schema.String.check(
-          Schema.isNonEmpty(),
-          Schema.isMaxLength(20),
-        ),
+        greeting: Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(20)),
       }),
       returns: () =>
         Schema.Struct({

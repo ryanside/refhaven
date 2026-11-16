@@ -1,27 +1,22 @@
-import { useAuthActions } from "@convex-dev/auth/react"
-import { Button } from "@refhaven/ui/components/button"
-import {
-  Link,
-  Navigate,
-  Outlet,
-  createFileRoute,
-} from "@tanstack/react-router"
-import { useConvexAuth } from "convex/react"
+import { useAuthActions } from "@convex-dev/auth/react";
+import { Button } from "@refhaven/ui/components/button";
+import { Link, Navigate, Outlet, createFileRoute } from "@tanstack/react-router";
+import { useConvexAuth } from "convex/react";
 
 export const Route = createFileRoute("/_app")({
   ssr: false,
   component: SignedInLayout,
-})
+});
 
 function SignedInLayout() {
-  const { isLoading, isAuthenticated } = useConvexAuth()
-  const { signOut } = useAuthActions()
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { signOut } = useAuthActions();
 
   if (isLoading) {
-    return <p className="p-6 text-sm">Loading…</p>
+    return <p className="p-6 text-sm">Loading…</p>;
   }
   if (!isAuthenticated) {
-    return <Navigate to="/sign-in" />
+    return <Navigate to="/sign-in" />;
   }
 
   return (
@@ -30,16 +25,11 @@ function SignedInLayout() {
         <Link to="/library" className="font-medium">
           refhaven
         </Link>
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          onClick={() => void signOut()}
-        >
+        <Button variant="outline" size="sm" className="ml-auto" onClick={() => void signOut()}>
           Sign out
         </Button>
       </header>
       <Outlet />
     </div>
-  )
+  );
 }

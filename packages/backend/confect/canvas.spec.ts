@@ -6,10 +6,7 @@ import RequireUser from "./middleware/RequireUser.spec";
 
 export const CanvasItem = Schema.Struct(canvasItemFields);
 
-export class CanvasNotFound extends Schema.TaggedError<CanvasNotFound>()(
-  "CanvasNotFound",
-  {},
-) {}
+export class CanvasNotFound extends Schema.TaggedError<CanvasNotFound>()("CanvasNotFound", {}) {}
 
 export default GroupSpec.make()
   .middleware(RequireUser)
@@ -34,8 +31,7 @@ export default GroupSpec.make()
     FunctionSpec.publicQuery({
       name: "itemsSince",
       args: () => ({ canvasId: Id("canvases"), rev: Schema.Int }),
-      returns: () =>
-        Schema.Struct({ rev: Schema.Int, items: Schema.Array(CanvasItem) }),
+      returns: () => Schema.Struct({ rev: Schema.Int, items: Schema.Array(CanvasItem) }),
       error: () => CanvasNotFound,
     }),
   )

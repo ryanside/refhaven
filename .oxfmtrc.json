@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [
+    "**/_generated/**",
+    "**/routeTree.gen.ts",
+    "packages/backend/convex/**",
+    "!packages/backend/convex/convex.config.ts",
+    "packages/ui/src/components/**",
+    "packages/ui/src/styles/**",
+    "**/*.md"
+  ]
+}

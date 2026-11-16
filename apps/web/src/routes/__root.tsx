@@ -1,16 +1,12 @@
-import {
-  HeadContent,
-  Scripts,
-  createRootRouteWithContext,
-} from "@tanstack/react-router"
-import type { QueryClient } from "@tanstack/react-query"
-import type { ConvexReactClient } from "convex/react"
+import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
+import type { ConvexReactClient } from "convex/react";
 
-import appCss from "@refhaven/ui/globals.css?url"
+import appCss from "@refhaven/ui/globals.css?url";
 
 export const Route = createRootRouteWithContext<{
-  queryClient: QueryClient
-  convexClient: ConvexReactClient
+  queryClient: QueryClient;
+  convexClient: ConvexReactClient;
 }>()({
   head: () => ({
     meta: [
@@ -27,7 +23,7 @@ export const Route = createRootRouteWithContext<{
     </main>
   ),
   shellComponent: RootDocument,
-})
+});
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
@@ -40,5 +36,5 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <Scripts />
       </body>
     </html>
-  )
+  );
 }

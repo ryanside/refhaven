@@ -15,23 +15,19 @@ const createUser = FunctionImpl.make(databaseSchema, users, "createUser", () =>
   }).pipe(Effect.orDie),
 );
 
-const whoAmI = FunctionImpl.make(
-  databaseSchema,
-  users,
-  "whoAmI",
-  ({ greeting }) =>
-    Effect.gen(function* () {
-      const { userId } = yield* CurrentUser;
-      const ctx = yield* QueryCtx;
-      const username = yield* Effect.promise(() =>
-        ctx.runQuery(components.authUsername.public.getUsername, { userId }),
-      );
-      return {
-        userId,
-        username,
-        message: `${greeting}, ${username ?? "stranger"}`,
-      };
-    }),
+const whoAmI = FunctionImpl.make(databaseSchema, users, "whoAmI", ({ greeting }) =>
+  Effect.gen(function* () {
+    const { userId } = yield* CurrentUser;
+    const ctx = yield* QueryCtx;
+    const username = yield* Effect.promise(() =>
+      ctx.runQuery(components.authUsername.public.getUsername, { userId }),
+    );
+    return {
+      userId,
+      username,
+      message: `${greeting}, ${username ?? "stranger"}`,
+    };
+  }),
 );
 
 export default GroupImpl.make(databaseSchema, users).pipe(

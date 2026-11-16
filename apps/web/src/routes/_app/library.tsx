@@ -1,11 +1,11 @@
-import { QueryResult, useQuery } from "@confect/react"
-import refs from "@refhaven/backend/refs"
-import { createFileRoute } from "@tanstack/react-router"
+import { QueryResult, useQuery } from "@confect/react";
+import refs from "@refhaven/backend/refs";
+import { createFileRoute } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/_app/library")({ component: Library })
+export const Route = createFileRoute("/_app/library")({ component: Library });
 
 function Library() {
-  const me = useQuery(refs.public.users.whoAmI, { greeting: "Hello" })
+  const me = useQuery(refs.public.users.whoAmI, { greeting: "Hello" });
 
   return (
     <main className="p-6">
@@ -25,5 +25,5 @@ function Library() {
         ),
       })}
     </main>
-  )
+  );
 }

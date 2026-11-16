@@ -1,48 +1,46 @@
-import { useSignInWithUsernamePasskey } from "@convex-dev/auth/methods/username-passkey/react"
-import { api } from "@refhaven/backend/api"
-import { Button } from "@refhaven/ui/components/button"
-import { Input } from "@refhaven/ui/components/input"
-import { Label } from "@refhaven/ui/components/label"
-import { Navigate, createFileRoute } from "@tanstack/react-router"
-import { useConvexAuth } from "convex/react"
-import { useState } from "react"
+import { useSignInWithUsernamePasskey } from "@convex-dev/auth/methods/username-passkey/react";
+import { api } from "@refhaven/backend/api";
+import { Button } from "@refhaven/ui/components/button";
+import { Input } from "@refhaven/ui/components/input";
+import { Label } from "@refhaven/ui/components/label";
+import { Navigate, createFileRoute } from "@tanstack/react-router";
+import { useConvexAuth } from "convex/react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/sign-in")({
   ssr: false,
   component: SignIn,
-})
+});
 
 function SignIn() {
-  const { isAuthenticated } = useConvexAuth()
-  const { signIn, pending, autofill } = useSignInWithUsernamePasskey(
-    api.session
-  )
-  const [username, setUsername] = useState("")
-  const [error, setError] = useState<string | null>(null)
+  const { isAuthenticated } = useConvexAuth();
+  const { signIn, pending, autofill } = useSignInWithUsernamePasskey(api.session);
+  const [username, setUsername] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   if (isAuthenticated) {
-    return <Navigate to="/library" />
+    return <Navigate to="/library" />;
   }
 
-  const shownError = error ?? autofill.lastError?.error ?? null
+  const shownError = error ?? autofill.lastError?.error ?? null;
 
   return (
     <main className="p-6 text-sm">
       <form
         className="flex max-w-xs flex-col gap-3"
         onSubmit={async (event) => {
-          event.preventDefault()
-          setError(null)
-          const result = await signIn({ username })
+          event.preventDefault();
+          setError(null);
+          const result = await signIn({ username });
           if (result.status !== "complete") {
-            setError(result.userError.error)
+            setError(result.userError.error);
           }
         }}
       >
         <h1 className="font-medium">Sign in</h1>
         <p>
-          A new username creates an account with a passkey. An existing
-          username asks for its passkey.
+          A new username creates an account with a passkey. An existing username asks for its
+          passkey.
         </p>
         <Label htmlFor="username">Username</Label>
         <Input
@@ -60,5 +58,5 @@ function SignIn() {
         </Button>
       </form>
     </main>
-  )
+  );
 }
