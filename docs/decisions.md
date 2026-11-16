@@ -115,7 +115,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 
 Known gaps in the upload path:
 
-- Nothing checks that the uploaded bytes match the hash in the key. The upload URL also stays valid for 15 minutes, so a client can replace the bytes after the server read them. Signing the hash into the upload URL closes both.
+- Nothing checks that the uploaded bytes match the hash in the key. The upload URL also stays valid for 15 minutes, so a client can replace the bytes after the server read them. Signing the hash into the upload URL closes both. R2 enforces a signed SHA-256 only when the browser sends it as the `x-amz-checksum-sha256` header, so the bucket's CORS policy must list that header first. As a URL parameter R2 ignores it.
 - A retried save adds another Ref, because nothing identifies one save attempt. The web app never retries. Give each save a client-made ID before the CLI or an agent saves.
 - An upload that is too large, refused, or abandoned stays in R2 with no Blob.
 - A new signed URL makes the browser download the image again, so an open page reloads its images about once an hour. Signing with a rounded date gives a URL the browser can cache.
