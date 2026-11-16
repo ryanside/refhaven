@@ -1,19 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router"
-import { Button } from "@refhaven/ui/components/button"
+import { Link, createFileRoute } from "@tanstack/react-router"
 
-export const Route = createFileRoute("/")({ component: App })
+export const Route = createFileRoute("/")({ component: Landing })
 
-function App() {
+function Landing() {
   return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
-        </div>
-      </div>
-    </div>
+    <main className="flex flex-col gap-2 p-6 text-sm">
+      <h1 className="font-medium">refhaven</h1>
+      <p>A reference library you can view as a gallery or a canvas.</p>
+      <Link to="/library" className="underline">
+        Open your library
+      </Link>
+    </main>
   )
 }
