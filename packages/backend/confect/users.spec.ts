@@ -1,11 +1,7 @@
 import { FunctionSpec, GroupSpec } from "@confect/core";
 import * as Schema from "effect/Schema";
 import { Id } from "./_generated/id";
-
-export class NotSignedIn extends Schema.TaggedError<NotSignedIn>()(
-  "NotSignedIn",
-  {},
-) {}
+import RequireUser from "./middleware/RequireUser.spec";
 
 export default GroupSpec.make()
   .addFunction(
@@ -35,6 +31,5 @@ export default GroupSpec.make()
           username: Schema.NullOr(Schema.String),
           message: Schema.String,
         }),
-      error: () => NotSignedIn,
-    }),
+    }).middleware(RequireUser),
   );
