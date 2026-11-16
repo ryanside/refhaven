@@ -23,7 +23,6 @@ page.on("response", (response) => {
 
 try {
   await signInWithPasskey(page, `check-${Date.now().toString(36)}`);
-  await page.goto(`${appUrl}/lab/texture`);
 
   const png = await page.evaluate((fill) => {
     const canvas = document.createElement("canvas");
@@ -33,12 +32,13 @@ try {
     context.fillRect(0, 0, 256, 256);
     return canvas.toDataURL("image/png").split(",")[1]!;
   }, color);
-  await page.getByLabel("Image").setInputFiles({
+  await page.getByLabel("Add images").setInputFiles({
     name: "check.png",
     mimeType: "image/png",
     buffer: Buffer.from(png, "base64"),
   });
-  await page.getByRole("button", { name: "Upload" }).click();
+  await page.locator('[role="status"] li[data-outcome="saved"]').waitFor();
+  await page.goto(`${appUrl}/lab/texture`);
 
   const drawn = page.getByTestId("drawn");
   await page.waitForFunction(() => {

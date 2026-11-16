@@ -11,7 +11,6 @@
     "check:library": "bun --env-file=../../packages/backend/.env.local checks/library.ts",
     "check:renderer": "bun checks/renderer.ts",
     "check:texture": "bun --env-file=../../packages/backend/.env.local checks/texture.ts",
-    "check:upload-keys": "bun --env-file=../../packages/backend/.env.local checks/upload-keys.ts",
     "dev": "vite dev --port 3000 --strictPort",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
@@ -20,7 +19,6 @@
     "@confect/core": "10.6.0",
     "@confect/react": "10.6.0",
     "@convex-dev/auth": "2.0.0",
-    "@convex-dev/r2": "0.10.4",
     "@convex-dev/react-query": "0.1.0",
     "@hugeicons/core-free-icons": "4.4.0",
     "@hugeicons/react": "1.1.10",

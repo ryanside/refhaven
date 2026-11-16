@@ -1,19 +1,17 @@
-import { QueryResult, useQuery } from "@confect/react";
-import { useUploadFile } from "@convex-dev/r2/react";
-import { api } from "@refhaven/backend/api";
+import { usePaginatedQuery } from "@confect/react";
 import refs from "@refhaven/backend/refs";
 import type { Renderer } from "@refhaven/renderer";
 import { createPixiRenderer } from "@refhaven/renderer/pixi";
-import { Button } from "@refhaven/ui/components/button";
-import { Input } from "@refhaven/ui/components/input";
-import { Label } from "@refhaven/ui/components/label";
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRefUrls } from "@/library/use-ref-urls";
 
 export const Route = createFileRoute("/_app/lab/texture")({
   component: TextureLab,
 });
 
+const drawnImages = 4;
+const itemSize = 256;
 const firstItemCenter = { x: 160, y: 160 };
 const itemSpacing = 280;
 
@@ -22,9 +20,10 @@ type Drawn =
   | { status: "failed"; error: string };
 
 function TextureLab() {
-  const uploadFile = useUploadFile(api.images);
-  const result = useQuery(refs.public.images.list, {});
-  const images = QueryResult.isSuccess(result) ? result.value : undefined;
+  const library = usePaginatedQuery(refs.public.library.list, {}, { initialNumItems: drawnImages });
+  const items = useMemo(() => library.results.slice(0, drawnImages), [library.results]);
+  const urls = useRefUrls(useMemo(() => items.map((item) => item.refId), [items]));
+  const ready = items.length > 0 && items.every((item) => urls.has(item.refId));
 
   const host = useRef<HTMLDivElement>(null);
   const [renderer, setRenderer] = useState<Renderer>();
@@ -52,21 +51,21 @@ function TextureLab() {
 
   useEffect(() => {
     const container = host.current;
-    if (!renderer || !images || !container) return;
+    if (!renderer || !ready || !container) return;
     let current = true;
     const drawImages = async () => {
-      for (const [index, image] of images.entries()) {
-        const response = await fetch(image.url);
+      for (const [index, item] of items.entries()) {
+        const response = await fetch(urls.get(item.refId)!.url);
         const bitmap = await createImageBitmap(await response.blob());
         if (!current) return;
-        renderer.uploadTexture(image.key, bitmap);
+        renderer.uploadTexture(item.refId, bitmap);
         renderer.upsertItems([
           {
-            key: image.key,
-            texture: image.key,
+            key: item.refId,
+            texture: item.refId,
             x: firstItemCenter.x + index * itemSpacing,
             y: firstItemCenter.y,
-            scale: 1,
+            scale: itemSize / Math.max(item.width, item.height),
             rotation: 0,
             z: String(index).padStart(4, "0"),
           },
@@ -75,7 +74,7 @@ function TextureLab() {
       renderer.draw();
       setDrawn({
         status: "drawn",
-        textures: images.length,
+        textures: items.length,
         firstItemPixel: readPixel(container, firstItemCenter),
       });
     };
@@ -85,32 +84,18 @@ function TextureLab() {
     return () => {
       current = false;
     };
-  }, [renderer, images]);
+  }, [renderer, ready, items, urls]);
 
   return (
     <main className="flex flex-col gap-3 p-6">
       <h1 className="font-medium">Lab: R2 image as a WebGL texture</h1>
-      <form
-        className="flex items-end gap-3"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          const form = event.currentTarget;
-          const file = new FormData(form).get("image");
-          if (!(file instanceof File) || file.size === 0) return;
-          try {
-            await uploadFile(file);
-            form.reset();
-          } catch (error) {
-            setDrawn({ status: "failed", error: String(error) });
-          }
-        }}
-      >
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="image">Image</Label>
-          <Input id="image" name="image" type="file" accept="image/*" />
-        </div>
-        <Button type="submit">Upload</Button>
-      </form>
+      <p>
+        This draws the {drawnImages} newest images of your{" "}
+        <Link to="/library" className="underline">
+          library
+        </Link>{" "}
+        with the PixiJS renderer.
+      </p>
       <p
         data-testid="drawn"
         data-status={drawn?.status}
