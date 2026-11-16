@@ -38,6 +38,17 @@ const outcome = (call: Promise<unknown>) =>
         : `refused (${error.message.split("\n")[1]?.trim()})`,
   );
 
+const rows = async (table: string) => {
+  const dump = Bun.spawn(
+    ["bunx", "convex", "data", table, "--limit", "200", "--format", "jsonLines"],
+    { cwd: `${import.meta.dir}/../../../packages/backend`, stdout: "pipe", stderr: "ignore" },
+  );
+  return (await new Response(dump.stdout).text())
+    .split("\n")
+    .filter((line) => line.startsWith("{"))
+    .map((line) => JSON.parse(line));
+};
+
 const clientFor = async (page: Page) => {
   const client = new ConvexHttpClient(convexUrl());
   client.setAuth(await accessToken(page));
@@ -121,6 +132,17 @@ try {
     `saving the same bytes again adds a Ref, uploads nothing, and says so: ${await outcomes(page).nth(2).textContent()}`,
   );
 
+  const workspaceId = uploads[0]!.split("/")[2];
+  const ownRows = async (table: "refs" | "blobs") =>
+    (await rows(table)).filter((row) => row.workspaceId === workspaceId);
+  const originals = (await ownRows("refs")).map((ref) => ref.blobs.original);
+  assert(
+    originals.length === 3 &&
+      new Set(originals).size === 2 &&
+      (await ownRows("blobs")).length === 2,
+    `the database holds 3 Refs on 2 Blobs for this workspace: ${originals.map((id: string) => id.slice(-4))}`,
+  );
+
   const owner = await clientFor(page);
   const ownerRefId = await cards(page).first().getAttribute("data-ref-id");
   const image = { fileName: "x.png", width: 10, height: 10 };
@@ -183,6 +205,20 @@ try {
   assert(
     (await other.mutation(api.library.prepareUpload, { sha256: sha256(red) })).status === "upload",
     "bytes are stored once per workspace, so the second user must upload them too",
+  );
+
+  await second.page.route("**/*.r2.cloudflarestorage.com/**", (route) =>
+    route.request().method() === "PUT" ? route.abort() : route.continue(),
+  );
+  await second.page.getByLabel("Add images").setInputFiles([
+    { name: "red.png", mimeType: "image/png", buffer: red },
+    { name: "blue.png", mimeType: "image/png", buffer: blue },
+  ]);
+  await outcomes(second.page).nth(1).waitFor();
+  assert(
+    (await second.page.locator('[role="status"] li[data-outcome="rejected"]').count()) === 2 &&
+      (await cards(second.page).count()) === 0,
+    `when the upload to R2 fails, each file gets an outcome and nothing is saved: ${await outcomes(second.page).allTextContents()}`,
   );
 } finally {
   await first.browser.close();

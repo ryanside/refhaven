@@ -46,6 +46,7 @@
         "playwright": "1.65.1",
         "typescript": "catalog:",
         "vite": "8.3.8",
+        "vitest": "catalog:",
       },
     },
     "packages/backend": {

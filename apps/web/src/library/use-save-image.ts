@@ -31,26 +31,30 @@ export function useSaveImage() {
   const save = useAction(refs.public.library.save);
 
   return useCallback(
-    async (file: File): Promise<SaveOutcome> => {
-      const size = await pixelSizeOf(file);
-      if (!size) return rejected("UnsupportedImage");
-      const sha256 = await sha256Of(file);
+    (file: File): Promise<SaveOutcome> => {
+      const saveImage = async (): Promise<SaveOutcome> => {
+        const size = await pixelSizeOf(file);
+        if (!size) return rejected("UnsupportedImage");
+        const sha256 = await sha256Of(file);
 
-      const prepared = await prepareUpload({ sha256 });
-      if (Result.isFailure(prepared)) return rejected(prepared.failure._tag);
-      if (prepared.success.status === "upload") {
-        const uploaded = await fetch(prepared.success.url, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type },
-        });
-        if (!uploaded.ok) return rejected("UploadFailed");
-      }
+        const prepared = await prepareUpload({ sha256 });
+        if (Result.isFailure(prepared)) return rejected(prepared.failure._tag);
+        if (prepared.success.status === "upload") {
+          const uploaded = await fetch(prepared.success.url, {
+            method: "PUT",
+            body: file,
+            headers: { "Content-Type": file.type },
+          });
+          if (!uploaded.ok) return rejected("UploadFailed");
+        }
 
-      const saved = await save({ sha256, fileName: file.name, ...size });
-      return Result.isFailure(saved)
-        ? rejected(saved.failure._tag)
-        : { status: "saved", duplicate: saved.success.duplicate };
+        const saved = await save({ sha256, fileName: file.name, ...size });
+        return Result.isFailure(saved)
+          ? rejected(saved.failure._tag)
+          : { status: "saved", duplicate: saved.success.duplicate };
+      };
+      // A network error or a server fault rejects. The caller still gets an outcome for the file.
+      return saveImage().catch(() => rejected("Failed"));
     },
     [prepareUpload, save],
   );
