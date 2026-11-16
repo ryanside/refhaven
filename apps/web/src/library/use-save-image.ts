@@ -42,11 +42,12 @@ function thumbHashOf(bitmap: ImageBitmap) {
   return btoa(String.fromCharCode(...rgbaToThumbHash(width, height, data)));
 }
 
-/** WebP copies of the image for the given roles, or none when the browser cannot encode WebP. */
-async function variantsOf(bitmap: ImageBitmap, roles: ReadonlyArray<VariantRole>) {
+type Needed = { role: VariantRole; size: { width: number; height: number } };
+
+/** WebP copies of the image at the given sizes, or none when the browser cannot encode WebP. */
+async function variantsOf(bitmap: ImageBitmap, needed: ReadonlyArray<Needed>) {
   const variants = await Promise.all(
-    roles.map(async (role) => {
-      const size = variantSize(bitmap, role)!;
+    needed.map(async ({ role, size }) => {
       const bytes = await drawn(bitmap, size.width, size.height).canvas.convertToBlob({
         type: "image/webp",
       });
@@ -69,16 +70,17 @@ export function useSaveImage() {
     (file: File): Promise<SaveOutcome> => {
       const saveImage = async (bitmap: ImageBitmap): Promise<SaveOutcome> => {
         const sha256 = await sha256Of(file);
-        const prepared = await prepareUpload({
-          sha256,
-          roles: variantRoles.filter((role) => variantSize(bitmap, role) !== null),
+        const needed = variantRoles.flatMap((role): Array<Needed> => {
+          const size = variantSize(bitmap, role);
+          return size ? [{ role, size }] : [];
         });
+        const prepared = await prepareUpload({ sha256, roles: needed.map(({ role }) => role) });
         if (Result.isFailure(prepared)) return rejected(prepared.failure._tag);
 
         const uploads = prepared.success;
         const variants = await variantsOf(
           bitmap,
-          variantRoles.filter((role) => uploads.some((upload) => upload.role === role)),
+          needed.filter(({ role }) => uploads.some((upload) => upload.role === role)),
         );
         const bodies = new Map<ImageRole, Blob>([
           ["original", file],

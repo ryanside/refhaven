@@ -19,8 +19,8 @@ export function refIdsToSign(refIds: ReadonlyArray<Id<"refs">>, known: SignedUrl
 }
 
 /**
- * Signed URLs by ref for one role of each image. A URL is kept until shortly before it expires, because a new URL
- * for the same image makes the browser download the image again.
+ * Signed URLs by ref for one role of each image. A URL is kept until shortly before it
+ * expires, because a new URL for the same image makes the browser download the image again.
  */
 export function useRefUrls(refIds: ReadonlyArray<Id<"refs">>, role: ImageRole) {
   const convex = useConvex();

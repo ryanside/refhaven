@@ -145,10 +145,11 @@ const record = FunctionImpl.make(
             thumbHash,
             variants,
           });
-      const lacks = (blob: NonNullable<typeof existing>) =>
-        blob.thumbHash === undefined ||
-        variantRoles.some((role) => variants[role] && !blob.variants?.[role]);
-      if (existing && lacks(existing)) {
+      if (
+        existing &&
+        (existing.thumbHash === undefined ||
+          variantRoles.some((role) => variants[role] && !existing.variants?.[role]))
+      ) {
         yield* writer.table("blobs").patch(existing._id, {
           thumbHash: existing.thumbHash ?? thumbHash,
           variants: { ...variants, ...existing.variants },
