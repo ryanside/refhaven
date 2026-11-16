@@ -1,0 +1,15 @@
+import { Table } from "@confect/core";
+import * as Schema from "effect/Schema";
+import { Id } from "../_generated/id";
+import { ImageMimeType, Sha256 } from "../blob";
+
+export default Table.make(() =>
+  Schema.Struct({
+    workspaceId: Id("workspaces"),
+    sha256: Sha256,
+    byteSize: Schema.Int,
+    mimeType: ImageMimeType,
+    width: Schema.Int,
+    height: Schema.Int,
+  }),
+).index("by_workspace_and_sha256", ["workspaceId", "sha256"]);

@@ -65,6 +65,7 @@
         "@confect/cli": "10.6.0",
         "@types/node": "catalog:",
         "typescript": "catalog:",
+        "vitest": "catalog:",
       },
     },
     "packages/renderer": {

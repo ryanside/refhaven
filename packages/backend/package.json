@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./api": "./convex/_generated/api.js",
+    "./blob": "./confect/blob.ts",
     "./id": "./confect/_generated/id.ts",
     "./refs": "./confect/_generated/refs.ts"
   },
@@ -12,7 +13,8 @@
     "dev": "convex dev --tail-logs",
     "dev:codegen": "confect dev",
     "codegen": "confect codegen",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@confect/core": "10.6.0",
@@ -26,6 +28,7 @@
   "devDependencies": {
     "@confect/cli": "10.6.0",
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
