@@ -47,8 +47,8 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | ID | Decision | Choice | Status | Note |
 |---|---|---|---|---|
 | C1 | Backend | Convex | Settled, lock | Free up to 1M function calls and 0.5 GB of data a month ([pricing](https://www.convex.dev/pricing)). |
-| C2 | Effect on Convex | Confect | Settled | Version 10.6 needs `effect ~4.1.0`, checked on npm. It is pre-1.0 and maintained outside Convex. |
-| C3 | Live updates | Convex live queries | Default | Online only. |
+| C2 | Effect on Convex | Confect | Settled | Version 10.6 needs `effect ~4.1.0`, checked on npm. It is pre-1.0 and maintained outside Convex. Test 2 passed. Loading Effect and Confect adds about 17 ms of server time to each call. Confect's `experimental_reuseContext` option removes that cost, and it is off. |
+| C3 | Live updates | Convex live queries. A canvas does not use one live query for all of its items. See C19. | Default | Online only. Changed by test 3. |
 | C4 | Ownership | Every document carries `workspaceId`. Each user gets a personal workspace. | Default, lock | Leaves room for co-op and teams. |
 | C5 | Tables | Workspace, Blob, Ref, Collection, CollectionRef, Tag, Canvas, CanvasItem | Default, lock | |
 | C6 | Blob and Ref | A Blob is bytes keyed by SHA-256 inside a workspace. A Ref points to blobs by role. | Default, lock | Roles are original, thumbnail, and display. |
@@ -60,10 +60,11 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | C12 | Item properties | x, y, uniform scale, rotation, flip, crop rectangle, opacity, grayscale | Default, lock | Stored on the item. Never baked into pixels. |
 | C13 | Z-order | A fractional index string per item | Default, lock | |
 | C14 | Groups | A parent reference on items. One level in the UI at first. | Default | |
-| C15 | Deletes | Soft delete with a 30-day trash | Default | |
+| C15 | Deletes | Soft delete with a 30-day trash | Default | C19 depends on this. A deleted item must stay a document so that the changes query can report it. |
 | C16 | What a Ref records | Source URL when there is one, file name, upload time, dimensions, MIME type, byte size, hash, note | Default, lock | |
 | C17 | URLs | `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas` | Default, lock | |
 | C18 | Export | A zip with `manifest.json` and the original files | Later | |
+| C19 | Canvas sync | Each canvas document carries a revision counter. A mutation raises the counter and stamps the items it wrote. The client loads a snapshot once, then subscribes to the items written after the snapshot's revision. | Default, lock | Added by test 3. One live query resends every item on each change. Every write to a canvas updates the one canvas document, so two writers to the same canvas conflict and Convex retries one of them. Look at this again before co-op. |
 
 ## D. Canvas behavior
 
@@ -112,7 +113,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | F2 | Components | shadcn, created with `--preset b1VlJAwK` | Settled | |
 | F3 | Styling | Tailwind 4 | Settled | |
 | F4 | TanStack libraries | Router, Query, Virtual, Form, Hotkeys, Pacer | Settled | |
-| F5 | Server data | Convex queries through TanStack Query, with `@convex-dev/react-query` | Default | Results update live. |
+| F5 | Server data | Convex queries through TanStack Query, with `@convex-dev/react-query` | Your call | Results update live. Confect's React hooks in `@confect/react` decode results with the function's schema, and they use `convex/react`, not TanStack Query. The router sets up both on one Convex client. Choose which one calls Confect functions. |
 | F6 | Optimistic edits | Convex optimistic updates | Default | |
 | F7 | Landing page | A route in the same Start app | Default | One app to deploy. |
 | F8 | Look | Whatever the preset gives. The UI stays plain for now. | Settled | The first UI is throwaway. The polished design comes later. |
@@ -121,10 +122,10 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 
 | ID | Decision | Choice | Status | Note |
 |---|---|---|---|---|
-| G1 | Library | Convex Auth 2.0 | Default | Stable since November 2026. Convex recommends it over Better Auth for new apps ([docs](https://docs.convex.dev/auth/convex-auth)). |
-| G2 | Methods | GitHub, Google, and passkeys | Your call | Emailed codes and magic links are not in 2.0 yet ([launch post](https://stack.convex.dev/convex-auth-v2)). |
-| G3 | App routes | Rendered in the browser, behind sign-in | Default | Convex Auth documents React and Next.js only. TanStack Start is the first thing to test. |
-| G4 | Fallback | Convex's Better Auth component | Later | It documents TanStack Start. |
+| G1 | Library | Convex Auth 2.0 | Default | Stable since November 2026. Convex recommends it over Better Auth for new apps ([docs](https://docs.convex.dev/auth/convex-auth)). Test 1 passed under TanStack Start. |
+| G2 | Methods | GitHub, Google, and passkeys | Your call | Emailed codes and magic links are not in 2.0 yet ([launch post](https://stack.convex.dev/convex-auth-v2)). A passkey account is a username plus a passkey. It has no email address. |
+| G3 | App routes | Rendered in the browser, behind sign-in | Default | Tested. The signed-in routes set `ssr: false`. The session tokens live in `localStorage`, because the cookie mode of Convex Auth is for Next.js only. |
+| G4 | Fallback | Convex's Better Auth component | Later | It documents TanStack Start. Not needed, because test 1 passed. |
 | G5 | CLI and agents | A personal API key, stored hashed | Default | |
 | G6 | Key scopes | Read, or read and write. No delete. | Default, lock | |
 
@@ -153,7 +154,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | I4 | Repository | One monorepo with Bun workspaces and Turborepo, public on GitHub | Settled | See "Repository layout" below. Nothing is pushed until you have reviewed it locally. |
 | I5 | API for the CLI and agents | A Confect HTTP API inside Convex, calling the same functions as the browser | Default | One write path for every client. |
 | I6 | Background jobs | Convex's scheduler and cron | Default | |
-| I7 | Access checks | One helper that resolves the workspace and scopes, used by every function | Default, lock | |
+| I7 | Access checks | One helper that resolves the workspace and scopes, used by every function | Default, lock | Started as the `RequireUser` Confect middleware, which provides the signed-in user. |
 | I8 | Deploys | `convex deploy` and Vercel's Git deploys | Default | |
 | I9 | What stays from Ratstack | Effect, the contract-first habit, and the lint setup | Default | |
 
@@ -175,7 +176,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | K2 | Plans | A free plan and subscription plans | Settled | Tiers and prices are open. |
 | K3 | License | AGPL-3.0 | Settled | |
 | K4 | License for the CLI | MIT | Your call | |
-| K5 | TypeScript | 7.0 with the Effect language service | Default | |
+| K5 | TypeScript | 7.0 with the Effect language service | Default | TypeScript 7.0.2 type-checks every package. For TypeScript 7 the Effect language service is the `@effect/tsgo` package, not `@effect/language-service`. It is not set up yet. |
 | K6 | Lint and format | Oxlint and Oxfmt | Default | |
 | K7 | Tests | Vitest, with `convex-test` for functions | Default | Start with the pure canvas logic. |
 | K8 | Git hooks | lefthook with a light pre-commit | Default | |
@@ -217,7 +218,7 @@ packages/
 	ui/          shared shadcn components
 ```
 
-`apps/extension` joins later.
+`apps/extension` joins later. `apps/cli` does not exist yet.
 
 ## Try these first
 
@@ -227,6 +228,22 @@ Each is a small test that could change a decision above.
 2. Write one Confect function on Effect 4.1 that reads the signed-in user.
 3. Open a canvas of 1,000 items as one live query. Check how much data each update sends.
 4. Load an R2 image into a WebGL texture from the browser through a signed URL.
+
+### Results on 2026-11-16
+
+Each test has a script in `apps/web/checks`. The scripts drive headless Chromium against the cloud dev deployment.
+
+1. **Passed.** Sign-up with a passkey, a page reload, sign-out, and sign-in with the same passkey all work. A query without a session fails with `NotSignedIn`. The passkey came from Chromium's virtual passkey device, not from a real fingerprint prompt.
+2. **Passed.** `users.whoAmI` returns the signed-in user to the browser. Convex rejects a wrong argument type and an undeclared argument. Effect Schema rejects an empty or too long `greeting`, and rejects a return value of the wrong type.
+3. **The whole result is resent.** The numbers are the median of 25 changes per design, with the range in parentheses.
+
+	| Design | JSON received per change | Bytes on the wire per change | Time from the mutation call to the new items in React |
+	|---|---|---|---|
+	| One live query through Confect | 247,880 bytes, all 1,000 items | 42.1 KB | 361 ms (341 to 422) |
+	| One live query as a plain Convex function | 247,880 bytes, all 1,000 items | 42.1 KB | 319 ms (294 to 361) |
+	| Snapshot plus the changes since a revision (C19) | 881 bytes for the first change of a session, 1,871 bytes for the fifth | 212 to 248 bytes | 182 ms (168 to 213) |
+
+	Opening the canvas costs about 248 KB of JSON and 45 KB on the wire in every design. The server is the limit on time, not the network or the browser. Convex takes about 115 ms to read and return 1,000 documents, Confect adds about 60 ms to that, and the browser needs 1 to 2 ms to apply the result.
 
 ## The backend that was not chosen
 
@@ -245,6 +262,10 @@ Terms and a privacy page, a copyright takedown contact, a process for reporting 
 | effect | 4.1.4 |
 | convex | 1.50.0 |
 | @confect/server | 10.6.0 |
+| @confect/core | 10.6.0 |
+| @confect/cli | 10.6.0 |
+| @confect/react | 10.6.0 |
+| @effect/platform-node | 4.1.4 |
 | @convex-dev/auth | 2.0.0 |
 | @convex-dev/react-query | 0.1.0 |
 | @convex-dev/r2 | 0.10.4 |
@@ -252,6 +273,9 @@ Terms and a privacy page, a copyright takedown contact, a process for reporting 
 | pixi.js | 8.23.0 |
 | react | 19.3.1 |
 | @tanstack/react-start | 1.169.5 |
+| @tanstack/react-router | 1.170.46 |
+| @tanstack/react-router-ssr-query | 1.167.3 |
+| vite | 8.3.8 |
 | @tanstack/react-query | 5.107.1 |
 | @tanstack/react-virtual | 3.14.26 |
 | @tanstack/react-form | 1.33.5 |
@@ -261,3 +285,7 @@ Terms and a privacy page, a copyright takedown contact, a process for reporting 
 | tailwindcss | 4.3.5 |
 | vitest | 5.1.0 |
 | typescript | 7.0.2 |
+| oxlint | 1.94.0 |
+| oxfmt | 0.79.0 |
+| lefthook | 2.2.2 |
+| playwright | 1.65.1 |
