@@ -24,20 +24,31 @@ page.on("response", (response) => {
 try {
   await signInWithPasskey(page, `check-${Date.now().toString(36)}`);
 
-  const png = await page.evaluate((fill) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 256;
-    const context = canvas.getContext("2d")!;
-    context.fillStyle = fill;
-    context.fillRect(0, 0, 256, 256);
-    return canvas.toDataURL("image/png").split(",")[1]!;
-  }, color);
-  await page.getByLabel("Add images").setInputFiles({
-    name: "check.png",
-    mimeType: "image/png",
-    buffer: Buffer.from(png, "base64"),
-  });
-  await page.locator('[role="status"] li[data-outcome="saved"]').waitFor();
+  const pngOf = (fill: string, width: number, height: number) =>
+    page.evaluate(
+      ({ fill, width, height }) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d")!;
+        context.fillStyle = fill;
+        context.fillRect(0, 0, width, height);
+        return canvas.toDataURL("image/png").split(",")[1]!;
+      },
+      { fill, width, height },
+    );
+  for (const [name, png] of [
+    ["large.png", await pngOf("rgb(30, 30, 200)", 3000, 2000)],
+    ["check.png", await pngOf(color, 256, 256)],
+  ] as const) {
+    await page.getByLabel("Add images").setInputFiles({
+      name,
+      mimeType: "image/png",
+      buffer: Buffer.from(png, "base64"),
+    });
+    await page.locator(`[role="status"] li[data-outcome="saved"]`).getByText(name).waitFor();
+  }
+  imageResponses.length = 0;
   await page.goto(`${appUrl}/lab/texture`);
 
   const drawn = page.getByTestId("drawn");
@@ -46,7 +57,7 @@ try {
     return (
       status === "failed" ||
       (status === "drawn" &&
-        document.querySelector('[data-testid="drawn"]')?.getAttribute("data-textures") === "1")
+        document.querySelector('[data-testid="drawn"]')?.getAttribute("data-textures") === "2")
     );
   });
   assert(
@@ -56,6 +67,12 @@ try {
   assert(
     (await drawn.getAttribute("data-first-item-pixel")) === color,
     `the WebGL canvas shows the image's color ${color} at the item's center`,
+  );
+
+  assert(
+    imageResponses.some(({ url }) => url.endsWith("/2048.webp")) &&
+      imageResponses.some(({ url }) => /\/o\/[0-9a-f]{64}$/.test(url)),
+    "the lab draws the large image's 2048 px display copy and the small image's original",
   );
 
   const crossOrigin = consoleErrors.filter((text) => /cors|cross-origin/i.test(text));
