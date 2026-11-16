@@ -85,8 +85,8 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 |---|---|---|
 | C4 | Every document carries `workspaceId`. Each user gets a personal workspace at sign-up. The lab tables `canvases` and `canvasItems` still use the user and move over in the canvas step. | Built, lock |
 | C5 | The tables are Workspace, Blob, Ref, Collection, CollectionRef, Tag, Canvas, and CanvasItem. Workspace, Blob, and Ref exist. | Planned, lock |
-| C6 | A Blob is bytes keyed by SHA-256 inside a workspace. A Ref points to blobs by role, in its `blobs` field. The roles are original, thumbnail, and display. Only `blobs.original` exists. | Built, lock |
-| C16 | A Ref records its file name, and its creation time is the upload time. The Blob records the hash, byte size, MIME type, and pixel size, because they describe the bytes. Source URL and note join the Ref with the first feature that sets them. | Built, lock |
+| C6 | A Blob is bytes keyed by SHA-256 inside a workspace. A Ref points at its original Blob, in `blobs.original`. The Blob records its variants, a thumbnail and a display copy, because they derive from its bytes. Every Ref that shares the Blob shares them. A page asks for a role, original, thumbnail, or display, and gets the variant when the Blob has it and the original otherwise. | Built, lock |
+| C16 | A Ref records its file name, and its creation time is the upload time. The Blob records the hash, byte size, MIME type, pixel size, ThumbHash, and the byte size and pixel size of each variant, because they describe the bytes. Source URL and note join the Ref with the first feature that sets them. | Built, lock |
 | C8 | IDs are Convex document IDs. A canvas item also carries a client-made `key`, so the canvas can create it at once. | Planned, lock |
 | C15 | A delete is a soft delete with a 30-day trash. | Planned |
 | C17 | The URLs are `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas`. Only `/library` exists. | Planned, lock |
@@ -100,24 +100,24 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | ID | Rule | State |
 |---|---|---|
 | H3 | Originals are kept byte-exact. | Built, lock |
-| H4 | Object keys are `w/{workspaceId}/o/{sha256}` for an original and `w/{workspaceId}/v/{sha256}/{spec}.webp` for a variant. Only the original key exists. | Built, lock |
+| H4 | Object keys are `w/{workspaceId}/o/{sha256}` for an original and `w/{workspaceId}/v/{sha256}/{file}` for a variant. A variant's `{sha256}` is the original's hash, and `{file}` is `512.webp` or `2048.webp`. | Built, lock |
 | H5 | Bytes are de-duplicated per workspace, never across workspaces. | Built, lock |
 | H6 | The browser uploads straight to R2 through a signed URL. The server makes the object key from the workspace and the hash. After the upload the server reads the object's size and first 12 bytes from R2 before it records anything. | Built |
 | L1 | The server records the file type that the bytes show and ignores the client's claim. | Built |
-| D18 | The formats are PNG, JPEG, WebP, GIF, and AVIF. SVG is rasterized at upload. The server refuses SVG until the rasterizing step exists. | Built |
+| D18 | The formats are PNG, JPEG, WebP, GIF, and AVIF. SVG is rasterized at upload. The server refuses SVG until the rasterizing step exists. Variants are WebP, and the server refuses a variant whose bytes are not WebP. | Built |
 | H7 | An image is at most 50 MB. The server checks the size when the image is saved, after the upload. | Built |
 | E5 | Saving bytes the library already holds reuses the Blob, uploads nothing, and tells you. It adds a second Ref. | Built |
-| H10 | Images are served through signed R2 URLs. A mutation signs each URL for one hour, and the page asks for a new one after 50 minutes. | Built |
+| H10 | Images are served through signed R2 URLs. A mutation signs each URL for one hour, for the role the page asks for, and the page asks for a new one after 50 minutes. The gallery asks for the thumbnail. | Built |
 | L2 | The server checks the workspace before it signs a URL. | Built |
-| H8 | Each image gets a 512 px WebP thumbnail, a 2048 px WebP display copy, and a ThumbHash. | Planned |
-| H9 | The browser makes the variants at upload. For a CLI or agent save, the app makes them the first time it shows the image. There is no server image code. | Planned |
+| H8 | An image gets a 512 px WebP thumbnail when its longer edge is over 512 px, and a 2048 px WebP display copy when it is over 2048 px. A variant keeps the aspect ratio, and its longer edge is the role's edge. Every image gets a ThumbHash, which the gallery shows until the thumbnail loads. An image saved before variants existed has none and is served from its original. | Built |
+| H9 | The browser makes the variants and the ThumbHash at upload. A browser that cannot encode WebP, such as Safari, saves the original alone. For a CLI or agent save, the app makes them the first time it shows the image. There is no server image code. Only the browser part exists. | Built |
 | L4 | A save from a URL fetches http and https only, with a cap on size and time. | Planned |
 
 Known gaps in the upload path:
 
 - Nothing checks that the uploaded bytes match the hash in the key. The upload URL also stays valid for 15 minutes, so a client can replace the bytes after the server read them. Signing the hash into the upload URL closes both. R2 enforces a signed SHA-256 only when the browser sends it as the `x-amz-checksum-sha256` header, so the bucket's CORS policy must list that header first. As a URL parameter R2 ignores it.
 - A retried save adds another Ref, because nothing identifies one save attempt. The web app never retries. Give each save a client-made ID before the CLI or an agent saves.
-- An upload that is too large, refused, or abandoned stays in R2 with no Blob.
+- An upload that is too large, refused, or abandoned stays in R2 with no Blob. The same holds for a variant.
 - A new signed URL makes the browser download the image again, so an open page reloads its images about once an hour. Signing with a rounded date gives a URL the browser can cache.
 
 ## Canvas
