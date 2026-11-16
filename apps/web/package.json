@@ -4,14 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev --port 3000 --strictPort",
     "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
     "check:auth": "bun --env-file=../../packages/backend/.env.local checks/auth.ts",
-    "check:confect": "bun --env-file=../../packages/backend/.env.local checks/confect.ts",
     "check:canvas-sync": "bun --env-file=../../packages/backend/.env.local checks/canvas-sync.ts",
-    "check:texture": "bun --env-file=../../packages/backend/.env.local checks/texture.ts"
+    "check:confect": "bun --env-file=../../packages/backend/.env.local checks/confect.ts",
+    "check:renderer": "bun checks/renderer.ts",
+    "check:texture": "bun --env-file=../../packages/backend/.env.local checks/texture.ts",
+    "check:upload-keys": "bun --env-file=../../packages/backend/.env.local checks/upload-keys.ts",
+    "dev": "vite dev --port 3000 --strictPort",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@confect/core": "10.6.0",

@@ -96,9 +96,12 @@ function TextureLab() {
           event.preventDefault();
           const form = event.currentTarget;
           const file = new FormData(form).get("image");
-          if (file instanceof File && file.size > 0) {
+          if (!(file instanceof File) || file.size === 0) return;
+          try {
             await uploadFile(file);
             form.reset();
+          } catch (error) {
+            setDrawn({ status: "failed", error: String(error) });
           }
         }}
       >

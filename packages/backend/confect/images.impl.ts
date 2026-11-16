@@ -3,10 +3,18 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import databaseSchema from "./_generated/schema";
 import { DatabaseReader } from "./_generated/services";
-import { generateUploadUrl, r2, syncMetadata } from "./images";
+import { r2, syncMetadata, uploadKeyPrefix } from "./images";
 import images from "./images.spec";
 import RequireUser from "./middleware/RequireUser.impl";
 import { CurrentUser } from "./middleware/RequireUser.spec";
+
+const generateUploadUrl = FunctionImpl.make(databaseSchema, images, "generateUploadUrl", () =>
+  Effect.gen(function* () {
+    const { userId } = yield* CurrentUser;
+    const key = `${uploadKeyPrefix(userId)}${crypto.randomUUID()}`;
+    return yield* Effect.promise(() => r2.generateUploadUrl(key));
+  }),
+);
 
 const list = FunctionImpl.make(databaseSchema, images, "list", () =>
   Effect.gen(function* () {
@@ -14,7 +22,7 @@ const list = FunctionImpl.make(databaseSchema, images, "list", () =>
     const reader = yield* DatabaseReader;
     const uploads = yield* reader
       .table("uploads")
-      .index("by_user", (q) => q.eq("userId", userId))
+      .index("by_user_and_key", (q) => q.eq("userId", userId))
       .collect();
     return yield* Effect.forEach(uploads, ({ key }) =>
       Effect.promise(() => r2.getUrl(key)).pipe(Effect.map((url) => ({ key, url }))),
@@ -23,7 +31,7 @@ const list = FunctionImpl.make(databaseSchema, images, "list", () =>
 );
 
 export default GroupImpl.make(databaseSchema, images).pipe(
-  Layer.provide(FunctionImpl.make(databaseSchema, images, "generateUploadUrl", generateUploadUrl)),
+  Layer.provide(generateUploadUrl),
   Layer.provide(FunctionImpl.make(databaseSchema, images, "syncMetadata", syncMetadata)),
   Layer.provide(list),
   Layer.provide(RequireUser),

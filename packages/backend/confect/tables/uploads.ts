@@ -7,4 +7,4 @@ export default Table.make(() =>
     userId: Id("users"),
     key: Schema.String,
   }),
-).index("by_user", ["userId"]);
+).index("by_user_and_key", ["userId", "key"]);
