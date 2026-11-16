@@ -37,8 +37,13 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 - Signed-in routes live under `_app` and set `ssr: false`. The session tokens are in `localStorage`, because Convex Auth's cookie mode is for Next.js only.
 - Load every image as a CORS request. An `<img>` sets `crossOrigin="anonymous"`. A response cached from a plain `<img>` has no CORS headers, and a later canvas load of the same URL fails on it.
 - Do not subscribe to every item of a canvas with one live query. It resends every item on each change. See C19.
-- Until F5 is decided, call Confect functions with the hooks from `@confect/react`.
+- Call Confect functions with the hooks from `@confect/react`. Use TanStack Query only for data that is not a live Convex subscription.
 - The UI stays plain. Use the shadcn preset's defaults and no custom styling until the design pass.
+
+### Git
+
+- Open a pull request for anything beyond a simple, high-confidence change. Push a simple, high-confidence change straight to `main`.
+- CI runs the typecheck, lint, the format check, and the unit tests on `main` and on every pull request. The browser checks need the dev deployment and R2, so they run locally, through the `verify-refhaven` skill.
 
 ### R2
 
@@ -119,7 +124,7 @@ Known gaps in the upload path:
 
 | ID | Rule | State |
 |---|---|---|
-| C19 | Each canvas document carries a revision counter. A mutation raises the counter and stamps the items it wrote. The client loads a snapshot, then subscribes to the items written after the snapshot's revision. The client takes a new snapshot on every page load and when the change list passes a set size. A snapshot must not outlive the trash period of C15, or a purged item comes back. The page `/lab/canvas-sync` is a prototype of this. | Open, lock |
+| C19 | Each canvas document carries a revision counter. A mutation raises the counter and stamps the items it wrote. The client loads a snapshot, then subscribes to the items written after the snapshot's revision. The client takes a new snapshot on every page load and when the change list passes a set size. A snapshot must not outlive the trash period of C15, or a purged item comes back. The page `/lab/canvas-sync` is a prototype of this. | Planned, lock |
 | C7 | A canvas item is a tagged union of image, note, and group. An image item points at a Ref. | Planned, lock |
 | C9 | A canvas stores one document per item. | Planned, lock |
 | C10 | An edit is saved as one mutation per gesture, carrying a list of item operations. | Planned, lock |
@@ -168,7 +173,7 @@ Known gaps in the upload path:
 | F7 | The landing page is a route in the same app. | Built |
 | F4 | Use TanStack Virtual, Form, Hotkeys, and Pacer for those jobs when they come up. Router and Query are set up. | Planned |
 | F6 | Edits show at once through Convex optimistic updates. | Planned |
-| F5 | Server data was planned to go through TanStack Query with `@convex-dev/react-query`. Confect's hooks decode results with the function's schema, and they use `convex/react`, not TanStack Query. The router sets up both on one Convex client, and every page uses Confect's hooks today. | Open |
+| F5 | Pages call Confect functions with the hooks from `@confect/react`, which decode results with the function's schema. TanStack Query is for data that is not a live Convex subscription. | Built |
 
 ## Sign-in
 
@@ -219,8 +224,6 @@ Keep these possible when you change the model.
 
 The owner decides these. Each row above shows the current default.
 
-- **C19.** Confirm the snapshot-plus-changes design for canvas sync before the canvas is built on it.
-- **F5.** Choose whether Confect's hooks or TanStack Query call Confect functions.
 - **E5.** Choose whether saving a duplicate adds a second Ref or returns the existing one.
 - **H7.** Confirm the 50 MB limit.
 - **G2.** Choose which OAuth providers to add.
