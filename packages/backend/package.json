@@ -1,0 +1,29 @@
+{
+  "name": "@refhaven/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./api": "./convex/_generated/api.js",
+    "./refs": "./confect/_generated/refs.ts"
+  },
+  "scripts": {
+    "dev": "convex dev --tail-logs",
+    "dev:codegen": "confect dev",
+    "codegen": "confect codegen",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@confect/core": "10.6.0",
+    "@confect/server": "10.6.0",
+    "@convex-dev/auth": "2.0.0",
+    "@effect/platform-node": "4.1.4",
+    "convex": "catalog:",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@confect/cli": "10.6.0",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
