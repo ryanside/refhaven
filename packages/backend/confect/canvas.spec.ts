@@ -2,14 +2,14 @@ import { FunctionSpec, GroupSpec } from "@confect/core";
 import * as Schema from "effect/Schema";
 import { Id } from "./_generated/id";
 import { canvasItemFields } from "./canvasItem";
-import RequireUser from "./middleware/RequireUser.spec";
+import RequireWorkspace from "./middleware/RequireWorkspace.spec";
 
 export const CanvasItem = Schema.Struct(canvasItemFields);
 
 export class CanvasNotFound extends Schema.TaggedError<CanvasNotFound>()("CanvasNotFound", {}) {}
 
 export default GroupSpec.make()
-  .middleware(RequireUser)
+  .middleware(RequireWorkspace)
   .addFunction(
     FunctionSpec.publicMutation({
       name: "seed",

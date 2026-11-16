@@ -5,12 +5,12 @@ import databaseSchema from "./_generated/schema";
 import { DatabaseReader } from "./_generated/services";
 import { r2, syncMetadata, uploadKeyPrefix } from "./images";
 import images from "./images.spec";
-import RequireUser from "./middleware/RequireUser.impl";
-import { CurrentUser } from "./middleware/RequireUser.spec";
+import RequireWorkspace from "./middleware/RequireWorkspace.impl";
+import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 
 const generateUploadUrl = FunctionImpl.make(databaseSchema, images, "generateUploadUrl", () =>
   Effect.gen(function* () {
-    const { userId } = yield* CurrentUser;
+    const { userId } = yield* CurrentWorkspace;
     const key = `${uploadKeyPrefix(userId)}${crypto.randomUUID()}`;
     return yield* Effect.promise(() => r2.generateUploadUrl(key));
   }),
@@ -18,7 +18,7 @@ const generateUploadUrl = FunctionImpl.make(databaseSchema, images, "generateUpl
 
 const list = FunctionImpl.make(databaseSchema, images, "list", () =>
   Effect.gen(function* () {
-    const { userId } = yield* CurrentUser;
+    const { userId } = yield* CurrentWorkspace;
     const reader = yield* DatabaseReader;
     const uploads = yield* reader
       .table("uploads")
@@ -34,6 +34,6 @@ export default GroupImpl.make(databaseSchema, images).pipe(
   Layer.provide(generateUploadUrl),
   Layer.provide(FunctionImpl.make(databaseSchema, images, "syncMetadata", syncMetadata)),
   Layer.provide(list),
-  Layer.provide(RequireUser),
+  Layer.provide(RequireWorkspace),
   GroupImpl.finalize,
 );

@@ -6,12 +6,12 @@ import type { Id } from "./_generated/id";
 import databaseSchema from "./_generated/schema";
 import { DatabaseReader, DatabaseWriter } from "./_generated/services";
 import canvas, { CanvasNotFound } from "./canvas.spec";
-import RequireUser from "./middleware/RequireUser.impl";
-import { CurrentUser } from "./middleware/RequireUser.spec";
+import RequireWorkspace from "./middleware/RequireWorkspace.impl";
+import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 
 const ownedCanvas = (canvasId: Id<"canvases">) =>
   Effect.gen(function* () {
-    const { userId } = yield* CurrentUser;
+    const { userId } = yield* CurrentWorkspace;
     const reader = yield* DatabaseReader;
     const found = yield* reader
       .table("canvases")
@@ -27,7 +27,7 @@ const toItem = ({ _id, _creationTime, canvasId, rev, ...item }: CanvasItemsDoc) 
 
 const seed = FunctionImpl.make(databaseSchema, canvas, "seed", ({ count }) =>
   Effect.gen(function* () {
-    const { userId } = yield* CurrentUser;
+    const { userId } = yield* CurrentWorkspace;
     const writer = yield* DatabaseWriter;
     const canvasId = yield* writer.table("canvases").insert({ userId, rev: 0 });
     yield* Effect.forEach(
@@ -109,6 +109,6 @@ export default GroupImpl.make(databaseSchema, canvas).pipe(
   Layer.provide(items),
   Layer.provide(itemsSince),
   Layer.provide(moveItems),
-  Layer.provide(RequireUser),
+  Layer.provide(RequireWorkspace),
   GroupImpl.finalize,
 );

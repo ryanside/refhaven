@@ -13,6 +13,7 @@ import type * as canvasPlain from "../canvasPlain.js";
 import type * as images from "../images.js";
 import type * as session from "../session.js";
 import type * as users from "../users.js";
+import type * as workspaces from "../workspaces.js";
 
 import type {
   ApiFromModules,
@@ -26,6 +27,7 @@ declare const fullApi: ApiFromModules<{
   images: typeof images;
   session: typeof session;
   users: typeof users;
+  workspaces: typeof workspaces;
 }>;
 
 /**

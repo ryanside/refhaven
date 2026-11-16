@@ -1,7 +1,7 @@
 import { FunctionSpec, GroupSpec } from "@confect/core";
 import * as Schema from "effect/Schema";
 import { Id } from "./_generated/id";
-import RequireUser from "./middleware/RequireUser.spec";
+import RequireWorkspace from "./middleware/RequireWorkspace.spec";
 
 export default GroupSpec.make()
   .addFunction(
@@ -28,5 +28,5 @@ export default GroupSpec.make()
           username: Schema.NullOr(Schema.String),
           message: Schema.String,
         }),
-    }).middleware(RequireUser),
+    }).middleware(RequireWorkspace),
   );

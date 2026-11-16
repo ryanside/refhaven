@@ -5,10 +5,12 @@ import canvasItems from "./tables/canvasItems";
 import canvases from "./tables/canvases";
 import uploads from "./tables/uploads";
 import users from "./tables/users";
+import workspaces from "./tables/workspaces";
 
 export default $defineSchema({
   canvasItems: $Table.tableDefinition(canvasItems),
   canvases: $Table.tableDefinition(canvases),
   uploads: $Table.tableDefinition(uploads),
   users: $Table.tableDefinition(users),
+  workspaces: $Table.tableDefinition(workspaces),
 });
