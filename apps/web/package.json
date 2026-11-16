@@ -10,16 +10,20 @@
     "typecheck": "tsc --noEmit",
     "check:auth": "bun --env-file=../../packages/backend/.env.local checks/auth.ts",
     "check:confect": "bun --env-file=../../packages/backend/.env.local checks/confect.ts",
-    "check:canvas-sync": "bun --env-file=../../packages/backend/.env.local checks/canvas-sync.ts"
+    "check:canvas-sync": "bun --env-file=../../packages/backend/.env.local checks/canvas-sync.ts",
+    "check:texture": "bun --env-file=../../packages/backend/.env.local checks/texture.ts"
   },
   "dependencies": {
     "@confect/core": "10.6.0",
     "@confect/react": "10.6.0",
     "@convex-dev/auth": "2.0.0",
+    "@convex-dev/r2": "0.10.4",
     "@convex-dev/react-query": "0.1.0",
     "@hugeicons/core-free-icons": "4.4.0",
     "@hugeicons/react": "1.1.10",
     "@refhaven/backend": "workspace:*",
+    "@refhaven/renderer": "workspace:*",
+    "@refhaven/scene": "workspace:*",
     "@refhaven/ui": "workspace:*",
     "@tanstack/react-query": "5.107.1",
     "@tanstack/react-router": "1.170.46",

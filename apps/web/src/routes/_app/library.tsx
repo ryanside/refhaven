@@ -1,6 +1,6 @@
 import { QueryResult, useQuery } from "@confect/react";
 import refs from "@refhaven/backend/refs";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/library")({ component: Library });
 
@@ -24,6 +24,19 @@ function Library() {
           </dl>
         ),
       })}
+      <h2 className="mt-4 font-medium">Lab</h2>
+      <ul>
+        <li>
+          <Link to="/lab/canvas-sync" search={{ mode: "live" }} className="underline">
+            Canvas sync with 1,000 items
+          </Link>
+        </li>
+        <li>
+          <Link to="/lab/texture" className="underline">
+            R2 image as a WebGL texture
+          </Link>
+        </li>
+      </ul>
     </main>
   );
 }

@@ -10,6 +10,7 @@
 
 import type * as canvas from "../canvas.js";
 import type * as canvasPlain from "../canvasPlain.js";
+import type * as images from "../images.js";
 import type * as session from "../session.js";
 import type * as users from "../users.js";
 
@@ -22,6 +23,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   canvas: typeof canvas;
   canvasPlain: typeof canvasPlain;
+  images: typeof images;
   session: typeof session;
   users: typeof users;
 }>;
@@ -56,4 +58,5 @@ export declare const components: {
   auth: import("@convex-dev/auth/_generated/component.js").ComponentApi<"auth">;
   authPasskey: import("@convex-dev/auth/components/passkey/_generated/component.js").ComponentApi<"authPasskey">;
   authUsername: import("@convex-dev/auth/components/username/_generated/component.js").ComponentApi<"authUsername">;
+  r2: import("@convex-dev/r2/_generated/component.js").ComponentApi<"r2">;
 };

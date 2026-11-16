@@ -244,6 +244,7 @@ Each test has a script in `apps/web/checks`. The scripts drive headless Chromium
 	| Snapshot plus the changes since a revision (C19) | 881 bytes for the first change of a session, 1,871 bytes for the fifth | 212 to 248 bytes | 182 ms (168 to 213) |
 
 	Opening the canvas costs about 248 KB of JSON and 45 KB on the wire in every design. The server is the limit on time, not the network or the browser. Convex takes about 115 ms to read and return 1,000 documents, Confect adds about 60 ms to that, and the browser needs 1 to 2 ms to apply the result.
+4. **Not run yet.** It waits for an R2 bucket and an API token. The page at `/lab/texture` and the script `apps/web/checks/texture.ts` are written. The PixiJS renderer draws a locally made image as a WebGL texture with the right pixel color, so the open question is only R2 and its CORS policy. H2, H6, and H10 are unchanged.
 
 ## The backend that was not chosen
 
