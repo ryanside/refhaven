@@ -101,7 +101,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | E2 | Filters | Tags, collection, and search text, kept in the URL | Default | |
 | E3 | Uploads | Paste, drop, and the file picker, from the gallery or a canvas | Settled | |
 | E4 | Uploading inside a collection | Adds the Ref to that collection | Default | |
-| E5 | Duplicates | The same hash reuses the blob and tells you | Default | Built this way: saving the same bytes again adds a second Ref on the existing Blob, uploads nothing, and the page says so. Say so if a duplicate should not add a Ref. |
+| E5 | Duplicates | The same hash reuses the blob and tells you | Default | Built this way: saving the same bytes again adds a second Ref on the existing Blob, uploads nothing, and the page says so. Say so if a duplicate should not add a Ref. A retried save also adds a Ref, because nothing identifies one save attempt. The web app never retries a save. Give each save a client-made ID before the CLI or an agent calls it. |
 | E6 | Search | A Convex full-text search index over name, note, tags, and source | Default | At most 16 terms a query and 1,024 results ([limits](https://docs.convex.dev/production/state/limits)). |
 | E7 | Bulk actions | Tag, add to collection, delete | Later | |
 
@@ -142,7 +142,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | H7 | Upload limit | 50 MB per image | Your call | Checked after the upload, when the image is saved. A larger upload still reaches R2 and stays there with no Blob. |
 | H8 | Variants | A 512 px WebP thumbnail, a 2048 px WebP display copy, and a ThumbHash | Default | |
 | H9 | Who makes variants | The browser, at upload. For CLI and agent saves, the app makes them the first time it shows the image. | Default | No server image code. |
-| H10 | Serving | Signed URLs from R2 | Default | Test 4 passed with the bucket's CORS policy listing the app's origin. A mutation signs each URL for one hour. A query must not sign URLs, because Convex caches query results and would return a URL after it expired. Every image load must be a CORS request, so each `<img>` sets `crossOrigin`. A response cached from a plain `<img>` has no CORS headers, and a later canvas load of the same URL fails on it. |
+| H10 | Serving | Signed URLs from R2 | Default | Test 4 passed with the bucket's CORS policy listing the app's origin. A mutation signs each URL for one hour, and the page asks for a new one after 50 minutes. A new URL makes the browser download the image again, so an open page reloads its images about once an hour. Signing with a rounded date would give a stable URL that the browser can cache. A query must not sign URLs, because Convex caches query results and would return a URL after it expired. Every image load must be a CORS request, so each `<img>` sets `crossOrigin`. A response cached from a plain `<img>` has no CORS headers, and a later canvas load of the same URL fails on it. |
 
 ## I. Hosting, runtime, and repository
 
