@@ -1,0 +1,15 @@
+node_modules
+.DS_Store
+dist
+.output
+.nitro
+.tanstack
+.turbo
+*.tsbuildinfo
+
+# Env files hold deployment names and secrets. Never commit them.
+.env*
+*.local
+
+# Local working notes
+.audit
