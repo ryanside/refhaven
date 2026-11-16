@@ -13,7 +13,7 @@ type Sample = {
   wireBytes: number;
   resent: number;
   totalMs: number;
-  untilLastFrameMs: number;
+  untilItemsFrameMs: number;
 };
 
 const median = (values: number[]) => {
@@ -45,6 +45,45 @@ const forwarder = net.createServer((client) => {
 await new Promise<void>((resolve) => forwarder.listen(0, "127.0.0.1", resolve));
 const forwarderPort = (forwarder.address() as net.AddressInfo).port;
 
+const runStartedAt = Date.now() / 1000;
+
+async function serverCalls(since: number) {
+  await Bun.sleep(3000);
+  const logs = Bun.spawn(["bunx", "convex", "logs", "--history", "2000", "--success", "--jsonl"], {
+    cwd: `${import.meta.dir}/../../../packages/backend`,
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  setTimeout(() => logs.kill(), 10_000);
+  const calls = new Map<string, Array<{ ms: number; documentsRead: number; bytesRead: number }>>();
+  for (const line of (await new Response(logs.stdout).text()).split("\n")) {
+    if (!line.startsWith("{")) continue;
+    const entry = JSON.parse(line);
+    if (
+      entry.kind !== "Completion" ||
+      entry.timestamp < since ||
+      entry.cachedResult ||
+      !/^canvas(Plain)?:/.test(entry.identifier)
+    ) {
+      continue;
+    }
+    const documentsRead: number = entry.usageStats.databaseReadDocuments;
+    const name =
+      entry.identifier === "canvas:itemsSince"
+        ? `canvas:itemsSince (${documentsRead > 500 ? "snapshot" : "changes"})`
+        : entry.identifier;
+    calls.set(name, [
+      ...(calls.get(name) ?? []),
+      {
+        ms: entry.executionTime * 1000,
+        documentsRead,
+        bytesRead: entry.usageStats.databaseReadBytes,
+      },
+    ]);
+  }
+  return [...calls].sort(([a], [b]) => a.localeCompare(b));
+}
+
 const { browser, page, cdp } = await openPageWithPasskeyDevice([
   `--host-resolver-rules=MAP ${convexHost}:443 127.0.0.1:${forwarderPort}`,
 ]);
@@ -64,14 +103,14 @@ cdp.on("Network.webSocketHandshakeResponseReceived", ({ response }) => {
 const bytesSince = (index: number) => received.slice(index).reduce((sum, bytes) => sum + bytes, 0);
 
 await page.context().addInitScript(() => {
-  const frameTimes: number[] = [];
-  Object.assign(window, { __frameTimes: frameTimes });
+  const frames: Array<{ at: number; size: number }> = [];
+  Object.assign(window, { __frames: frames });
   const Native = window.WebSocket;
   window.WebSocket = class extends Native {
     constructor(url: string | URL, protocols?: string | string[]) {
       super(url, protocols);
-      this.addEventListener("message", () => {
-        frameTimes.push(performance.now());
+      this.addEventListener("message", (event) => {
+        frames.push({ at: performance.now(), size: String(event.data).length });
       });
     }
   };
@@ -118,9 +157,18 @@ try {
           const applied = document.querySelector('[data-testid="applied"]')!;
           const startedAt = Number(applied.getAttribute("data-started-at"));
           const appliedAt = Number(applied.getAttribute("data-applied-at"));
-          const frameTimes = (window as unknown as { __frameTimes: number[] }).__frameTimes;
-          const lastFrameAt = frameTimes.findLast((at) => at <= appliedAt);
-          return { startedAt, appliedAt, lastFrameAt };
+          const { __frames } = window as unknown as {
+            __frames: Array<{ at: number; size: number }>;
+          };
+          // The largest frame between the call and the update is the one that
+          // carried the items. The mutation response is smaller.
+          const itemsFrame = __frames
+            .filter((frame) => frame.at >= startedAt && frame.at <= appliedAt)
+            .reduce((largest, frame) => (frame.size > largest.size ? frame : largest), {
+              at: NaN,
+              size: 0,
+            });
+          return { startedAt, appliedAt, itemsFrameAt: itemsFrame.at };
         });
         samples.push({
           mode,
@@ -129,7 +177,7 @@ try {
           wireBytes: wireBytes - wireBeforeMove,
           resent: Number(await page.getByTestId("resent").textContent()),
           totalMs: timing.appliedAt - timing.startedAt,
-          untilLastFrameMs: (timing.lastFrameAt ?? NaN) - timing.startedAt,
+          untilItemsFrameMs: timing.itemsFrameAt - timing.startedAt,
         });
       }
       assert(
@@ -162,16 +210,26 @@ try {
       )}`,
     );
     console.log(
-      `    of which until the last WebSocket frame arrived: ${summary(
-        own.map((s) => s.untilLastFrameMs),
+      `    of which until the frame with the items arrived: ${summary(
+        own.map((s) => s.untilItemsFrameMs),
         1,
       )}`,
     );
     console.log(
       `    of which from that frame to React: ${summary(
-        own.map((s) => s.totalMs - s.untilLastFrameMs),
+        own.map((s) => s.totalMs - s.untilItemsFrameMs),
         1,
       )}`,
+    );
+  }
+
+  console.log("\nServer side, from `convex logs` for this run. Cached results are left out.");
+  for (const [name, calls] of await serverCalls(runStartedAt)) {
+    console.log(
+      `  ${name}: ${calls.length} calls, ${summary(
+        calls.map((call) => call.ms),
+        0,
+      )} ms, ${summary(calls.map((call) => call.documentsRead))} documents read, ${summary(calls.map((call) => call.bytesRead))} bytes read`,
     );
   }
 } finally {
