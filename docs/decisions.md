@@ -1,305 +1,230 @@
-# refhaven decision list
+# refhaven decisions
 
-This list covers the decisions refhaven needs to start building. refhaven is a hobby project: a reference library you can view as a gallery or arrange on a canvas, with agent access through MCP and a CLI. It is built for its author first. It may later offer a free plan and subscription plans. The code is open source under AGPL.
+The rules for working in this repo. refhaven is a reference library for images. You save images into a library, group them into collections, and view any set as a gallery or as a canvas. Agents will read and save references through a CLI and an MCP server.
 
-Updated 2026-11-16. Facts with a link were read from that source on that date.
+The [README](../README.md) covers how to run the project, the checks, and the layout.
 
 ## How to read a row
 
-| Status | Meaning |
+| State | Meaning |
 |---|---|
-| Settled | You decided it. |
-| Default | Recommended, and applied unless you change it. |
-| Your call | Taste or preference. A default is shown. |
-| Later | Decide when you build that part. A default is shown. |
+| Built | The code does this today. |
+| Planned | Decided, and not built yet. Build it this way. |
+| Later | Not decided in detail. The row gives the starting point. Confirm it with the owner when you build that part. |
+| Open | The owner has not decided. Ask before you build on it. |
 
-"Lock" marks a decision that is painful to change once there is real data.
+"Lock" marks a rule that is painful to change once there is real data.
 
-## A. Scope
+## Stack
 
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| A1 | Who it is for | You first. Others later, on a free plan and subscription plans. | Settled | |
-| A2 | First version | A library with a gallery view, collections, a canvas view, uploads, and text search. Then the CLI and MCP. | Settled | Uploads mean paste, drop, and the file picker. |
-| A3 | Not in the first version | The browser extension, public sharing, co-op editing, AI tags, semantic search, video, offline editing, desktop shell, mobile editing, PureRef import | Settled | Section T keeps room for them. |
-| A4 | Speed work | Product first. The custom renderer and image tuning come after. | Settled | |
-| A5 | Priorities | Good developer experience, low hosting cost, and room to grow | Settled | |
-| A6 | Mobile | The gallery is responsive. Canvases are view-only. | Your call | |
+TanStack Start with React, Tailwind 4, and shadcn on Base UI (preset `b1VlJAwK`). Convex with Confect, so backend code is written with Effect 4.1. Convex Auth 2.0. Cloudflare R2 through Convex's R2 component. PixiJS 8. Bun and Turborepo. TypeScript 7. Every version is an exact pin, and the shared ones live in the Bun catalog in the root `package.json`.
 
-## B. Product model
+## Working rules
 
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| B1 | Library | Everything you have saved. Each saved thing is a Ref. | Settled, lock | |
-| B2 | Collection | A named set of Refs. A Ref can sit in many collections. | Settled, lock | |
-| B3 | Two views | Any set of Refs can be shown as a gallery or as a canvas. The set is the whole library, a filter, or one collection. | Settled, lock | |
-| B4 | What a canvas is | The canvas view of a collection, or of the whole library. There are no separate boards. | Default, lock | A moodboard is a collection you look at as a canvas. |
-| B5 | Canvas layout | Each collection keeps one saved layout. The whole library keeps one too. | Default, lock | |
-| B6 | New items on a canvas | An item dropped on the canvas lands where you dropped it. An item added anywhere else is placed beside the existing layout the next time the canvas opens. | Default | |
-| B7 | Removing an item from a canvas | Removes it from that collection. It stays in the library. | Default | |
-| B8 | Repeats | One canvas item per Ref per canvas | Default | Duplicates can come later. |
-| B9 | Canvas-only items | Notes and groups live on the canvas and not in the library | Default | |
-| B10 | The whole library on one canvas | Works like any canvas. Loading thousands of items in pieces comes with the speed work. | Later | This is the case your own renderer is for. |
-| B11 | Filters in canvas view | Dim the items that do not match | Later | |
+Each rule below comes from a bug or a wrong assumption already hit in this repo.
 
-## C. Backend and data
+### Backend
 
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| C1 | Backend | Convex | Settled, lock | Free up to 1M function calls and 0.5 GB of data a month ([pricing](https://www.convex.dev/pricing)). |
-| C2 | Effect on Convex | Confect | Settled | Version 10.6 needs `effect ~4.1.0`, checked on npm. It is pre-1.0 and maintained outside Convex. Test 2 passed. Confect adds about 40 ms of server time to a query that returns 1,000 documents (215 ms against 175 ms, 30 calls each in test 3). A one-time probe with temporary functions, 5 to 6 calls each, put the cost of loading Effect and Confect at about 17 ms per call, and Confect's `experimental_reuseContext` option removed it. That option is off. |
-| C3 | Live updates | Convex live queries. A canvas does not use one live query for all of its items. See C19. | Default | Online only. Changed by test 3. |
-| C4 | Ownership | Every document carries `workspaceId`. Each user gets a personal workspace. | Default, lock | Leaves room for co-op and teams. Built. A workspace has an owner, and sign-up creates it with the user. The lab canvas tables still use the user and move over in the canvas step. |
-| C5 | Tables | Workspace, Blob, Ref, Collection, CollectionRef, Tag, Canvas, CanvasItem | Default, lock | |
-| C6 | Blob and Ref | A Blob is bytes keyed by SHA-256 inside a workspace. A Ref points to blobs by role. | Default, lock | Roles are original, thumbnail, and display. Built for the original role. The Ref's `blobs.original` field holds the Blob's ID. |
-| C7 | CanvasItem kinds | A tagged union of image, note, and group | Default, lock | An image item points at a Ref. |
-| C8 | IDs | Convex document IDs. Canvas items also carry a client-made `key`, so the canvas can create them at once. | Default, lock | |
-| C9 | Canvas storage | One document per item | Default, lock | A document caps at 1 MiB and a query can read 16 MiB ([limits](https://docs.convex.dev/production/state/limits)). |
-| C10 | Saving edits | One mutation per gesture, carrying a list of item operations | Default, lock | |
-| C11 | Conflicts | Each operation patches only the fields it changed, so the last write wins per field | Default | |
-| C12 | Item properties | x, y, uniform scale, rotation, flip, crop rectangle, opacity, grayscale | Default, lock | Stored on the item. Never baked into pixels. |
-| C13 | Z-order | A fractional index string per item | Default, lock | |
-| C14 | Groups | A parent reference on items. One level in the UI at first. | Default | |
-| C15 | Deletes | Soft delete with a 30-day trash | Default | C19 depends on this. A deleted item must stay a document so that the changes query can report it. |
-| C16 | What a Ref records | Source URL when there is one, file name, upload time, dimensions, MIME type, byte size, hash, note | Default, lock | The file name is on the Ref, and the upload time is the Ref's creation time. Dimensions, MIME type, byte size, and hash are on the Blob, because they describe the bytes. Source URL and note come with the first feature that sets them. |
-| C17 | URLs | `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas` | Default, lock | |
-| C18 | Export | A zip with `manifest.json` and the original files | Later | |
-| C19 | Canvas sync | Each canvas document carries a revision counter. A mutation raises the counter and stamps the items it wrote. The client loads a snapshot, then subscribes to the items written after the snapshot's revision. The client takes a new snapshot on every page load and when the change list passes a set size. | Default, lock | Added by test 3. One live query resends every item on each change. The change list grows with every distinct item changed since the snapshot, so a session that never takes a new snapshot ends up resending the whole canvas. A snapshot must not outlive the trash period of C15. Once a deleted item's document is purged, the change list stops reporting it, and a client that still holds an older snapshot would show the item again. Every write to a canvas updates the one canvas document, so two writers to the same canvas conflict and Convex retries one of them. Look at this again before co-op. |
+- Write backend code in `packages/backend/confect`. `confect codegen` owns `convex/` and `confect/_generated/`, and it deletes any file in `convex/` that it did not write. The two exceptions are `convex/convex.config.ts` and `convex/tsconfig.json`.
+- A table is one file in `confect/tables/`. A function group is a `*.spec.ts` and `*.impl.ts` pair. A spec is bundled into the browser, so it must not import server code.
+- `confect/auth.ts` is the Convex auth config. The sign-in functions that Convex Auth returns are plain Convex functions, and they live in the `session` group.
+- Every group that acts for a user attaches the `RequireWorkspace` middleware and reads the user and workspace from `CurrentWorkspace`. Never take a user ID or a workspace ID from a function's arguments.
+- Sign R2 URLs in a mutation or an action, never in a query. Convex caches query results, so a query returns the same signed URL after it has expired.
+- Name unit tests `*.test.ts`. Confect's specs are named `*.spec.ts`, and Vitest must not run them.
 
-## D. Canvas behavior
+### Web
 
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| D1 | Renderer | PixiJS 8 on WebGL, behind a small renderer interface | Settled | The interface is set camera, upsert items, remove items, upload texture, evict texture, draw. |
-| D2 | Pixi types | Kept out of the scene and canvas model | Default, lock | Makes your own engine a backend swap later. |
-| D3 | Scene state | A plain TypeScript store owned by the canvas, outside React state | Default, lock | React reads selection, tool, and zoom from it. |
-| D4 | Live query and the scene | The scene applies changes from the live query, except to items in a gesture | Default | Drags stay local until release. |
-| D5 | Coordinates | World units as float64 with y down. The renderer gets camera-relative float32. | Default, lock | |
-| D6 | Zoom range | 1% to 6400%, toward the cursor | Later | |
-| D7 | Input | Wheel pans. Pinch or Ctrl+wheel zooms. Space-drag and middle-drag pan. A mouse preset makes the wheel zoom, as PureRef does. | Your call | |
-| D8 | Touch and pen | Pan and pinch only at first | Later | |
-| D9 | Shortcuts | One keymap table through TanStack Hotkeys. Shortcuts do not fire while a text field has focus. | Default | |
-| D10 | Selection | Click, shift-add, marquee. Eight handles plus rotate. Aspect ratio locked. | Later | |
-| D11 | Handles and outlines | Drawn in an overlay above the GPU layer | Default | The renderer then draws textured quads only. |
-| D12 | Snapping | None at first | Your call | PureRef has none. |
-| D13 | Arrange | Grid, pack, align, and distribute | Later | The same packing places new items for B6. |
-| D14 | Undo | A client-side stack of inverse operations per session | Default | |
-| D15 | Clipboard | Paste images, files, and image URLs. Copy the selection as PNG. | Later | |
-| D16 | Drag and drop | Native drag and drop for files, and from the gallery onto a canvas | Default | |
-| D17 | Notes | Plain text with size and color, drawn to a texture with Canvas2D and edited in a DOM overlay | Default | |
-| D18 | Formats | PNG, JPEG, WebP, GIF, AVIF. SVG is rasterized at upload. | Default | The server accepts the five raster formats. SVG is refused until the rasterizing step exists. |
-| D19 | Animated images | First frame at first | Later | |
-| D20 | Large images | The canvas shows the 2048 px copy and loads the original when zoomed past it | Default | |
-| D21 | Canvas background | One color per canvas | Your call | |
-| D22 | Instant open from a local copy | A cached snapshot shown before the live query answers | Later | Part of the speed work. |
+- Signed-in routes live under `_app` and set `ssr: false`. The session tokens are in `localStorage`, because Convex Auth's cookie mode is for Next.js only.
+- Load every image as a CORS request. An `<img>` sets `crossOrigin="anonymous"`. A response cached from a plain `<img>` has no CORS headers, and a later canvas load of the same URL fails on it.
+- Do not subscribe to every item of a canvas with one live query. It resends every item on each change. See C19.
+- Until F5 is decided, call Confect functions with the hooks from `@confect/react`.
+- The UI stays plain. Use the shadcn preset's defaults and no custom styling until the design pass.
 
-## E. Gallery and library behavior
+### R2
 
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| E1 | Gallery | A masonry grid with TanStack Virtual | Your call | |
-| E2 | Filters | Tags, collection, and search text, kept in the URL | Default | |
-| E3 | Uploads | Paste, drop, and the file picker, from the gallery or a canvas | Settled | |
-| E4 | Uploading inside a collection | Adds the Ref to that collection | Default | |
-| E5 | Duplicates | The same hash reuses the blob and tells you | Default | Built this way: saving the same bytes again adds a second Ref on the existing Blob, uploads nothing, and the page says so. Say so if a duplicate should not add a Ref. A retried save also adds a Ref, because nothing identifies one save attempt. The web app never retries a save. Give each save a client-made ID before the CLI or an agent calls it. |
-| E6 | Search | A Convex full-text search index over name, note, tags, and source | Default | At most 16 terms a query and 1,024 results ([limits](https://docs.convex.dev/production/state/limits)). |
-| E7 | Bulk actions | Tag, add to collection, delete | Later | |
+- The bucket is private. Its CORS policy lists the app's origin, the methods `GET` and `PUT`, and the header `Content-Type`.
+- The Convex deployment needs `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. `R2_ENDPOINT` is the account URL, `https://<account-id>.r2.cloudflarestorage.com`, with no bucket name after it.
 
-## F. User interface
+### Sign-in
 
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| F1 | Framework | TanStack Start with React | Settled | Convex has an official TanStack Start setup ([quickstart](https://docs.convex.dev/quickstart/tanstack-start)). |
-| F2 | Components | shadcn, created with `--preset b1VlJAwK` | Settled | |
-| F3 | Styling | Tailwind 4 | Settled | |
-| F4 | TanStack libraries | Router, Query, Virtual, Form, Hotkeys, Pacer | Settled | |
-| F5 | Server data | Convex queries through TanStack Query, with `@convex-dev/react-query` | Your call | Results update live. Confect's React hooks in `@confect/react` decode results with the function's schema, and they use `convex/react`, not TanStack Query. The router sets up both on one Convex client. Choose which one calls Confect functions. |
-| F6 | Optimistic edits | Convex optimistic updates | Default | |
-| F7 | Landing page | A route in the same Start app | Default | One app to deploy. |
-| F8 | Look | Whatever the preset gives. The UI stays plain for now. | Settled | The first UI is throwaway. The polished design comes later. |
+- Passkeys are bound to their `rpId` for good. `AUTH_RP_ID` and `AUTH_ORIGIN` on the Convex deployment set it, and they default to `localhost` and `http://localhost:3000`. Set both before the first real user signs up.
 
-## G. Sign-in
+## Scope
 
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| G1 | Library | Convex Auth 2.0 | Default | Stable since November 2026. Convex recommends it over Better Auth for new apps ([docs](https://docs.convex.dev/auth/convex-auth)). Test 1 passed under TanStack Start. |
-| G2 | Methods | GitHub, Google, and passkeys | Your call | Emailed codes and magic links are not in 2.0 yet ([launch post](https://stack.convex.dev/convex-auth-v2)). A passkey account is a username plus a passkey. It has no email address. |
-| G3 | App routes | Rendered in the browser, behind sign-in | Default | Tested. The signed-in routes set `ssr: false`. The session tokens live in `localStorage`, because the cookie mode of Convex Auth is for Next.js only. |
-| G4 | Fallback | Convex's Better Auth component | Later | It documents TanStack Start. Not needed, because test 1 passed. |
-| G5 | CLI and agents | A personal API key, stored hashed | Default | |
-| G6 | Key scopes | Read, or read and write. No delete. | Default, lock | |
-
-## H. Storage and images
-
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| H1 | API | The S3 API | Settled | |
-| H2 | Store | Cloudflare R2, through Convex's R2 component | Default | Convex's own file storage charges $0.12 per GB served ([pricing](https://www.convex.dev/pricing)). R2 serves for free. Test 4 passed. |
-| H3 | Originals | Kept byte-exact | Default, lock | |
-| H4 | Keys | `w/{workspaceId}/o/{sha256}` and `w/{workspaceId}/v/{sha256}/{spec}.webp` | Default, lock | The original key is built. |
-| H5 | De-duplication | Per workspace, never global | Default, lock | |
-| H6 | Uploads | A signed URL, then the browser uploads straight to R2 | Default | Built. The server makes the object key from the workspace and the hash, so a client cannot write outside its workspace. After the upload the server reads the object's size and first 12 bytes from R2, and records the type those bytes show (L1). Two gaps remain. Nothing checks that the bytes match the hash in the key. The upload URL stays valid for 15 minutes by the SDK's default, so a client can replace the bytes after the server read them. Signing the hash into the upload URL would close both. |
-| H7 | Upload limit | 50 MB per image | Your call | Checked after the upload, when the image is saved. A larger upload still reaches R2 and stays there with no Blob. |
-| H8 | Variants | A 512 px WebP thumbnail, a 2048 px WebP display copy, and a ThumbHash | Default | |
-| H9 | Who makes variants | The browser, at upload. For CLI and agent saves, the app makes them the first time it shows the image. | Default | No server image code. |
-| H10 | Serving | Signed URLs from R2 | Default | Test 4 passed with the bucket's CORS policy listing the app's origin. A mutation signs each URL for one hour, and the page asks for a new one after 50 minutes. A new URL makes the browser download the image again, so an open page reloads its images about once an hour. Signing with a rounded date would give a stable URL that the browser can cache. A query must not sign URLs, because Convex caches query results and would return a URL after it expired. Every image load must be a CORS request, so each `<img>` sets `crossOrigin`. A response cached from a plain `<img>` has no CORS headers, and a later canvas load of the same URL fails on it. |
-
-## I. Hosting, runtime, and repository
-
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| I1 | Backend host | Convex Cloud, free plan | Default | |
-| I2 | Web host | Vercel | Default | The Hobby plan is for personal, non-commercial use. A web host is quick to change later. |
-| I3 | Runtime and package manager | Bun | Settled | Convex functions run on Convex's own runtime. |
-| I4 | Repository | One monorepo with Bun workspaces and Turborepo, public on GitHub | Settled | See "Repository layout" below. Nothing is pushed until you have reviewed it locally. |
-| I5 | API for the CLI and agents | A Confect HTTP API inside Convex, calling the same functions as the browser | Default | One write path for every client. |
-| I6 | Background jobs | Convex's scheduler and cron | Default | |
-| I7 | Access checks | One helper that resolves the workspace and scopes, used by every function | Default, lock | Built as the `RequireWorkspace` Confect middleware. It provides the signed-in user and that user's workspace to queries, mutations, and actions. Scopes come with API keys. |
-| I8 | Deploys | `convex deploy` and Vercel's Git deploys | Default | |
-| I9 | What stays from Ratstack | Effect, the contract-first habit, and the lint setup | Default | |
-
-## J. Agent interface
-
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| J1 | Transport | A local MCP server over stdio, started by the CLI | Default | A remote MCP endpoint comes later. |
-| J2 | Tools | `search_refs`, `get_ref`, `view_refs`, `list_collections`, `get_collection`, `save_ref`, `add_to_collection` | Default | Each is also a CLI command. |
-| J3 | Deletes by agents | None | Default | |
-| J4 | Images in results | Text and metadata first. Pixels on request, at most four per call. | Default | |
-| J5 | CLI | Effect's CLI module on Bun, published to npm | Default | |
-
-## K. Plans, license, and tooling
-
-| ID | Decision | Choice | Status | Note |
-|---|---|---|---|---|
-| K1 | Payments | Polar, through Convex's Polar component | Settled | Not needed while it is only you. |
-| K2 | Plans | A free plan and subscription plans | Settled | Tiers and prices are open. |
-| K3 | License | AGPL-3.0 | Settled | |
-| K4 | License for the CLI | MIT | Your call | |
-| K5 | TypeScript | 7.0 with the Effect language service | Default | TypeScript 7.0.2 type-checks every package. For TypeScript 7 the Effect language service is the `@effect/tsgo` package, not `@effect/language-service`. It is not set up yet. |
-| K6 | Lint and format | Oxlint and Oxfmt | Default | |
-| K7 | Tests | Vitest, with `convex-test` for functions | Default | Start with the pure canvas logic. Vitest covers the pure helpers in `packages/scene` and `packages/backend`. `convex-test` is not set up. The function rules are covered by the browser checks against the dev deployment. |
-| K8 | Git hooks | lefthook with a light pre-commit | Default | |
-| K9 | Versions | Exact pins | Default | |
-| K10 | Name | refhaven | Settled | You have the domain, and the GitHub name is free on your account. The npm name is not checked. |
-| K11 | Convex help for agents | Convex's agent skills, installed globally | Settled | |
-
-## L. Safety basics
-
-| ID | Decision | Choice | Status |
-|---|---|---|---|
-| L1 | Uploads | The server records the real file type and ignores the client's claim | Default |
-| L2 | Image access | The server checks the workspace before it signs a URL | Default |
-| L3 | API keys | Hashed at rest and revocable | Default |
-| L4 | Fetching a URL for a save | http and https only. Cap size and time. | Default |
-
-## T. Room kept for later
-
-| ID | Later feature | What the model keeps room for now |
+| ID | Rule | State |
 |---|---|---|
-| T1 | Browser extension | WXT. Saves call the same `save_ref` function. A Ref already records a source URL. |
-| T2 | Public sharing | A `/s/{token}` route and a public R2 path |
-| T3 | Co-op | Live queries already carry other people's edits. Add presence. |
-| T4 | AI tags | A `source` on each tag with the values user, agent, and model |
-| T5 | Semantic search | Convex vector search, in its own table keyed by ref and model |
-| T6 | Video | A `kind` on Ref and a set of blobs per Ref |
-| T7 | Your own renderer | The renderer interface and a `levels` field on blobs for more image sizes |
+| A2 | The first version is a library with a gallery view, collections, a canvas view, uploads, and text search. The CLI and MCP come after it. | Planned |
+| A3 | Not in the first version: the browser extension, public sharing, co-op editing, AI tags, semantic search, video, offline editing, a desktop shell, mobile editing, and PureRef import. | Planned |
+| A4 | Product first. A custom renderer and image tuning come after the product works. | Planned |
+| A6 | On mobile the gallery is responsive and canvases are view-only. | Open |
 
-## Repository layout
+## Product model
 
-```
-apps/
-	web/         TanStack Start app
-	cli/         CLI and the stdio MCP server
-packages/
-	backend/     Convex functions with Confect, and the schema
-	scene/       pure canvas model with transforms, hit testing, and undo
-	renderer/    the renderer interface and the Pixi backend
-	ui/          shared shadcn components
-```
+| ID | Rule | State |
+|---|---|---|
+| B1 | The library is everything you have saved. Each saved thing is a Ref. | Built, lock |
+| B2 | A collection is a named set of Refs. A Ref can sit in many collections. | Planned, lock |
+| B3 | Any set of Refs can be shown as a gallery or as a canvas. The set is the whole library, a filter, or one collection. | Planned, lock |
+| B4 | A canvas is the canvas view of a collection or of the whole library. There are no separate boards. | Planned, lock |
+| B5 | Each collection keeps one saved layout. The whole library keeps one too. | Planned, lock |
+| B6 | An item dropped on the canvas lands where you dropped it. An item added anywhere else is placed beside the existing layout the next time the canvas opens. | Planned |
+| B7 | Removing an item from a canvas removes it from that collection. It stays in the library. | Planned |
+| B8 | A canvas holds one item per Ref. | Planned |
+| B9 | Notes and groups live on the canvas and not in the library. | Planned |
+| B10 | The whole library on one canvas works like any canvas. Loading thousands of items in pieces comes with the speed work. | Later |
+| B11 | In canvas view, a filter dims the items that do not match. | Later |
 
-`apps/extension` joins later. `apps/cli` does not exist yet.
+## Data
 
-## Try these first
+| ID | Rule | State |
+|---|---|---|
+| C4 | Every document carries `workspaceId`. Each user gets a personal workspace at sign-up. The lab tables `canvases` and `canvasItems` still use the user and move over in the canvas step. | Built, lock |
+| C5 | The tables are Workspace, Blob, Ref, Collection, CollectionRef, Tag, Canvas, and CanvasItem. Workspace, Blob, and Ref exist. | Planned, lock |
+| C6 | A Blob is bytes keyed by SHA-256 inside a workspace. A Ref points to blobs by role, in its `blobs` field. The roles are original, thumbnail, and display. Only `blobs.original` exists. | Built, lock |
+| C16 | A Ref records its file name, and its creation time is the upload time. The Blob records the hash, byte size, MIME type, and pixel size, because they describe the bytes. Source URL and note join the Ref with the first feature that sets them. | Built, lock |
+| C8 | IDs are Convex document IDs. A canvas item also carries a client-made `key`, so the canvas can create it at once. | Planned, lock |
+| C15 | A delete is a soft delete with a 30-day trash. | Planned |
+| C17 | The URLs are `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas`. Only `/library` exists. | Planned, lock |
+| C18 | Export is a zip with `manifest.json` and the original files. | Later |
+| I7 | One helper resolves the caller's workspace, and every function uses it. It is the `RequireWorkspace` middleware. Scopes join it with API keys. | Built, lock |
+| I5 | The CLI and agents call a Confect HTTP API inside Convex, which runs the same functions as the browser. | Planned |
+| I6 | Background jobs use Convex's scheduler and cron. | Planned |
 
-Each is a small test that could change a decision above.
+## Storage and images
 
-1. Sign in with Convex Auth 2.0 under TanStack Start.
-2. Write one Confect function on Effect 4.1 that reads the signed-in user.
-3. Open a canvas of 1,000 items as one live query. Check how much data each update sends.
-4. Load an R2 image into a WebGL texture from the browser through a signed URL.
+| ID | Rule | State |
+|---|---|---|
+| H3 | Originals are kept byte-exact. | Built, lock |
+| H4 | Object keys are `w/{workspaceId}/o/{sha256}` for an original and `w/{workspaceId}/v/{sha256}/{spec}.webp` for a variant. Only the original key exists. | Built, lock |
+| H5 | Bytes are de-duplicated per workspace, never across workspaces. | Built, lock |
+| H6 | The browser uploads straight to R2 through a signed URL. The server makes the object key from the workspace and the hash. After the upload the server reads the object's size and first 12 bytes from R2 before it records anything. | Built |
+| L1 | The server records the file type that the bytes show and ignores the client's claim. | Built |
+| D18 | The formats are PNG, JPEG, WebP, GIF, and AVIF. SVG is rasterized at upload. The server refuses SVG until the rasterizing step exists. | Built |
+| H7 | An image is at most 50 MB. The server checks the size when the image is saved, after the upload. | Built |
+| E5 | Saving bytes the library already holds reuses the Blob, uploads nothing, and tells you. It adds a second Ref. | Built |
+| H10 | Images are served through signed R2 URLs. A mutation signs each URL for one hour, and the page asks for a new one after 50 minutes. | Built |
+| L2 | The server checks the workspace before it signs a URL. | Built |
+| H8 | Each image gets a 512 px WebP thumbnail, a 2048 px WebP display copy, and a ThumbHash. | Planned |
+| H9 | The browser makes the variants at upload. For a CLI or agent save, the app makes them the first time it shows the image. There is no server image code. | Planned |
+| L4 | A save from a URL fetches http and https only, with a cap on size and time. | Planned |
 
-### Results on 2026-11-16
+Known gaps in the upload path:
 
-Each test has a script in `apps/web/checks`. The scripts drive headless Chromium against the cloud dev deployment.
+- Nothing checks that the uploaded bytes match the hash in the key. The upload URL also stays valid for 15 minutes, so a client can replace the bytes after the server read them. Signing the hash into the upload URL closes both.
+- A retried save adds another Ref, because nothing identifies one save attempt. The web app never retries. Give each save a client-made ID before the CLI or an agent saves.
+- An upload that is too large, refused, or abandoned stays in R2 with no Blob.
+- A new signed URL makes the browser download the image again, so an open page reloads its images about once an hour. Signing with a rounded date gives a URL the browser can cache.
 
-1. **Passed.** Sign-up with a passkey, a page reload, sign-out, and sign-in with the same passkey all work. A query without a session fails with `NotSignedIn`. The passkey came from Chromium's virtual passkey device, not from a real fingerprint prompt.
-2. **Passed.** `users.whoAmI` returns the signed-in user to the browser. Convex rejects a wrong argument type and an undeclared argument. Effect Schema rejects an empty or too long `greeting`. The return check was seen once by hand and no script repeats it: with `message` set to a number in the implementation, the call failed with `SchemaError: Expected string`.
-3. **The whole result is resent.** The numbers are the median of 25 changes per design, with the range in parentheses.
+## Canvas
 
-	| Design | JSON received per change | Bytes on the wire per change | Time from the mutation call to the new items in React |
-	|---|---|---|---|
-	| One live query through Confect | 247,952 bytes, all 1,000 items | 42.2 KB | 367 ms (338 to 430) |
-	| One live query as a plain Convex function | 247,952 bytes, all 1,000 items | 42.2 KB | 321 ms (304 to 389) |
-	| Snapshot plus the changes since a revision (C19) | 881 bytes for the first change after a snapshot, 1,873 bytes for the fifth | 214 to 248 bytes | 180 ms (168 to 202) |
+| ID | Rule | State |
+|---|---|---|
+| C19 | Each canvas document carries a revision counter. A mutation raises the counter and stamps the items it wrote. The client loads a snapshot, then subscribes to the items written after the snapshot's revision. The client takes a new snapshot on every page load and when the change list passes a set size. A snapshot must not outlive the trash period of C15, or a purged item comes back. The page `/lab/canvas-sync` is a prototype of this. | Open, lock |
+| C7 | A canvas item is a tagged union of image, note, and group. An image item points at a Ref. | Planned, lock |
+| C9 | A canvas stores one document per item. | Planned, lock |
+| C10 | An edit is saved as one mutation per gesture, carrying a list of item operations. | Planned, lock |
+| C11 | Each operation patches only the fields it changed, so the last write wins per field. | Planned |
+| C12 | An item has x, y, uniform scale, rotation, flip, crop rectangle, opacity, and grayscale. They are stored on the item and never baked into pixels. | Planned, lock |
+| C13 | Z-order is a fractional index string per item. | Planned, lock |
+| C14 | A group is a parent reference on its items. The UI shows one level at first. | Planned |
+| D1 | The canvas draws with PixiJS 8 on WebGL behind the `Renderer` interface in `packages/renderer`. The interface is set camera, upsert items, remove items, upload texture, evict texture, and draw. | Built |
+| D2 | Pixi types stay inside `packages/renderer`. The scene and the canvas model never import them. | Built, lock |
+| D5 | World units are float64 with y down. An item's x and y are its center. The renderer turns positions into camera-relative values before the GPU sees them. | Built, lock |
+| D3 | Scene state is a plain TypeScript store owned by the canvas, outside React state. React reads selection, tool, and zoom from it. | Planned, lock |
+| D4 | The scene applies changes from the server, except to items in a gesture. A drag stays local until release. | Planned |
+| D9 | Shortcuts come from one keymap table through TanStack Hotkeys. They do not fire while a text field has focus. | Planned |
+| D11 | Handles and outlines are drawn in an overlay above the GPU layer. The renderer draws textured quads only. | Planned |
+| D14 | Undo is a client-side stack of inverse operations per session. | Planned |
+| D16 | Files can be dragged in, and a Ref can be dragged from the gallery onto a canvas, with native drag and drop. | Planned |
+| D17 | A note is plain text with a size and a color. It is drawn to a texture with Canvas2D and edited in a DOM overlay. | Planned |
+| D20 | The canvas shows the 2048 px copy and loads the original when zoomed past it. | Planned |
+| D6 | Zoom runs from 1% to 6400%, toward the cursor. | Later |
+| D8 | Touch and pen do pan and pinch only at first. | Later |
+| D10 | Selection is click, shift-add, and marquee, with eight handles plus rotate and a locked aspect ratio. | Later |
+| D13 | Arrange offers grid, pack, align, and distribute. The same packing places new items for B6. | Later |
+| D15 | Paste takes images, files, and image URLs. Copy puts the selection on the clipboard as PNG. | Later |
+| D19 | An animated image shows its first frame at first. | Later |
+| D22 | A cached snapshot is shown before the server answers. This is part of the speed work. | Later |
+| D7 | The wheel pans. Pinch or Ctrl+wheel zooms. Space-drag and middle-drag pan. A mouse preset makes the wheel zoom. | Open |
+| D12 | There is no snapping at first. | Open |
+| D21 | A canvas has one background color. | Open |
 
-	The change list grows by about 250 bytes of JSON for each distinct item changed since the snapshot. The test stops at five changes, so it does not show a long session.
+## Gallery
 
-	Opening the canvas costs about 248 KB of JSON and 46 KB on the wire in every design. That is from a production build, 5 loads per design. On the dev server the two live designs sometimes receive the result twice, 496 KB, because the page subscribes, unsubscribes, and subscribes again.
+| ID | Rule | State |
+|---|---|---|
+| E3 | Images are added by paste, drop, and the file picker, from the gallery or a canvas. Only the file picker exists. | Planned |
+| E4 | Uploading inside a collection adds the Ref to that collection. | Planned |
+| E2 | Filters are tags, collection, and search text, and they are kept in the URL. | Planned |
+| E6 | Search is a Convex full-text search index over name, note, tags, and source. | Planned |
+| E7 | Bulk actions are tag, add to collection, and delete. | Later |
+| E1 | The gallery is a masonry grid with TanStack Virtual. Today it is a plain grid. | Open |
 
-	Most of the time is server function time. `convex logs` for the same run gives these medians: `canvas.moveItems` takes 63 ms, and the query that reruns after it takes 215 ms through Confect, 175 ms as a plain Convex function, and 59 ms for the change list. The other 60 to 90 ms cover the network round trip, the transfer, and the browser, and the test does not split them further. From the WebSocket frame that carries the items to the React update, the browser takes 14 ms through Confect, 10 ms for the plain function, and 3 ms for the change list.
+## Web app
 
-	Each rerun of a live query reads 1,002 documents and 403 KB from the database. A rerun of the change list reads 2 to 7 documents.
-4. **Passed.** An image uploaded through the R2 component was fetched through a signed URL and drawn by the PixiJS renderer. The canvas pixel at the item's center matched the image's color, and the console showed no error. R2 answered with `access-control-allow-origin: http://localhost:3000`. The same signed URL was refused from an origin that the CORS policy does not list. The browser loads the image with `fetch`, then `createImageBitmap`, then a texture upload.
+| ID | Rule | State |
+|---|---|---|
+| G3 | App routes render in the browser, behind sign-in. | Built |
+| F7 | The landing page is a route in the same app. | Built |
+| F4 | Use TanStack Virtual, Form, Hotkeys, and Pacer for those jobs when they come up. Router and Query are set up. | Planned |
+| F6 | Edits show at once through Convex optimistic updates. | Planned |
+| F5 | Server data was planned to go through TanStack Query with `@convex-dev/react-query`. Confect's hooks decode results with the function's schema, and they use `convex/react`, not TanStack Query. The router sets up both on one Convex client, and every page uses Confect's hooks today. | Open |
 
-	The R2 settings it needed:
+## Sign-in
 
-	- A private bucket. It needs no public access.
-	- A CORS policy on the bucket with `AllowedOrigins` set to the app's origin, `AllowedMethods` set to `GET` and `PUT`, and `AllowedHeaders` set to `Content-Type`. The test shows the origin matters. It does not test each of the other fields alone.
-	- An API token with **Object Read & Write**, limited to the bucket.
-	- Four environment variables on the Convex deployment: `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. `R2_ENDPOINT` is the account URL, `https://<account-id>.r2.cloudflarestorage.com`, without the bucket name after it. The component does not need `R2_TOKEN`.
+| ID | Rule | State |
+|---|---|---|
+| G1 | Sign-in is Convex Auth 2.0. A passkey account is a username plus a passkey, with no email address. | Built |
+| G2 | The methods are passkeys, GitHub, and Google. Only passkeys exist. | Open |
+| G5 | The CLI and agents use a personal API key, stored hashed and revocable. | Planned |
+| G6 | A key's scope is read, or read and write. No key can delete. | Planned, lock |
 
-## The backend that was not chosen
+## CLI and agents
 
-PlanetScale Postgres with a Bun server on Railway, Ratstack's capability package, and Alchemy. It costs about $10 to $15 a month and has no live updates. It fits if plain SQL ever matters more than free hosting.
+| ID | Rule | State |
+|---|---|---|
+| J1 | The agent interface is a local MCP server over stdio, started by the CLI. A remote endpoint comes later. | Planned |
+| J2 | The tools are `search_refs`, `get_ref`, `view_refs`, `list_collections`, `get_collection`, `save_ref`, and `add_to_collection`. Each is also a CLI command. | Planned |
+| J3 | Agents cannot delete. | Planned |
+| J4 | A result carries text and metadata first. Pixels come on request, at most four images per call. | Planned |
+| J5 | The CLI uses Effect's CLI module on Bun, lives in `apps/cli`, and is published to npm. | Planned |
+| K4 | The CLI's license is MIT. | Open |
 
-## Parked until this is more than a hobby
+## Tooling and hosting
 
-Terms and a privacy page, a copyright takedown contact, a process for reporting illegal content, rules for EU and UK users, a contributor agreement, a trademark, and a legal entity.
+| ID | Rule | State |
+|---|---|---|
+| K3 | The license is AGPL-3.0. | Built |
+| K6 | Lint with Oxlint and format with Oxfmt. A lefthook pre-commit runs both on staged files. | Built |
+| K7 | Unit tests use Vitest and cover pure logic. The browser checks in `apps/web/checks` cover the function rules against the dev deployment. `convex-test` is not set up. | Built |
+| K5 | The Effect language service for TypeScript 7 is the `@effect/tsgo` package. It is not set up. | Planned |
+| I1 | The backend runs on Convex Cloud. Only a dev deployment exists. | Built |
+| I2 | The web app is hosted on Vercel and deployed by its Git deploys. The backend is deployed with `convex deploy`. | Planned |
 
-## Versions checked on npm on 2026-11-16
+## Room kept for later
 
-| Package | Version |
-|---|---|
-| bun | 1.4.4 |
-| turbo | 2.11.11 |
-| effect | 4.1.4 |
-| convex | 1.50.0 |
-| @confect/server | 10.6.0 |
-| @confect/core | 10.6.0 |
-| @confect/cli | 10.6.0 |
-| @confect/react | 10.6.0 |
-| @effect/platform-node | 4.1.4 |
-| @convex-dev/auth | 2.0.0 |
-| @convex-dev/react-query | 0.1.0 |
-| @convex-dev/r2 | 0.10.4 |
-| @convex-dev/polar | 0.9.2 |
-| pixi.js | 8.23.0 |
-| react | 19.3.1 |
-| @tanstack/react-start | 1.169.5 |
-| @tanstack/react-router | 1.170.46 |
-| @tanstack/react-router-ssr-query | 1.167.3 |
-| vite | 8.3.8 |
-| @tanstack/react-query | 5.107.1 |
-| @tanstack/react-virtual | 3.14.26 |
-| @tanstack/react-form | 1.33.5 |
-| @tanstack/react-hotkeys | 0.27.0 |
-| @tanstack/react-pacer | 0.24.1 |
-| shadcn | 4.23.0 |
-| tailwindcss | 4.3.5 |
-| vitest | 5.1.0 |
-| typescript | 7.0.2 |
-| oxlint | 1.94.0 |
-| oxfmt | 0.79.0 |
-| lefthook | 2.2.2 |
-| playwright | 1.65.1 |
+Keep these possible when you change the model.
+
+| ID | Later feature | What the model keeps room for |
+|---|---|---|
+| T1 | Browser extension | It uses WXT and lives in `apps/extension`. A save calls the same `save_ref` function. |
+| T2 | Public sharing | A `/s/{token}` route and a public R2 path. |
+| T3 | Co-op | Live queries carry other people's edits. Add presence. C19's single revision counter needs another look first. |
+| T4 | AI tags | A `source` on each tag with the values user, agent, and model. |
+| T5 | Semantic search | Convex vector search, in its own table keyed by ref and model. |
+| T6 | Video | A `kind` on Ref and a set of blobs per Ref. |
+| T7 | A custom renderer | The `Renderer` interface and a `levels` field on blobs for more image sizes. |
+
+## Open decisions
+
+The owner decides these. Each row above shows the current default.
+
+- **C19.** Confirm the snapshot-plus-changes design for canvas sync before the canvas is built on it.
+- **F5.** Choose whether Confect's hooks or TanStack Query call Confect functions.
+- **E5.** Choose whether saving a duplicate adds a second Ref or returns the existing one.
+- **H7.** Confirm the 50 MB limit.
+- **G2.** Choose which OAuth providers to add.
+- **E1.** Choose the gallery layout.
+- **D7, D12, D21.** Canvas input, snapping, and background.
+- **A6.** Mobile behavior.
+- **K4.** The CLI's license.

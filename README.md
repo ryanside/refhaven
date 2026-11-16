@@ -1,8 +1,8 @@
 # refhaven
 
-A reference library for images. You save images into a library, group them into collections, and view any set as a gallery or as a canvas. The decisions behind the stack are in [docs/decisions.md](docs/decisions.md).
+A reference library for images. You save images into a library, group them into collections, and view any set as a gallery or as a canvas. The rules for working in this repo are in [docs/decisions.md](docs/decisions.md).
 
-This repository is at its first build step. It holds the project setup and four small tests of the stack. The pages under `/lab` are throwaway.
+This repository is early. You can sign in with a passkey and save images into your library. Collections and the canvas are not built yet. The pages under `/lab` are throwaway.
 
 ## Run it locally
 
