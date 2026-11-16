@@ -5,6 +5,7 @@ import { Input } from "@refhaven/ui/components/input";
 import { Label } from "@refhaven/ui/components/label";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { thumbHashToDataURL } from "thumbhash";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { type SaveOutcome, useSaveImage } from "@/library/use-save-image";
 
@@ -27,7 +28,7 @@ function Library() {
 
   const items = usePaginatedQuery(refs.public.library.list, {}, { initialNumItems: pageSize });
   const refIds = useMemo(() => items.results.map((item) => item.refId), [items.results]);
-  const urls = useRefUrls(refIds);
+  const urls = useRefUrls(refIds, "thumbnail");
 
   return (
     <main className="flex flex-col gap-4 p-6">
@@ -61,16 +62,7 @@ function Library() {
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
         {items.results.map((item) => (
           <li key={item.refId} data-ref-id={item.refId}>
-            <img
-              // Every image load is a CORS request. A response cached from a plain <img> has
-              // no CORS headers, and a later canvas load of the same URL would fail on it.
-              crossOrigin="anonymous"
-              src={urls.get(item.refId)?.url}
-              alt={item.fileName}
-              width={item.width}
-              height={item.height}
-              className="h-auto w-full"
-            />
+            <Thumbnail item={item} url={urls.get(item.refId)?.url} />
             <p className="truncate">{item.fileName}</p>
           </li>
         ))}
@@ -102,6 +94,39 @@ function Library() {
         </li>
       </ul>
     </main>
+  );
+}
+
+type Item = {
+  fileName: string;
+  width: number;
+  height: number;
+  thumbHash: string | null;
+};
+
+function Thumbnail({ item, url }: { item: Item; url: string | undefined }) {
+  const [loaded, setLoaded] = useState(false);
+  const placeholder = useMemo(
+    () =>
+      item.thumbHash === null
+        ? undefined
+        : `url(${thumbHashToDataURL(Uint8Array.from(atob(item.thumbHash), (c) => c.charCodeAt(0)))})`,
+    [item.thumbHash],
+  );
+
+  return (
+    <img
+      // Every image load is a CORS request. A response cached from a plain <img> has
+      // no CORS headers, and a later canvas load of the same URL would fail on it.
+      crossOrigin="anonymous"
+      src={url}
+      alt={item.fileName}
+      width={item.width}
+      height={item.height}
+      onLoad={() => setLoaded(true)}
+      style={loaded ? undefined : { backgroundImage: placeholder, backgroundSize: "100% 100%" }}
+      className="h-auto w-full"
+    />
   );
 }
 

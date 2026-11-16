@@ -22,7 +22,10 @@ type Drawn =
 function TextureLab() {
   const library = usePaginatedQuery(refs.public.library.list, {}, { initialNumItems: drawnImages });
   const items = useMemo(() => library.results.slice(0, drawnImages), [library.results]);
-  const urls = useRefUrls(useMemo(() => items.map((item) => item.refId), [items]));
+  const urls = useRefUrls(
+    useMemo(() => items.map((item) => item.refId), [items]),
+    "display",
+  );
   const ready = items.length > 0 && items.every((item) => urls.has(item.refId));
 
   const host = useRef<HTMLDivElement>(null);
@@ -65,7 +68,7 @@ function TextureLab() {
             texture: item.refId,
             x: firstItemCenter.x + index * itemSpacing,
             y: firstItemCenter.y,
-            scale: itemSize / Math.max(item.width, item.height),
+            scale: itemSize / Math.max(bitmap.width, bitmap.height),
             rotation: 0,
             z: String(index).padStart(4, "0"),
           },

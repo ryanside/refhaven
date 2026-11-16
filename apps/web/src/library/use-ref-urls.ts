@@ -1,5 +1,5 @@
 import { api } from "@refhaven/backend/api";
-import { signedUrlSeconds } from "@refhaven/backend/blob";
+import { type ImageRole, signedUrlSeconds } from "@refhaven/backend/blob";
 import type { Id } from "@refhaven/backend/id";
 import { useConvex } from "convex/react";
 import { useEffect, useState } from "react";
@@ -19,10 +19,10 @@ export function refIdsToSign(refIds: ReadonlyArray<Id<"refs">>, known: SignedUrl
 }
 
 /**
- * Signed image URLs by ref. A URL is kept until shortly before it expires, because a new URL
+ * Signed URLs by ref for one role of each image. A URL is kept until shortly before it expires, because a new URL
  * for the same image makes the browser download the image again.
  */
-export function useRefUrls(refIds: ReadonlyArray<Id<"refs">>) {
+export function useRefUrls(refIds: ReadonlyArray<Id<"refs">>, role: ImageRole) {
   const convex = useConvex();
   const [signed, setSigned] = useState<SignedUrls>(new Map());
   const [recheck, setRecheck] = useState(0);
@@ -37,7 +37,7 @@ export function useRefUrls(refIds: ReadonlyArray<Id<"refs">>) {
     };
 
     if (toSign.length > 0) {
-      convex.mutation(api.library.urls, { refIds: toSign.slice(0, urlsPerCall) }).then(
+      convex.mutation(api.library.urls, { refIds: toSign.slice(0, urlsPerCall), role }).then(
         (fresh) => {
           if (!current) return;
           setSigned(
@@ -61,7 +61,7 @@ export function useRefUrls(refIds: ReadonlyArray<Id<"refs">>) {
       current = false;
       clearTimeout(timer);
     };
-  }, [convex, refIds, signed, recheck]);
+  }, [convex, refIds, role, signed, recheck]);
 
   return signed;
 }
