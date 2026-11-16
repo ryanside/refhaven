@@ -37,14 +37,16 @@ You need [Bun](https://bun.sh) 1.4 and a [Convex](https://www.convex.dev) accoun
 | `bun run format` | Formats the code with Oxfmt. |
 | `bun run test` | Runs the unit tests. |
 
-The browser checks need `bun dev` running. Run them from `apps/web`. Each one signs up a new test user in the dev deployment through a virtual passkey device in headless Chromium.
+The browser checks need `bun dev` running. Run them from `apps/web`. Most of them sign up a new test user in the dev deployment through a virtual passkey device in headless Chromium.
 
 | Command | What it checks |
 |---|---|
 | `bun run check:auth` | Passkey sign-up, sign-out, and sign-in. |
-| `bun run check:confect` | The argument and return checks of a Confect function. |
+| `bun run check:confect` | A Confect function returns the signed-in user and refuses bad arguments. |
 | `bun run check:canvas-sync` | The bytes and time one change costs on a canvas of 1,000 items. |
-| `bun run check:texture` | An image uploaded to R2 drawn as a WebGL texture. |
+| `bun run check:renderer` | A local bitmap drawn as a WebGL texture by the PixiJS renderer. |
+| `bun run check:upload-keys` | An upload key outside the caller's prefix is refused. |
+| `bun run check:texture` | An image uploaded to R2 drawn as a WebGL texture. It needs the R2 environment variables on the Convex deployment. |
 
 ## Layout
 

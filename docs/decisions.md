@@ -47,7 +47,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | ID | Decision | Choice | Status | Note |
 |---|---|---|---|---|
 | C1 | Backend | Convex | Settled, lock | Free up to 1M function calls and 0.5 GB of data a month ([pricing](https://www.convex.dev/pricing)). |
-| C2 | Effect on Convex | Confect | Settled | Version 10.6 needs `effect ~4.1.0`, checked on npm. It is pre-1.0 and maintained outside Convex. Test 2 passed. Loading Effect and Confect adds about 17 ms of server time to each call. Confect's `experimental_reuseContext` option removes that cost, and it is off. |
+| C2 | Effect on Convex | Confect | Settled | Version 10.6 needs `effect ~4.1.0`, checked on npm. It is pre-1.0 and maintained outside Convex. Test 2 passed. Confect adds about 40 ms of server time to a query that returns 1,000 documents (215 ms against 175 ms, 30 calls each in test 3). A one-time probe with temporary functions, 5 to 6 calls each, put the cost of loading Effect and Confect at about 17 ms per call, and Confect's `experimental_reuseContext` option removed it. That option is off. |
 | C3 | Live updates | Convex live queries. A canvas does not use one live query for all of its items. See C19. | Default | Online only. Changed by test 3. |
 | C4 | Ownership | Every document carries `workspaceId`. Each user gets a personal workspace. | Default, lock | Leaves room for co-op and teams. |
 | C5 | Tables | Workspace, Blob, Ref, Collection, CollectionRef, Tag, Canvas, CanvasItem | Default, lock | |
@@ -64,7 +64,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | C16 | What a Ref records | Source URL when there is one, file name, upload time, dimensions, MIME type, byte size, hash, note | Default, lock | |
 | C17 | URLs | `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas` | Default, lock | |
 | C18 | Export | A zip with `manifest.json` and the original files | Later | |
-| C19 | Canvas sync | Each canvas document carries a revision counter. A mutation raises the counter and stamps the items it wrote. The client loads a snapshot once, then subscribes to the items written after the snapshot's revision. | Default, lock | Added by test 3. One live query resends every item on each change. Every write to a canvas updates the one canvas document, so two writers to the same canvas conflict and Convex retries one of them. Look at this again before co-op. |
+| C19 | Canvas sync | Each canvas document carries a revision counter. A mutation raises the counter and stamps the items it wrote. The client loads a snapshot, then subscribes to the items written after the snapshot's revision. The client takes a new snapshot on every page load and when the change list passes a set size. | Default, lock | Added by test 3. One live query resends every item on each change. The change list grows with every distinct item changed since the snapshot, so a session that never takes a new snapshot ends up resending the whole canvas. A snapshot must not outlive the trash period of C15. Once a deleted item's document is purged, the change list stops reporting it, and a client that still holds an older snapshot would show the item again. Every write to a canvas updates the one canvas document, so two writers to the same canvas conflict and Convex retries one of them. Look at this again before co-op. |
 
 ## D. Canvas behavior
 
@@ -138,7 +138,7 @@ Updated 2026-11-16. Facts with a link were read from that source on that date.
 | H3 | Originals | Kept byte-exact | Default, lock | |
 | H4 | Keys | `w/{workspaceId}/o/{sha256}` and `w/{workspaceId}/v/{sha256}/{spec}.webp` | Default, lock | |
 | H5 | De-duplication | Per workspace, never global | Default, lock | |
-| H6 | Uploads | A signed URL, then the browser uploads straight to R2 | Default | |
+| H6 | Uploads | A signed URL, then the browser uploads straight to R2 | Default | The server issues the object key. The R2 component's `syncMetadata` mutation accepts any key the client sends, so the server must refuse a key outside the caller's prefix. `images.ts` does this, and `check:upload-keys` tests it. |
 | H7 | Upload limit | 50 MB per image | Your call | |
 | H8 | Variants | A 512 px WebP thumbnail, a 2048 px WebP display copy, and a ThumbHash | Default | |
 | H9 | Who makes variants | The browser, at upload. For CLI and agent saves, the app makes them the first time it shows the image. | Default | No server image code. |
@@ -234,17 +234,23 @@ Each is a small test that could change a decision above.
 Each test has a script in `apps/web/checks`. The scripts drive headless Chromium against the cloud dev deployment.
 
 1. **Passed.** Sign-up with a passkey, a page reload, sign-out, and sign-in with the same passkey all work. A query without a session fails with `NotSignedIn`. The passkey came from Chromium's virtual passkey device, not from a real fingerprint prompt.
-2. **Passed.** `users.whoAmI` returns the signed-in user to the browser. Convex rejects a wrong argument type and an undeclared argument. Effect Schema rejects an empty or too long `greeting`, and rejects a return value of the wrong type.
+2. **Passed.** `users.whoAmI` returns the signed-in user to the browser. Convex rejects a wrong argument type and an undeclared argument. Effect Schema rejects an empty or too long `greeting`. The return check was seen once by hand and no script repeats it: with `message` set to a number in the implementation, the call failed with `SchemaError: Expected string`.
 3. **The whole result is resent.** The numbers are the median of 25 changes per design, with the range in parentheses.
 
 	| Design | JSON received per change | Bytes on the wire per change | Time from the mutation call to the new items in React |
 	|---|---|---|---|
-	| One live query through Confect | 247,880 bytes, all 1,000 items | 42.1 KB | 361 ms (341 to 422) |
-	| One live query as a plain Convex function | 247,880 bytes, all 1,000 items | 42.1 KB | 319 ms (294 to 361) |
-	| Snapshot plus the changes since a revision (C19) | 881 bytes for the first change of a session, 1,871 bytes for the fifth | 212 to 248 bytes | 182 ms (168 to 213) |
+	| One live query through Confect | 247,952 bytes, all 1,000 items | 42.2 KB | 367 ms (338 to 430) |
+	| One live query as a plain Convex function | 247,952 bytes, all 1,000 items | 42.2 KB | 321 ms (304 to 389) |
+	| Snapshot plus the changes since a revision (C19) | 881 bytes for the first change after a snapshot, 1,873 bytes for the fifth | 214 to 248 bytes | 180 ms (168 to 202) |
 
-	Opening the canvas costs about 248 KB of JSON and 45 KB on the wire in every design. The server is the limit on time, not the network or the browser. Convex takes about 115 ms to read and return 1,000 documents, Confect adds about 60 ms to that, and the browser needs 1 to 2 ms to apply the result.
-4. **Not run yet.** It waits for an R2 bucket and an API token. The page at `/lab/texture` and the script `apps/web/checks/texture.ts` are written. The PixiJS renderer draws a locally made image as a WebGL texture with the right pixel color, so the open question is only R2 and its CORS policy. H2, H6, and H10 are unchanged.
+	The change list grows by about 250 bytes of JSON for each distinct item changed since the snapshot. The test stops at five changes, so it does not show a long session.
+
+	Opening the canvas costs about 248 KB of JSON and 46 KB on the wire in every design. That is from a production build, 5 loads per design. On the dev server the two live designs sometimes receive the result twice, 496 KB, because the page subscribes, unsubscribes, and subscribes again.
+
+	Most of the time is server function time. `convex logs` for the same run gives these medians: `canvas.moveItems` takes 63 ms, and the query that reruns after it takes 215 ms through Confect, 175 ms as a plain Convex function, and 59 ms for the change list. The other 60 to 90 ms cover the network round trip, the transfer, and the browser, and the test does not split them further. From the WebSocket frame that carries the items to the React update, the browser takes 14 ms through Confect, 10 ms for the plain function, and 3 ms for the change list.
+
+	Each rerun of a live query reads 1,002 documents and 403 KB from the database. A rerun of the change list reads 2 to 7 documents.
+4. **Not run yet.** It waits for an R2 bucket and an API token. The page at `/lab/texture` and the script `apps/web/checks/texture.ts` are written. `check:renderer` shows that the PixiJS renderer draws a locally made bitmap as a WebGL texture with the right pixel color, so the open question is only R2 and its CORS policy. H2 and H10 are unchanged.
 
 ## The backend that was not chosen
 
