@@ -70,7 +70,7 @@ export default GroupSpec.make()
     }),
   )
   .addFunction(
-    FunctionSpec.publicQuery({
+    FunctionSpec.publicMutation({
       name: "urls",
       args: () => ({ refIds: Schema.Array(Id("refs")).check(Schema.isMaxLength(100)) }),
       returns: () => Schema.Array(Schema.Struct({ refId: Id("refs"), url: Schema.String })),

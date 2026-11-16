@@ -62,6 +62,9 @@ function Library() {
         {items.results.map((item) => (
           <li key={item.refId} data-ref-id={item.refId}>
             <img
+              // Every image load is a CORS request. A response cached from a plain <img> has
+              // no CORS headers, and a later canvas load of the same URL would fail on it.
+              crossOrigin="anonymous"
               src={urls.get(item.refId)?.url}
               alt={item.fileName}
               width={item.width}

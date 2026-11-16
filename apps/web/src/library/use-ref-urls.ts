@@ -26,16 +26,18 @@ export function useRefUrls(refIds: ReadonlyArray<Id<"refs">>) {
     if (missing.length === 0) return;
 
     let current = true;
-    void convex.query(api.library.urls, { refIds: missing.slice(0, urlsPerCall) }).then((fresh) => {
-      if (!current) return;
-      setSigned(
-        (known) =>
-          new Map([
-            ...known,
-            ...fresh.map(({ refId, url }) => [refId, { url, signedAt: now }] as const),
-          ]),
-      );
-    });
+    void convex
+      .mutation(api.library.urls, { refIds: missing.slice(0, urlsPerCall) })
+      .then((fresh) => {
+        if (!current) return;
+        setSigned(
+          (known) =>
+            new Map([
+              ...known,
+              ...fresh.map(({ refId, url }) => [refId, { url, signedAt: now }] as const),
+            ]),
+        );
+      });
     return () => {
       current = false;
     };

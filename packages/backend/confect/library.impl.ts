@@ -138,6 +138,8 @@ const list = FunctionImpl.make(databaseSchema, library, "list", ({ paginationOpt
   }).pipe(Effect.orDie),
 );
 
+// A mutation, not a query. Convex caches a query's result, so a query would keep handing out
+// the same signed URL after it expired.
 const urls = FunctionImpl.make(databaseSchema, library, "urls", ({ refIds }) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;

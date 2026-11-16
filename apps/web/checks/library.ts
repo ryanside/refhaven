@@ -97,6 +97,19 @@ try {
   const served = new Uint8Array(await (await fetch(redUrl!)).arrayBuffer());
   assert(sha256(served) === sha256(red), "the signed URL serves the original bytes unchanged");
 
+  const refetched = await page.evaluate(
+    (url) =>
+      fetch(url).then(
+        () => "ok",
+        (error: Error) => error.message,
+      ),
+    redUrl!,
+  );
+  assert(
+    refetched === "ok",
+    `an image the grid already showed can be fetched again for a canvas from the same URL: ${refetched}`,
+  );
+
   await page
     .getByLabel("Add images")
     .setInputFiles([{ name: "red-again.png", mimeType: "image/png", buffer: red }]);
@@ -109,6 +122,7 @@ try {
   );
 
   const owner = await clientFor(page);
+  const ownerRefId = await cards(page).first().getAttribute("data-ref-id");
   const image = { fileName: "x.png", width: 10, height: 10 };
   assert(
     (await outcome(owner.action(api.library.save, { ...image, sha256: "0".repeat(64) }))) ===
@@ -142,14 +156,22 @@ try {
   assert(zeroWidth !== "accepted", `a width of 0 is ${zeroWidth}`);
   assert((await cards(page).count()) === 3, "none of the refused saves added a Ref");
 
+  const signUrl = async () =>
+    (await owner.mutation(api.library.urls, { refIds: [ownerRefId as never] }))[0]!.url;
+  const earlierUrl = await signUrl();
+  await Bun.sleep(1100);
+  assert(
+    earlierUrl !== (await signUrl()),
+    "each request for a URL signs a fresh one, so an expired URL is never handed out again",
+  );
+
   await signInWithPasskey(second.page, `check-b-${stamp}`);
   await second.page.getByText("Nothing saved yet.").waitFor();
   assert(true, "a second user's library is empty");
 
   const other = await clientFor(second.page);
-  const ownerRefId = await cards(page).first().getAttribute("data-ref-id");
   assert(
-    (await outcome(other.query(api.library.urls, { refIds: [ownerRefId as never] }))) ===
+    (await outcome(other.mutation(api.library.urls, { refIds: [ownerRefId as never] }))) ===
       "RefNotFound",
     "the second user cannot get a URL for the first user's Ref",
   );
