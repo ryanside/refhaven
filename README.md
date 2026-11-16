@@ -43,10 +43,10 @@ The browser checks need `bun dev` running. Run them from `apps/web`. Most of the
 |---|---|
 | `bun run check:auth` | Passkey sign-up, sign-out, and sign-in. |
 | `bun run check:confect` | A Confect function returns the signed-in user and refuses bad arguments. |
+| `bun run check:library` | Saving images, a duplicate, byte-exact serving, and the rules between two users. It needs R2. |
 | `bun run check:canvas-sync` | The bytes and time one change costs on a canvas of 1,000 items. |
 | `bun run check:renderer` | A local bitmap drawn as a WebGL texture by the PixiJS renderer. |
-| `bun run check:upload-keys` | An upload key outside the caller's prefix is refused. |
-| `bun run check:texture` | An image uploaded to R2 drawn as a WebGL texture. It needs the R2 environment variables on the Convex deployment. |
+| `bun run check:texture` | A saved image drawn as a WebGL texture. It needs R2. |
 
 ## Layout
 
