@@ -241,8 +241,19 @@ export function CanvasView({
     void edit(entry, store.hold(entry.redo), "An image could not be removed.");
   }, [edit, store]);
 
+  const restack = useCallback(
+    (to: "front" | "back") => {
+      if (store.gesture().kind !== "idle") return;
+      const entry = store.restack(to);
+      if (entry) void edit(entry, store.hold(entry.redo), "The order could not be saved.");
+    },
+    [edit, store],
+  );
+
   const actions: Record<Action, () => void> = {
     remove: removeSelection,
+    bringToFront: () => restack("front"),
+    sendToBack: () => restack("back"),
     undo: () => step("undo"),
     redo: () => step("redo"),
     selectAll: store.selectAll,
@@ -346,17 +357,32 @@ function EditButtons({
   const { selected } = useSyncExternalStore(store.subscribe, store.summary);
   const { canUndo, canRedo } = useSyncExternalStore(history.subscribe, history.summary);
   return (
-    <div className="flex gap-2">
-      <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.remove}>
-        {removeLabel}
-      </Button>
-      <Button variant="outline" size="sm" disabled={!canUndo} onClick={actions.undo}>
-        Undo
-      </Button>
-      <Button variant="outline" size="sm" disabled={!canRedo} onClick={actions.redo}>
-        Redo
-      </Button>
-    </div>
+    <>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.remove}>
+          {removeLabel}
+        </Button>
+        <Button variant="outline" size="sm" disabled={!canUndo} onClick={actions.undo}>
+          Undo
+        </Button>
+        <Button variant="outline" size="sm" disabled={!canRedo} onClick={actions.redo}>
+          Redo
+        </Button>
+      </div>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={selected === 0}
+          onClick={actions.bringToFront}
+        >
+          Bring to front
+        </Button>
+        <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.sendToBack}>
+          Send to back
+        </Button>
+      </div>
+    </>
   );
 }
 
@@ -467,6 +493,7 @@ function drive(
     host.dataset.displayKeys = displays.join(" ");
     drawOutlines(outlines, store, byKey);
     drawFrame(outlines, store);
+    drawMarquee(outlines, store);
   }
 
   void createPixiRenderer(host).then((created) => {
@@ -654,4 +681,25 @@ function drawFrame(layer: HTMLDivElement, store: SceneStore) {
     layer.append(element);
   }
   place(element, store.camera(), frame);
+}
+
+/** Keeps the marquee's rectangle from its press to the pointer while a marquee has moved. */
+function drawMarquee(layer: HTMLDivElement, store: SceneStore) {
+  const gesture = store.gesture();
+  let element = layer.querySelector<HTMLElement>("[data-marquee]");
+  if (gesture.kind !== "marquee" || !gesture.moved) {
+    element?.remove();
+    return;
+  }
+  if (!element) {
+    element = document.createElement("div");
+    element.dataset.marquee = "";
+    element.className = "absolute border border-primary";
+    layer.append(element);
+  }
+  const from = worldToScreen(store.camera(), gesture.fromWorld);
+  element.style.left = `${Math.min(from.x, gesture.pointer.x)}px`;
+  element.style.top = `${Math.min(from.y, gesture.pointer.y)}px`;
+  element.style.width = `${Math.abs(from.x - gesture.pointer.x)}px`;
+  element.style.height = `${Math.abs(from.y - gesture.pointer.y)}px`;
 }

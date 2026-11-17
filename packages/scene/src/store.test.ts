@@ -567,8 +567,9 @@ test("a press on empty canvas that does not move clears the selection, with Shif
   const { store, screen } = setUp();
   store.selectAll();
 
-  store.press(screen({ x: 150, y: 400 }), true);
-  store.move({ ...screen({ x: 150, y: 400 }), x: screen({ x: 150, y: 400 }).x + 2 });
+  const start = screen({ x: 150, y: 400 });
+  store.press(start, true);
+  store.move({ x: start.x + 2, y: start.y });
   expect(store.release()).toBeNull();
 
   expect(store.selection().size).toBe(0);

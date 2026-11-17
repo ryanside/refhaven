@@ -7,6 +7,8 @@ export const keymap = [
   { hotkey: "Control+Y", action: "redo" },
   { hotkey: "Mod+A", action: "selectAll" },
   { hotkey: "Escape", action: "clearSelection" },
+  { hotkey: "]", action: "bringToFront" },
+  { hotkey: "[", action: "sendToBack" },
 ] as const;
 
 export type Action = (typeof keymap)[number]["action"];
