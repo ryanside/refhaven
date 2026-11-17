@@ -40,4 +40,3 @@ Keep implementation details out of the map. Name only user paths, stable handles
 
 - [Sign in](./sign-in.md) covers passkey sign-up, the session, sign-out, sign-in, and the redirect for a signed-out visitor.
 - [Library](./library.md) covers saving images, a duplicate, the grid, and what a second user can see.
-- [Texture lab](./texture.md) covers the throwaway page that draws library images with the PixiJS renderer.

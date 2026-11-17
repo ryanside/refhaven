@@ -6,10 +6,17 @@ import { Label } from "@refhaven/ui/components/label";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { thumbHashToDataURL } from "thumbhash";
+import { CanvasView } from "@/canvas/canvas-view";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { type SaveOutcome, useSaveImage } from "@/library/use-save-image";
 
-export const Route = createFileRoute("/_app/library")({ component: Library });
+type View = "gallery" | "canvas";
+
+export const Route = createFileRoute("/_app/library")({
+  validateSearch: (search): { view?: View } =>
+    search.view === "canvas" || search.view === "gallery" ? { view: search.view } : {},
+  component: Library,
+});
 
 const pageSize = 60;
 
@@ -21,6 +28,30 @@ const outcomeText = (outcome: SaveOutcome) =>
       : "saved.";
 
 function Library() {
+  const { view = "gallery" } = Route.useSearch();
+  return view === "canvas" ? (
+    <CanvasView>
+      <ViewLinks />
+    </CanvasView>
+  ) : (
+    <Gallery />
+  );
+}
+
+function ViewLinks() {
+  return (
+    <nav className="flex gap-3">
+      <Link to="/library" search={{ view: "gallery" }} className="underline">
+        Gallery
+      </Link>
+      <Link to="/library" search={{ view: "canvas" }} className="underline">
+        Canvas
+      </Link>
+    </nav>
+  );
+}
+
+function Gallery() {
   const saveImage = useSaveImage();
   const [outcomes, setOutcomes] = useState<
     ReadonlyArray<{ fileName: string; outcome: SaveOutcome }>
@@ -33,6 +64,7 @@ function Library() {
   return (
     <main className="flex flex-col gap-4 p-6">
       <h1 className="font-medium">Library</h1>
+      <ViewLinks />
 
       <div className="flex max-w-sm flex-col gap-2">
         <Label htmlFor="images">Add images</Label>
@@ -79,15 +111,6 @@ function Library() {
       ) : null}
 
       <Account />
-
-      <h2 className="font-medium">Lab</h2>
-      <ul>
-        <li>
-          <Link to="/lab/texture" className="underline">
-            R2 image as a WebGL texture
-          </Link>
-        </li>
-      </ul>
     </main>
   );
 }

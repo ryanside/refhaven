@@ -46,7 +46,6 @@ The browser checks need `bun dev` running. Run them from `apps/web`. Most of the
 | `bun run check:library` | Saving images with their thumbnail and display copy, a duplicate, byte-exact serving, and the rules between two users. It needs R2. |
 | `bun run check:canvas` | The canvas functions: placing saved images, a patch, a removal, refused edits, and the rules between two users. It needs R2. |
 | `bun run check:renderer` | A local bitmap drawn as a WebGL texture by the PixiJS renderer. |
-| `bun run check:texture` | Saved images drawn as WebGL textures from their display copies. It needs R2. |
 
 Agents verify a change in the running app with the `verify-refhaven` skill in `.agents/skills/verify-refhaven`. Its helper script starts the app, checks it, runs a drive script, and keeps the evidence.
 
