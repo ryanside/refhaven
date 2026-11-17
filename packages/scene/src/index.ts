@@ -37,3 +37,4 @@ export * from "./history";
 export * from "./hit";
 export * from "./layout";
 export * from "./store";
+export * from "./transform";
