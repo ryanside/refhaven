@@ -59,6 +59,7 @@
         "@convex-dev/auth": "2.0.0",
         "@convex-dev/r2": "0.10.4",
         "@effect/platform-node": "4.1.4",
+        "@refhaven/scene": "workspace:*",
         "convex": "catalog:",
         "effect": "catalog:",
       },

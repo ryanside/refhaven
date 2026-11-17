@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as canvas from "../canvas.js";
 import type * as library from "../library.js";
 import type * as session from "../session.js";
 import type * as users from "../users.js";
@@ -20,6 +21,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  canvas: typeof canvas;
   library: typeof library;
   session: typeof session;
   users: typeof users;
