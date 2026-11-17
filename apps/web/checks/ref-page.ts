@@ -6,6 +6,7 @@ import {
   appUrl,
   assert,
   clientFor,
+  consoleWatch,
   openPageWithPasskeyDevice,
   outcome,
   pngOf,
@@ -65,13 +66,7 @@ const imagesLoaded = (page: Page) =>
     ),
   );
 
-const consoleErrors: Array<string> = [];
-const watchConsole = (page: Page) => {
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(String(error)));
-};
+const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 const first = await openPageWithPasskeyDevice();
 const second = await openPageWithPasskeyDevice();
@@ -397,10 +392,7 @@ try {
     "the first user's image page shows the second user only Image not found.",
   );
 
-  assert(
-    consoleErrors.length === 0,
-    `the browser console shows no error: ${consoleErrors.join(" | ")}`,
-  );
+  assertCleanConsole();
 
   // This comes after the console assertion, because Convex's client logs the refused argument.
   await page.goto(`${appUrl}/r/not-an-id`);

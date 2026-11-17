@@ -19,6 +19,37 @@ export function assert(condition: unknown, message: string): asserts condition {
   console.log(`ok   ${message}`);
 }
 
+/**
+ * Collects what a check's pages log as errors, for the check's last assertion. Chromium fails
+ * every request in flight with `net::ERR_NETWORK_CHANGED` when the machine's network changes, and
+ * some machines' networks change every few minutes. That says nothing about the app, so it is
+ * counted apart and printed. A request the app needed still fails the assertion that waits for it.
+ */
+export function consoleWatch() {
+  const errors: Array<string> = [];
+  let networkChanges = 0;
+  const record = (text: string) => {
+    if (text.includes("net::ERR_NETWORK_CHANGED")) networkChanges += 1;
+    else errors.push(text);
+  };
+  return {
+    watch(page: Page) {
+      page.on("console", (message) => {
+        if (message.type() === "error") record(message.text());
+      });
+      page.on("pageerror", (error) => record(String(error)));
+    },
+    assertClean() {
+      if (networkChanges > 0) {
+        console.log(
+          `note the network changed during the run, and Chromium failed ${networkChanges} request(s) in flight`,
+        );
+      }
+      assert(errors.length === 0, `the browser console shows no error: ${errors.join(" | ")}`);
+    },
+  };
+}
+
 export async function openPageWithPasskeyDevice(args: string[] = []) {
   const browser = await chromium.launch({ args });
   const context = await browser.newContext();

@@ -8,6 +8,7 @@ import {
   appUrl,
   assert,
   clientFor,
+  consoleWatch,
   openPageWithPasskeyDevice,
   outcome,
   pngOf,
@@ -80,13 +81,7 @@ const revOf = async (client: ConvexHttpClient, canvasId: Id<"canvases">) =>
   (await client.query(api.canvas.changes, { canvasId, rev: 0 })).rev;
 
 const evidence = process.env.EVIDENCE;
-const consoleErrors: Array<string> = [];
-const watchConsole = (page: Page) => {
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(String(error)));
-};
+const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 const until = async (condition: () => Promise<boolean>, message: string) => {
   for (let tries = 0; tries < 75; tries++) {
@@ -366,10 +361,7 @@ try {
       (await blobOf(again!)) === (await blobOf(e)),
     "saving the bytes of a Ref in the trash adds a second, live Ref on the same Blob",
   );
-  assert(
-    consoleErrors.length === 0,
-    `the browser console shows no error: ${consoleErrors.join(" | ")}`,
-  );
+  assertCleanConsole();
 } finally {
   await first.browser.close();
   await second.browser.close();
