@@ -132,6 +132,7 @@ export function createSceneStore() {
   let camera: Camera = { x: 0, y: 0, zoom: 1 };
   let gesture: Gesture = { kind: "idle" };
   let selection: ReadonlySet<string> = new Set();
+  let editing: string | null = null;
   let saves = 0;
   const server = new Map<string, ServerItem>();
   // Each held field remembers the save that set it, so a save that fails takes back only its own.
@@ -285,6 +286,8 @@ export function createSceneStore() {
     camera: () => camera,
     viewport: () => viewport,
     selection: () => selection,
+    /** The key of the note open in the editor, which the editor shows in its place. */
+    editing: () => editing,
     gesture: () => gesture,
     /** The selection's frame: one item's own rectangle, or the upright box around several. */
     frame: () => frameOf(selected()),
@@ -380,6 +383,11 @@ export function createSceneStore() {
 
     selectAll() {
       selection = new Set(all().map(({ key }) => key));
+      changed();
+    },
+
+    setEditing(key: string | null) {
+      editing = key;
       changed();
     },
 
