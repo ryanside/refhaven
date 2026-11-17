@@ -120,13 +120,17 @@ try {
   );
   assert(
     (await found(owner, { q: "harb" })) === "harbor-dusk.png" &&
-      (await found(owner, { q: "zzz harb" })) === "harbor-dusk.png" &&
+      (await found(owner, { q: "lantern harb" })) === "harbor-dusk.png" &&
       (await found(owner, { q: "harb zzz" })) === "",
-    `Convex matches the last word as a prefix and every other word whole: "harb" and "zzz harb" find the image, "harb zzz" finds nothing`,
+    `the beginning of the last word finds the image: "harb" and "lantern harb" find it, "harb zzz" finds nothing`,
   );
   assert(
-    (await found(owner, { q: "dune forest" })) === "desert-dune.png,forest-path.png",
-    "an image that matches any one of the words is found",
+    (await found(owner, { q: "dune" })) === "desert-dune.png" &&
+      (await found(owner, { q: "forest" })) === "forest-path.png" &&
+      (await found(owner, { q: "dune forest" })) === "" &&
+      (await found(owner, { q: "zzz harb" })) === "" &&
+      (await found(owner, { q: "wharfside lantern harbor" })) === "harbor-dusk.png",
+    "more words find fewer images: an image is found only when it holds every word typed",
   );
   assert(
     (await found(owner, { tag: "seascape" })) === "forest-path.png,harbor-dusk.png" &&

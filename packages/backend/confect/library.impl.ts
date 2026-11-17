@@ -24,6 +24,7 @@ import { addMember, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 import { hashBoundUpload, r2 } from "./r2";
+import { holdsEveryWord } from "./searchText";
 import { isLive, liveRefs, ownedRef, writeSearchText } from "./ref";
 
 const storedBlob = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
@@ -227,7 +228,7 @@ const memberIds = (collectionId: Id<"collections">) =>
 /**
  * Reads the Refs to check: the search results in relevance order when there is a search text,
  * else the Refs of the tag, newest tagged first, else the whole library, newest first. Then keeps
- * the live ones that carry the tag and sit in the collection.
+ * the live ones that hold every word of the search, carry the tag, and sit in the collection.
  */
 const filter = FunctionImpl.make(databaseSchema, library, "filter", ({ q, tag, collectionId }) =>
   Effect.gen(function* () {
@@ -265,7 +266,11 @@ const filter = FunctionImpl.make(databaseSchema, library, "filter", ({ q, tag, c
           : yield* (yield* liveRefs).take(scanLimit).pipe(Effect.orDie);
     const taggedIds = tagged && new Set(tagged.map(({ refId }) => refId));
     const matches = scanned.filter(
-      (ref) => isLive(ref) && (taggedIds?.has(ref._id) ?? true) && (members?.has(ref._id) ?? true),
+      (ref) =>
+        isLive(ref) &&
+        (q === undefined || holdsEveryWord(ref.searchText ?? "", q)) &&
+        (taggedIds?.has(ref._id) ?? true) &&
+        (members?.has(ref._id) ?? true),
     );
     return {
       items: yield* Effect.forEach(matches.slice(0, filterLimit), galleryItem),

@@ -45,6 +45,6 @@ Preconditions:
 
 - Wait for the URL and the cards together. Right after typing, the old results still show until the pause ends.
 - Convex matches the last word as a prefix and every other word whole. `harb` finds `harbor`, and `harb zzz` finds nothing.
-- An image matches when any one word matches, so a search of two words can show images that hold only one of them.
+- An image matches only when its text holds every word typed, so each added word narrows the result. Convex's index alone would return an image that holds any one word, and `library.filter` drops those.
 - Search terms after the 16th are dropped without an error.
 - Tags are lowercase. Choose `seascape`, not `Seascape`, in the select.
