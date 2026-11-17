@@ -49,6 +49,24 @@ type Base = { canvasId: Id<"canvases">; rev: number };
 
 const toApplyOp = (op: ItemOp) => (op.op === "add" ? { ...op, refId: op.refId as Id<"refs"> } : op);
 
+/**
+ * Resolves when the store has applied the server's `rev`. The wait is bounded, so a change list
+ * that never arrives cannot hold up the edits that follow.
+ */
+const reached = (store: SceneStore, rev: number) =>
+  new Promise<void>((resolve) => {
+    if (store.rev() >= rev) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      stop();
+      resolve();
+    };
+    const stop = store.subscribe(() => {
+      if (store.rev() >= rev) done();
+    });
+    const timer = setTimeout(done, 5000);
+  });
+
 /** The canvas of a set: the collection's, or the whole library's when `collectionId` is absent. */
 export function CanvasView({
   collectionId,
@@ -85,12 +103,16 @@ export function CanvasView({
         if (store.loadSnapshot(opened.success)) {
           setBase({ canvasId: opened.success.canvasId, rev: opened.success.rev });
           setOffCanvas(opened.success.removed);
+          // Putting images back is an edit like a drop, so it can be undone and it empties redo.
+          if (placeRemoved && opened.success.placed > 0) {
+            history.record(addEntry(opened.success.items.slice(-opened.success.placed)));
+          }
         }
       } finally {
         snapshotting.current = false;
       }
     },
-    [collectionId, open, store],
+    [collectionId, history, open, store],
   );
 
   useEffect(() => {
@@ -119,40 +141,67 @@ export function CanvasView({
         : null;
       if (result && Result.isSuccess(result)) {
         store.acknowledge(save, result.success);
-        return true;
+        return result.success;
       }
       store.reject(save);
-      return false;
+      return null;
     },
     [apply, store],
   );
 
-  /** Records an edit for undo and saves it. An edit that is not saved leaves the stack. */
-  const edit = useCallback(
-    async (entry: Entry, save: number, failure: string) => {
-      history.record(entry);
-      if (!(await send(entry.redo, save))) {
-        history.drop(entry);
-        setProblem(failure);
-      }
+  // Every edit and every undo runs after the one before it has reached this page through
+  // `canvas.changes`. Removals and adds show only then, so an undo pressed right after one, or
+  // twice in a row, would otherwise be judged against a canvas that has not changed yet.
+  const queue = useRef(Promise.resolve());
+  /** Runs `save` in turn. It resolves to the rev it wrote, or null when it wrote nothing. */
+  const inOrder = useCallback(
+    (save: () => Promise<number | null>) => {
+      queue.current = queue.current.then(async () => {
+        const rev = await save();
+        if (rev !== null) await reached(store, rev);
+      });
+      return queue.current;
     },
-    [history, send],
+    [store],
   );
 
-  const step = useCallback(
-    async (direction: "undo" | "redo") => {
-      const entry = direction === "undo" ? history.undo() : history.redo();
-      if (!entry) return;
-      const ops = entry[direction];
-      if (!store.applies(ops) || !(await send(ops, store.hold(ops)))) {
-        history.drop(entry);
-        setProblem(`That change could not be ${direction === "undo" ? "undone" : "redone"}.`);
-      }
+  /** Records an edit for undo and saves it. An edit that is not saved leaves the stack. */
+  const edit = useCallback(
+    (entry: Entry, save: number, failure: string) => {
+      history.record(entry);
+      return inOrder(async () => {
+        const rev = await send(entry.redo, save);
+        if (rev === null) {
+          history.drop(entry);
+          setProblem(failure);
+        }
+        return rev;
+      });
     },
-    [history, send, store],
+    [history, inOrder, send],
+  );
+
+  // A gesture holds the places its items had when it began. Undoing under it would leave those
+  // places stale, so history and removal wait for the pointer to let go.
+  const step = useCallback(
+    (direction: "undo" | "redo") =>
+      void inOrder(async () => {
+        if (store.gesture().kind !== "idle") return null;
+        const entry = direction === "undo" ? history.undo() : history.redo();
+        if (!entry) return null;
+        const ops = entry[direction];
+        const rev = store.applies(ops) ? await send(ops, store.hold(ops)) : null;
+        if (rev === null) {
+          history.drop(entry);
+          setProblem(`That change could not be ${direction === "undo" ? "undone" : "redone"}.`);
+        }
+        return rev;
+      }),
+    [history, inOrder, send, store],
   );
 
   const removeSelection = useCallback(() => {
+    if (store.gesture().kind !== "idle") return;
     const selection = store.selection();
     const chosen = store.items().filter((item) => selection.has(item.key));
     if (chosen.length === 0) return;
@@ -163,8 +212,8 @@ export function CanvasView({
 
   const actions: Record<Action, () => void> = {
     remove: removeSelection,
-    undo: () => void step("undo"),
-    redo: () => void step("redo"),
+    undo: () => step("undo"),
+    redo: () => step("redo"),
     selectAll: store.selectAll,
     clearSelection: store.clearSelection,
   };
@@ -232,7 +281,11 @@ export function CanvasView({
                 ? "1 image of the library is not on this canvas."
                 : `${offCanvas} images of the library are not on this canvas.`}
             </p>
-            <Button variant="outline" size="sm" onClick={() => void takeSnapshot(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void inOrder(() => takeSnapshot(true).then(() => null))}
+            >
               Put them back
             </Button>
           </div>

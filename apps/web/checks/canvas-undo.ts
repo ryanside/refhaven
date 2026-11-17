@@ -58,7 +58,7 @@ const galleryOf = async (owner: ConvexHttpClient, collectionId: Id<"collections"
 const find = (items: ReadonlyArray<Item>, key: string) => items.find((item) => item.key === key);
 
 const placeOf = (item: Item | undefined) =>
-  item && { x: item.x, y: item.y, scale: item.scale, z: item.z };
+  item && { x: item.x, y: item.y, scale: item.scale, rotation: item.rotation, z: item.z };
 
 const samePlace = (a: Item | undefined, b: Item | undefined) =>
   a !== undefined && JSON.stringify(placeOf(a)) === JSON.stringify(placeOf(b));
@@ -358,6 +358,29 @@ try {
     again.rev === putBack.rev && again.removed === 0,
     `a second ask to put them back finds nothing to place: rev stays ${putBack.rev}`,
   );
+  assert(
+    (await button("Undo").isEnabled()) && (await button("Redo").isDisabled()),
+    "putting images back is an edit: Undo is enabled after it",
+  );
+  await press(page, "ControlOrMeta+z");
+  await until(
+    () => readout(page),
+    (r) => r.items === 2,
+    "Mod+Z to undo the put back",
+  );
+  const putBackUndone = await snapshotOf(owner);
+  await press(page, "ControlOrMeta+Shift+z");
+  await until(
+    () => readout(page),
+    (r) => r.items === 3,
+    "Mod+Shift+Z to redo the put back",
+  );
+  assert(
+    find(putBackUndone.items, blue.key) === undefined &&
+      putBackUndone.removed === 1 &&
+      samePlace(find((await snapshotOf(owner)).items, blue.key), blueBack),
+    "undo takes the image that was put back off the canvas again, and redo puts it back at the same place",
+  );
 
   const dropColor: Rgb = [220, 200, 40];
   const dropped: Carried = {
@@ -376,6 +399,7 @@ try {
     "the dropped image to land",
   );
   const yellow = await refIdOf("yellow.png");
+  const yellowDropped = find((await snapshotOf(owner)).items, yellow);
   await press(page, "ControlOrMeta+z");
   await until(
     () => readout(page),
@@ -387,6 +411,106 @@ try {
       (await libraryOf(owner)).includes(yellow),
     "an image dropped on the canvas and then undone leaves the canvas and stays in the library",
   );
+  await press(page, "ControlOrMeta+Shift+z");
+  await until(
+    () => readout(page),
+    (r) => r.items === 4,
+    "Mod+Shift+Z to redo the drop",
+  );
+  const yellowRedone = find((await snapshotOf(owner)).items, yellow);
+  assert(
+    yellowRedone?.x === yellowDropped?.x && yellowRedone?.y === yellowDropped?.y,
+    "redo puts the dropped image back on the canvas at the point it was dropped",
+  );
+
+  // The outcome line shows when the file is saved, a moment before the image is placed. An undo
+  // pressed then must wait for the placement, not give up on an image that has not arrived.
+  const early: Carried = {
+    name: "teal.png",
+    mimeType: "image/png",
+    buffer: await solidPng(page, [30, 170, 170], 300, 300),
+  };
+  await send(page, "drop", [early], '[data-testid="canvas"]', {
+    x: Math.round(view.box.x + 1000),
+    y: Math.round(view.box.y + 700),
+  });
+  await page.locator('[role="status"] li', { hasText: "teal.png" }).waitFor();
+  await press(page, "ControlOrMeta+z");
+  const teal = await until(
+    async () => find((await snapshotOf(owner)).items, await refIdOf("teal.png")),
+    (item) => item === undefined,
+    "the undo pressed right after the drop to take the image off again",
+  );
+  await Bun.sleep(600);
+  assert(
+    teal === undefined &&
+      (await readout(page)).items === 4 &&
+      (await page.getByRole("alert").count()) === 0,
+    "an undo pressed before a dropped image has reached the page waits for it and then takes it off, with no complaint",
+  );
+
+  // Two edits, then two undos with no wait between them. The second must not be judged against
+  // a canvas that the first has not changed yet.
+  const greenStart = find((await snapshotOf(owner)).items, green.key)!;
+  await drag(page, await pointOf(greenStart), { x: 0, y: 70 });
+  await until(
+    () => snapshotOf(owner),
+    (snapshot) => find(snapshot.items, green.key)?.y !== greenStart.y,
+    "the green drag to save",
+  );
+  await click(page, await pointOf(find((await snapshotOf(owner)).items, green.key)!));
+  await selected(page, 1);
+  await press(page, "Delete");
+  await until(
+    () => readout(page),
+    (r) => r.items === 3,
+    "Delete to remove the green image",
+  );
+  await press(page, "ControlOrMeta+z");
+  await press(page, "ControlOrMeta+z");
+  const greenTwiceUndone = await until(
+    () => snapshotOf(owner),
+    (snapshot) => samePlace(find(snapshot.items, green.key), greenStart),
+    "two quick undos to bring the green image back to where it was before its move",
+  );
+  assert(
+    samePlace(find(greenTwiceUndone.items, green.key), greenStart) &&
+      (await page.getByRole("alert").count()) === 0,
+    "two undos pressed in a row undo a removal and then the move before it, and neither is dropped",
+  );
+
+  // A drag holds the places its items had when it began. An undo pressed while the button is
+  // down must wait, or the next undo would restore a place that is no longer true.
+  await drag(page, await pointOf(greenStart), { x: 60, y: 0 });
+  const greenOnce = (
+    await until(
+      () => snapshotOf(owner),
+      (snapshot) => find(snapshot.items, green.key)?.x !== greenStart.x,
+      "the first green drag to save",
+    )
+  ).items.find((item) => item.key === green.key)!;
+  const from = await pointOf(greenOnce);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 50, from.y, { steps: 6 });
+  await press(page, "ControlOrMeta+z");
+  await page.mouse.up();
+  await until(
+    () => snapshotOf(owner),
+    (snapshot) => find(snapshot.items, green.key)?.x !== greenOnce.x,
+    "the second green drag to save",
+  );
+  await press(page, "ControlOrMeta+z");
+  await press(page, "ControlOrMeta+z");
+  const greenBack = await until(
+    () => snapshotOf(owner),
+    (snapshot) => samePlace(find(snapshot.items, green.key), greenStart),
+    "two undos to take back both green drags",
+  );
+  assert(
+    samePlace(find(greenBack.items, green.key), greenStart),
+    "an undo pressed during a drag is ignored, and two undos afterwards take back both drags in order",
+  );
 
   const board = await owner.mutation(api.collections.create, { name: "Board" });
   await owner.mutation(api.collections.addRefs, {
@@ -395,6 +519,11 @@ try {
   });
   await page.goto(`${appUrl}/c/${board}?view=canvas`);
   await waitForCanvas(page, 2);
+  const firstInBoard = await owner.mutation(api.canvas.open, { collectionId: board });
+  await owner.mutation(api.canvas.apply, {
+    canvasId: firstInBoard.canvasId,
+    ops: [{ op: "patch", key: red.key, fields: { rotation: 0.4, scale: red.scale * 1.5 } }],
+  });
   const inBoard = await owner.mutation(api.canvas.open, { collectionId: board });
   const redInBoard = find(inBoard.items, red.key)!;
   await click(page, toPage(await pageView(page), exposedPoint(redInBoard, inBoard.items)));
@@ -425,7 +554,7 @@ try {
   assert(
     (await galleryOf(owner, board)).includes(red.refId) &&
       samePlace(find(boardBack.items, red.key), redInBoard),
-    "undo puts the image back in the collection and on its canvas, at the same position, scale, and z",
+    `undo puts the image back in the collection and on its canvas, at the same position, scale, rotation, and z: ${JSON.stringify(placeOf(redInBoard))}`,
   );
   await screenshot(page, "04-collection-undone.png");
 
