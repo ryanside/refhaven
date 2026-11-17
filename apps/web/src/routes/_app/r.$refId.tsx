@@ -122,7 +122,8 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
           save={async (fileName) => failureTag(await update({ refId, fileName }))}
         />
         <FieldForm
-          key={`note ${details.note}`}
+          // JSON keeps an absent note apart from a note that reads "null".
+          key={`note ${JSON.stringify(details.note)}`}
           label="Note"
           initial={details.note ?? ""}
           parse={parseClearable(Note)}
@@ -143,7 +144,7 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
             </a>
           ) : null}
           <FieldForm
-            key={`source ${details.sourceUrl}`}
+            key={`source ${JSON.stringify(details.sourceUrl)}`}
             label="Source"
             initial={details.sourceUrl ?? ""}
             parse={parseClearable(SourceUrl)}

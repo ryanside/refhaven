@@ -148,6 +148,21 @@ try {
   await until(async () => !("note" in (await refRow(large))), "the note is cleared");
   assert(true, "clearing the note on the page removes the field from the row");
 
+  // Another tab changes the note while this page is open. The form must take each new value,
+  // also between no note and a note that reads "null".
+  const noteField = page.getByLabel("Note", { exact: true });
+  await owner.mutation(api.ref.update, { refId: large, note: "null" });
+  await until(
+    async () => (await noteField.inputValue()) === "null",
+    'the form shows the note "null"',
+  );
+  await owner.mutation(api.ref.update, { refId: large, note: null });
+  await until(async () => (await noteField.inputValue()) === "", "the form shows no note");
+  assert(
+    true,
+    'the open form follows a note set to the text "null" in another tab, and then cleared',
+  );
+
   const source = "https://example.com/a?b=c";
   await submit(page, "Source", "Save source", source);
   const sourceLink = page.getByTestId("source");
