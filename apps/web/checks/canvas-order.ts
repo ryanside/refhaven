@@ -161,18 +161,24 @@ try {
   // A marquee dragged up and to the left, from empty canvas below green to above red.
   const rev = (await snapshotOf(owner)).rev;
   let calls = applied.length;
-  let during = { shown: 0, box: null as { width: number; height: number } | null };
+  let during = {
+    shown: 0,
+    box: null as { x: number; y: number; width: number; height: number } | null,
+  };
   await drag(at({ x: 700, y: 350 }), at({ x: -100, y: -100 }), false, async () => {
     during = { shown: await marquee.count(), box: await marquee.boundingBox() };
     await screenshot(page, "01-marquee-drag.png");
   });
   await selected(2);
+  const marqueeCorner = at({ x: -100, y: -100 });
   assert(
     during.shown === 1 &&
       during.box !== null &&
+      Math.abs(during.box.x - marqueeCorner.x) <= 2 &&
+      Math.abs(during.box.y - marqueeCorner.y) <= 2 &&
       Math.abs(during.box.width - 800 * view.camera.zoom) <= 2 &&
       Math.abs(during.box.height - 450 * view.camera.zoom) <= 2,
-    `the marquee is drawn from the press to the pointer during the drag: ${during.box?.width.toFixed(1)} by ${during.box?.height.toFixed(1)} px`,
+    `the marquee is drawn from the press to the pointer during the drag: ${during.box?.width.toFixed(1)} by ${during.box?.height.toFixed(1)} px at ${during.box?.x.toFixed(1)}, ${during.box?.y.toFixed(1)}`,
   );
   assert((await marquee.count()) === 0, "the marquee is gone after the release");
   assert(
@@ -286,6 +292,8 @@ try {
       .sort((m, n) => (m.z < n.z ? -1 : m.z > n.z ? 1 : 0))
       .map((item) => colorOfKey.get(item.key))
       .join(" < ");
+  // The second page must show green on top first, or red there afterwards would prove nothing.
+  await shows(second, secondView, "green", "green on top on the second page before the command");
   before = await snapshotOf(owner);
   calls = applied.length;
   await page.getByRole("button", { name: "Send to back" }).click();

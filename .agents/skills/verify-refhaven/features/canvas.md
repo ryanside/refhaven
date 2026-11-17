@@ -9,7 +9,7 @@ The canvas view of the library shows every saved image on a free canvas. Each co
 - `canvas-zoom` zooms toward the cursor with Ctrl+wheel or a pinch, from 1% to 6400%.
 - `canvas-select` selects with click and shift-click, clears with a click on empty canvas, and outlines each selected image.
 - `canvas-marquee` draws a rectangle from a press on empty canvas to the pointer, and on release selects every image whose own turned rectangle it touches. With Shift held it adds them to the selection. It saves nothing.
-- `canvas-order` brings the selection to the front or sends it to the back, in its own order, with one `canvas.apply` call that patches only `z`, by `Bring to front`, `Send to back`, `]`, or `[`. The drawn order, the click order, and `canvas.open` agree.
+- `canvas-order` brings the selection to the front or sends it to the back, in its own order, with one `canvas.apply` call that patches only `z`, or several calls for more than 1,000 images, by `Bring to front`, `Send to back`, `]`, or `[`. The two keys also work with Option held, for keyboards that type a bracket that way. The drawn order, the click order, and `canvas.open` agree.
 - `canvas-move` moves the selection with a drag and saves it as one `canvas.apply` call when the drag ends. A click saves nothing.
 - `canvas-frame` draws the selection's frame: one image's own turned rectangle, or the upright box around several, with eight resize handles and one rotate handle that keep their size at every zoom.
 - `canvas-resize` scales the selection by one factor about the frame's point opposite the dragged handle, for a corner and an edge alike, and stops when the frame's longer edge is 8 px on screen. The release saves one `canvas.apply` call that patches only `x`, `y`, and `scale`.
