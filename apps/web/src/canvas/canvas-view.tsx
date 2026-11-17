@@ -128,7 +128,7 @@ export function CanvasView({
         const x = start.x + placed++ * (placedEdge + placementGap);
         const canvasId = latestBase.current?.canvasId;
         const result = canvasId
-          ? await apply({ canvasId, ops: [{ op: "add", refId, x, y: start.y }] })
+          ? await apply({ canvasId, ops: [{ op: "add", refId, x, y: start.y }] }).catch(() => null)
           : null;
         if (!result || Result.isFailure(result)) setProblem("An image could not be placed.");
       };
