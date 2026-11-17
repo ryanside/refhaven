@@ -105,7 +105,7 @@ const reclaim = FunctionImpl.make(databaseSchema, library, "takeBack", ({ sha256
  * Takes the bytes back from the sweep, then looks at the objects, then records them. In that
  * order no sweep can delete an object between the look and the record: the sweep has not begun,
  * and it cannot begin for bytes with no orphan row. A new orphan row would be a week from its
- * sweep, and this action lives ten minutes at most.
+ * sweep, and Convex ends this action after 30 minutes at most.
  */
 const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...image }) =>
   Effect.gen(function* () {

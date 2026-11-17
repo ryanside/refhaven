@@ -16,7 +16,8 @@ import {
 import { canvasChanges, openCanvas, refOf } from "./canvas-screen";
 
 const minute = 60 * 1000;
-const day = 24 * 60 * minute;
+const hour = 60 * minute;
+const day = 24 * hour;
 const stamp = Date.now().toString(36);
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const backend = `${import.meta.dir}/../../../packages/backend`;
@@ -211,12 +212,25 @@ try {
   );
 
   await signInWithPasskey(second.page, `check-purge-b-${stamp}`);
-  const fBuffer = await pngOf(second.page, "rgb(250, 120, 0)", 140, 90);
-  await save(second.page, [{ name: "f.png", buffer: fBuffer }]);
+  const [fBuffer, gBuffer, hBuffer] = (await Promise.all(
+    ["rgb(250, 120, 0)", "rgb(0, 120, 250)", "rgb(120, 250, 0)"].map((color, index) =>
+      pngOf(second.page, color, 140 + index * 10, 90),
+    ),
+  )) as [Buffer, Buffer, Buffer];
+  await save(second.page, [
+    { name: "f.png", buffer: fBuffer },
+    { name: "g.png", buffer: gBuffer },
+    { name: "h.png", buffer: hBuffer },
+  ]);
   const intruder = await clientFor(second.page);
-  const f = (await refsByName(intruder)).get("f.png")!;
+  const theirs = await refsByName(intruder);
+  const [f, g, h] = [theirs.get("f.png")!, theirs.get("g.png")!, theirs.get("h.png")!];
+  const [fObject, gObject] = await Promise.all(
+    [f, g].map((refId) => signed(intruder, refId, "original")),
+  );
+  await intruder.mutation(api.library.remove, { refIds: [g] });
+  await Bun.sleep(1500);
   await intruder.mutation(api.library.remove, { refIds: [f] });
-  const fObject = await signed(intruder, f, "original");
 
   for (let start = 0; start < bigRefs.length; start += 100) {
     await owner.mutation(api.library.remove, { refIds: bigRefs.slice(start, start + 100) });
@@ -238,14 +252,26 @@ try {
     `the first images went to the trash ${firstLate - lastEarly} ms before the last two, and the second user's image is in another workspace`,
   );
 
-  const purgeAt = async (now: number) => {
-    const args = JSON.stringify({ pretend: { workspaceId: workspace, now } });
+  const purgeAt = async (now: number, workspaceId = workspace) => {
+    const args = JSON.stringify({ pretend: { workspaceId, now } });
     return Number(await convexRun("trash:purge", args));
   };
   const sweepAt = async (now: number) => {
     const args = JSON.stringify({ pretend: { workspaceId: workspace, now } });
     return JSON.parse(await convexRun("trash:sweep", args)) as { swept: number; deleted: number };
   };
+
+  // The second user's own purge, of the first image they deleted. It leaves an orphan row in
+  // their workspace that is a week old at the first user's sweeps below.
+  const theirPurge = await purgeAt(deletedAt(g) + 30 * day + 500, foreignWorkspace);
+  const theirOrphans = (await state()).orphansIn(foreignWorkspace);
+  assert(
+    theirPurge === 1 &&
+      theirOrphans.length === 1 &&
+      theirOrphans[0]!.sha256 === sha256(gBuffer) &&
+      deletedAt(f) - deletedAt(g) >= 1000,
+    "the second user's purge, between their two deletes, purges their first image and writes its orphan row",
+  );
 
   const at29 = lastLate + 29 * day;
   assert(
@@ -449,20 +475,21 @@ try {
       !(await refsByName(owner)).has("k-during.png"),
     `a save of bytes that the sweep has begun to delete, while R2 still holds them, fails with ${duringSweep} and writes no Blob row and no Ref, and prepareUpload leaves the orphan row`,
   );
-  const second59 = await sweepAt(atSweep + 59 * minute);
+  const tooSoon = await sweepAt(atSweep + 12 * hour - minute);
   assert(
-    second59.swept === 0 &&
-      second59.deleted === 0 &&
+    tooSoon.swept === 0 &&
+      tooSoon.deleted === 0 &&
       (await state()).orphansIn(workspace).length === 4 &&
       (await Promise.all([...pObjects, kObject!, dObject!, bigObject!].map(held))).every(Boolean),
-    `a second sweep 59 minutes after the first began leaves its rows and its objects alone: ${JSON.stringify(second59)}`,
+    `a second sweep a minute under 12 hours after the first began leaves its rows and its objects alone: ${JSON.stringify(tooSoon)}`,
   );
 
-  const swept = await sweepAt(atSweep + 60 * minute);
+  const atTakeover = atSweep + 12 * hour;
+  const swept = await sweepAt(atTakeover);
   const afterSweep = await state();
   assert(
     swept.swept === 4 && swept.deleted === 6 && afterSweep.orphansIn(workspace).length === 0,
-    `a sweep an hour after the first began finishes its work: it takes the four orphan rows and deletes six objects: ${JSON.stringify(swept)}`,
+    `a sweep 12 hours after the first began finishes its work: it takes the four orphan rows and deletes six objects: ${JSON.stringify(swept)}`,
   );
   assert(
     (await Promise.all([...pObjects, kObject!, dObject!, bigObject!].map(held))).every(
@@ -480,10 +507,7 @@ try {
     "the sweep leaves the bytes saved again before it, the bytes saved across the purge, and the Blob a live Ref shares, and each serves its original byte-exact",
   );
 
-  const again = {
-    purged: await purgeAt(atSweep + 60 * minute),
-    swept: await sweepAt(atSweep + 60 * minute),
-  };
+  const again = { purged: await purgeAt(atTakeover), swept: await sweepAt(atTakeover) };
   const afterAgain = await state();
   assert(
     again.purged === 0 &&
@@ -506,12 +530,73 @@ try {
     "after the sweep, the page saves the swept bytes again with a new upload, and the image serves its original byte-exact",
   );
 
+  const theirOrphan = afterKAgain.orphansIn(foreignWorkspace);
   assert(
-    typeof afterAgain.refRow(f)?.deletedAt === "number" &&
-      afterAgain.blobsOf(foreignWorkspace, sha256(fBuffer)).length === 1 &&
-      afterAgain.orphansIn(foreignWorkspace).length === 0 &&
-      (await held(fObject)),
+    typeof afterKAgain.refRow(f)?.deletedAt === "number" &&
+      afterKAgain.blobsOf(foreignWorkspace, sha256(fBuffer)).length === 1 &&
+      (await held(fObject!)),
     "the second user's Ref, deleted before every pretend time above, keeps its row, its Blob, and its object in R2",
+  );
+  assert(
+    theirOrphan.length === 1 &&
+      theirOrphan[0]!.sweepingAt === undefined &&
+      theirOrphan[0]!.orphanedAt + 7 * day < atSweep &&
+      (await held(gObject!)),
+    "the second user's orphan row, a week old at the first user's sweeps, is still there and unmarked, and its object is still in R2",
+  );
+
+  // More rows than one purge mutation deletes: 50 Refs in 6 collections, each on its canvas.
+  const hHash = sha256(hBuffer);
+  const hBlob = afterKAgain.blobsOf(foreignWorkspace, hHash)[0]!;
+  const hCopies = await Promise.all(
+    Array.from({ length: 49 }, (_, index) =>
+      intruder.action(api.library.save, {
+        sha256: hHash,
+        fileName: `h-${index}.png`,
+        width: hBlob.width,
+        height: hBlob.height,
+        thumbHash: hBlob.thumbHash,
+        variants: {},
+      }),
+    ),
+  );
+  const hRefs = [h, ...hCopies.map(({ refId }) => refId)];
+  for (let index = 0; index < 6; index += 1) {
+    const collectionId = await intruder.mutation(api.collections.create, {
+      name: `Many ${index}`,
+    });
+    await intruder.mutation(api.collections.addRefs, { collectionId, refIds: hRefs });
+    await intruder.mutation(api.canvas.open, { collectionId });
+  }
+  await intruder.mutation(api.library.remove, { refIds: hRefs });
+  const pointingAtMany = async () => {
+    const [memberships, items] = await Promise.all([
+      rows("collectionRefs", 1000),
+      rows("canvasItems", 1000),
+    ]);
+    const many = new Set<string>(hRefs);
+    return {
+      memberships: memberships.filter((row) => many.has(row.refId)).length,
+      items: items.filter((row) => many.has(row.refId)).length,
+    };
+  };
+  const manyBefore = await pointingAtMany();
+  const beforeMany = await state();
+  const lastOfMany = Math.max(...hRefs.map((refId) => beforeMany.refRow(refId)!.deletedAt));
+  const manyPurged = await purgeAt(lastOfMany + 30 * day + 1000, foreignWorkspace);
+  const manyAfter = await pointingAtMany();
+  const afterMany = await state();
+  assert(
+    manyBefore.memberships === 300 &&
+      manyBefore.items === 300 &&
+      manyPurged === 51 &&
+      manyAfter.memberships === 0 &&
+      manyAfter.items === 0 &&
+      hRefs.every((refId) => afterMany.refRow(refId) === undefined) &&
+      afterMany.refRow(f) === undefined &&
+      afterMany.blobsOf(foreignWorkspace, hHash).length === 0 &&
+      afterMany.orphansOf(foreignWorkspace, hHash).length === 1,
+    `a purge of 50 Refs with 600 rows that point at them, more than one mutation deletes, purges every expired Ref (${manyPurged}) and leaves none of those rows: ${JSON.stringify(manyAfter)}`,
   );
   assertCleanConsole();
 } finally {
