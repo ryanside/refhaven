@@ -59,27 +59,28 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
     const placedRefs = new Set(
       (collectionId === undefined ? items : shown).map((item) => item.refId),
     );
-    const setRefIds =
+    const unplaced =
       collectionId === undefined
         ? (yield* reader
             .table("refs")
             .index("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-            .collect()).map((ref) => ref._id)
-        : (yield* reader
-            .table("collectionRefs")
-            .index("by_collection", (q) => q.eq("collectionId", collectionId))
-            .collect()).map((member) => member.refId);
-    const unplaced = setRefIds.filter((refId) => !placedRefs.has(refId));
+            .collect()).filter((ref) => !placedRefs.has(ref._id))
+        : yield* Effect.forEach(
+            (yield* reader
+              .table("collectionRefs")
+              .index("by_collection", (q) => q.eq("collectionId", collectionId))
+              .collect()).filter((member) => !placedRefs.has(member.refId)),
+            (member) => reader.table("refs").get(member.refId),
+          );
     if (unplaced.length === 0) {
       return { canvasId, rev: openedRev, items: shown.map(toItem) };
     }
 
-    const sizes = yield* Effect.forEach(unplaced, (refId) =>
-      Effect.gen(function* () {
-        const ref = yield* reader.table("refs").get(refId);
-        const { width, height } = yield* reader.table("blobs").get(ref.blobs.original);
-        return { refId, width, height };
-      }),
+    const sizes = yield* Effect.forEach(unplaced, (ref) =>
+      reader
+        .table("blobs")
+        .get(ref.blobs.original)
+        .pipe(Effect.map(({ width, height }) => ({ refId: ref._id, width, height }))),
     );
     const rev = openedRev + 1;
     const added = Arr.zip(

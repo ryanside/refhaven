@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-export type View = "gallery" | "canvas";
+type View = "gallery" | "canvas";
 
 /** Reads `view` from a page's search parameters. A page with no valid `view` is the gallery. */
 export const validateView = (search: Record<string, unknown>): { view?: View } =>
