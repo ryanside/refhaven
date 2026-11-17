@@ -8,10 +8,15 @@ type View = "gallery" | "canvas";
 /** A gallery's filters. An absent one is off. */
 export type Filters = { readonly q?: string; readonly tag?: string };
 
-// The router reads `?q=123` as the number 123.
+// The router reads a hand-typed `?q=123`, `?q=true`, or `?q=null` as a number, a boolean, or null.
+// Each is the text the owner typed. A string the page wrote itself comes back as a string.
 const decoded = (schema: Schema.Decoder<string>, value: unknown) =>
   Option.getOrUndefined(
-    Schema.decodeUnknownOption(schema)(typeof value === "number" ? String(value) : value),
+    Schema.decodeUnknownOption(schema)(
+      value === null || typeof value === "number" || typeof value === "boolean"
+        ? String(value)
+        : value,
+    ),
   );
 
 /**
