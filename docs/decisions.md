@@ -69,8 +69,8 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 |---|---|---|
 | B1 | The library is everything you have saved. Each saved thing is a Ref. | Built, lock |
 | B2 | A collection is a named set of Refs. A Ref can sit in many collections. | Planned, lock |
-| B3 | Any set of Refs can be shown as a gallery or as a canvas. The set is the whole library, a filter, or one collection. | Planned, lock |
-| B4 | A canvas is the canvas view of a collection or of the whole library. There are no separate boards. Only the whole library's canvas exists, and no page shows it yet. | Built, lock |
+| B3 | Any set of Refs can be shown as a gallery or as a canvas. The set is the whole library, a filter, or one collection. Only the whole library exists, in both views. | Planned, lock |
+| B4 | A canvas is the canvas view of a collection or of the whole library. There are no separate boards. Only the whole library's canvas exists. `/library?view=canvas` shows it. | Built, lock |
 | B5 | Each collection keeps one saved layout. The whole library keeps one too, as the one canvas of its workspace. Only the whole library's layout exists. | Built, lock |
 | B6 | An item dropped on the canvas lands where you dropped it. An item added anywhere else is placed beside the existing layout the next time the canvas opens. `canvas.open` places each Ref that has no item in rows to the right of the layout, 40 units away, with its longer edge at 400 units. Dropping is not built. | Built |
 | B7 | Removing an item from a canvas removes it from that collection. It stays in the library. On the whole library's canvas, `open` does not place a removed item's Ref again. Collections are not built. | Built |
@@ -89,7 +89,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | C16 | A Ref records its file name, and its creation time is the upload time. The Blob records the hash, byte size, MIME type, pixel size, ThumbHash, and the byte size and pixel size of each variant, because they describe the bytes. Source URL and note join the Ref with the first feature that sets them. | Built, lock |
 | C8 | IDs are Convex document IDs. A canvas item also carries a client-made `key`, so the canvas can create it at once. A key is unique inside its canvas. An item that `canvas.open` places takes its Ref's ID as its key. | Built, lock |
 | C15 | A delete is a soft delete with a 30-day trash. A removed canvas item already keeps its row with a `deletedAt`, so `canvas.changes` can report the removal. Nothing purges yet. | Planned |
-| C17 | The URLs are `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas`. Only `/library` exists. | Planned, lock |
+| C17 | The URLs are `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas`. Only `/library` exists. Its `view` defaults to `gallery`, and two links switch between the views. | Planned, lock |
 | C18 | Export is a zip with `manifest.json` and the original files. | Later |
 | I7 | One helper resolves the caller's workspace, and every function uses it. It is the `RequireWorkspace` middleware. Scopes join it with API keys. | Built, lock |
 | I5 | The CLI and agents call a Confect HTTP API inside Convex, which runs the same functions as the browser. | Planned |
@@ -107,7 +107,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | D18 | The formats are PNG, JPEG, WebP, GIF, and AVIF. SVG is rasterized at upload. The server refuses SVG until the rasterizing step exists. Variants are WebP, and the server refuses a variant whose bytes are not WebP. | Built |
 | H7 | An image is at most 50 MB. The server checks the size when the image is saved, after the upload. | Built |
 | E5 | Saving bytes the library already holds reuses the Blob, uploads the original no second time, and tells you. It adds a second Ref. It also adds any variant or ThumbHash the Blob still lacks. | Built |
-| H10 | Images are served through signed R2 URLs. A mutation signs each URL for one hour, for the role the page asks for, and the page asks for a new one after 50 minutes. The gallery asks for the thumbnail. | Built |
+| H10 | Images are served through signed R2 URLs. A mutation signs each URL for one hour, for the role the page asks for, and the page asks for a new one after 50 minutes. The gallery asks for the thumbnail. The canvas asks for the thumbnail or the display copy by each image's size on screen. | Built |
 | L2 | The server checks the workspace before it signs a URL. | Built |
 | H8 | An image gets a 512 px WebP thumbnail when its longer edge is over 512 px, and a 2048 px WebP display copy when it is over 2048 px. A variant keeps the aspect ratio, and its longer edge is the role's edge. Every image gets a ThumbHash, which the gallery shows until the thumbnail loads. An image saved before variants existed has none and is served from its original. | Built |
 | H9 | The browser makes the variants and the ThumbHash at upload. A browser that cannot encode WebP, such as Safari, saves the original alone. For a CLI or agent save, the app makes them the first time it shows the image. There is no server image code. Only the browser part exists. | Built |
@@ -124,7 +124,7 @@ Known gaps in the upload path:
 
 | ID | Rule | State |
 |---|---|---|
-| C19 | Each canvas document carries a revision counter. A mutation raises the counter once and stamps the items it wrote. The client loads a snapshot with `canvas.open`, then subscribes to `canvas.changes` for the items written after the snapshot's revision. The client takes a new snapshot on every page load and when the change list passes a set size. A snapshot must not outlive the trash period of C15, or a purged item comes back. The client part comes with the canvas page. The lab that measured this design is in git history. | Built, lock |
+| C19 | Each canvas document carries a revision counter. A mutation raises the counter once and stamps the items it wrote. The client loads a snapshot with `canvas.open`, then subscribes to `canvas.changes` for the items written after the snapshot's revision. The client takes a new snapshot on every page load and when the change list passes a set size. A snapshot must not outlive the trash period of C15, or a purged item comes back. The canvas page takes a new snapshot when the change list passes 200 items. The lab that measured this design is in git history. | Built, lock |
 | C7 | A canvas item is a tagged union of image, note, and group, with `kind` as the tag. An image item points at a Ref and copies the pixel size of its original, so a client can hit-test with no join. Only images exist. | Built, lock |
 | C9 | A canvas stores one document per item. | Built, lock |
 | C10 | An edit is saved as one mutation per gesture, carrying a list of item operations. `canvas.apply` takes up to 1,000 patch and remove operations. An operation on a missing or removed key fails the whole call with `ItemNotFound`, and nothing is written. | Built, lock |
@@ -132,25 +132,25 @@ Known gaps in the upload path:
 | C12 | An item has x, y, uniform scale, rotation, flip, crop rectangle, opacity, and grayscale. They are stored on the item and never baked into pixels. The server refuses a scale of 0 or less, an opacity outside 0 to 1, and a number that is not finite. Crop joins with the feature that sets it. | Built, lock |
 | C13 | Z-order is a fractional index string per item, from `fractional-indexing` 4.0.0. The server refuses a z that is not a valid key, because the next key above it could not be made. | Built, lock |
 | C14 | A group is a parent reference on its items. The UI shows one level at first. | Planned |
-| D1 | The canvas draws with PixiJS 8 on WebGL behind the `Renderer` interface in `packages/renderer`. The interface is set camera, upsert items, remove items, upload texture, evict texture, and draw. | Built |
+| D1 | The canvas draws with PixiJS 8 on WebGL behind the `Renderer` interface in `packages/renderer`. The interface is set camera, upsert items, remove items, upload texture, evict texture, and draw. An item carries its size in world units, so a texture of any resolution covers the same area. | Built |
 | D2 | Pixi types stay inside `packages/renderer`. The scene and the canvas model never import them. | Built, lock |
 | D5 | World units are float64 with y down. An item's x and y are its center, and its rotation is in radians. The renderer turns positions into camera-relative values before the GPU sees them. | Built, lock |
-| D3 | Scene state is a plain TypeScript store owned by the canvas, outside React state. React reads selection, tool, and zoom from it. | Planned, lock |
-| D4 | The scene applies changes from the server, except to items in a gesture. A drag stays local until release. | Planned |
-| D9 | Shortcuts come from one keymap table through TanStack Hotkeys. They do not fire while a text field has focus. | Planned |
-| D11 | Handles and outlines are drawn in an overlay above the GPU layer. The renderer draws textured quads only. | Planned |
+| D3 | Scene state is a plain TypeScript store owned by the canvas, outside React state: `createSceneStore` in `packages/scene`. The pointer gesture is one state, idle, panning, or dragging. React reads the item count, the selection count, and the camera through `useSyncExternalStore`, so a drag renders nothing in React. There is no tool yet. | Built, lock |
+| D4 | The scene applies changes from the server, except to items in a gesture. A drag stays local until release. After release, a moved item keeps its local position until the server state includes the save, so it never jumps back. A failed save puts it back at its server position. | Built |
+| D9 | Shortcuts come from one keymap table through TanStack Hotkeys. They do not fire while a text field has focus. Space for panning is read with a plain key listener, because it is the only key so far. | Planned |
+| D11 | Handles and outlines are drawn in an overlay above the GPU layer. The renderer draws textured quads only. Only the selection outline exists. | Built |
 | D14 | Undo is a client-side stack of inverse operations per session. | Planned |
 | D16 | Files can be dragged in, and a Ref can be dragged from the gallery onto a canvas, with native drag and drop. | Planned |
 | D17 | A note is plain text with a size and a color. It is drawn to a texture with Canvas2D and edited in a DOM overlay. | Planned |
-| D20 | The canvas shows the 2048 px copy and loads the original when zoomed past it. | Planned |
-| D6 | Zoom runs from 1% to 6400%, toward the cursor. | Later |
+| D20 | The canvas shows an image's 512 px thumbnail until its longer edge passes 512 device pixels on screen, and then its 2048 px copy. It loads only images in or near the view, four at a time, and keeps at most 200 thumbnails and 12 display copies, evicting the least recently needed. Loading the original when zoomed past the 2048 px copy is not built. | Planned |
+| D6 | Zoom runs from 1% to 6400%, toward the cursor. Applied by default while the owner was away. The owner can still change it. | Built, open |
 | D8 | Touch and pen do pan and pinch only at first. | Later |
-| D10 | Selection is click, shift-add, and marquee, with eight handles plus rotate and a locked aspect ratio. | Later |
+| D10 | Selection is click, shift-add, and marquee, with eight handles plus rotate and a locked aspect ratio. Click, shift-click, and dragging the selection exist. | Later |
 | D13 | Arrange offers grid, pack, align, and distribute. `placeBeside` in `packages/scene` places new items for B6 in rows, and arrange can build on it. | Later |
 | D15 | Paste takes images, files, and image URLs. Copy puts the selection on the clipboard as PNG. | Later |
 | D19 | An animated image shows its first frame at first. | Later |
 | D22 | A cached snapshot is shown before the server answers. This is part of the speed work. | Later |
-| D7 | The wheel pans. Pinch or Ctrl+wheel zooms. Space-drag and middle-drag pan. A mouse preset makes the wheel zoom. | Open |
+| D7 | The wheel pans. Pinch or Ctrl+wheel zooms. Space-drag and middle-drag pan. A mouse preset makes the wheel zoom. Applied by default while the owner was away, without the mouse preset. The owner can still change it. | Built, open |
 | D12 | There is no snapping at first. | Open |
 | D21 | A canvas has one background color. | Open |
 
@@ -173,7 +173,7 @@ Known gaps in the upload path:
 | F7 | The landing page is a route in the same app. | Built |
 | F4 | Use TanStack Virtual, Form, Hotkeys, and Pacer for those jobs when they come up. Router and Query are set up. | Planned |
 | F6 | Edits show at once through Convex optimistic updates. | Planned |
-| F5 | Pages call Confect functions with the hooks from `@confect/react`, which decode results with the function's schema. TanStack Query is for data that is not a live Convex subscription. | Built |
+| F5 | Pages call Confect functions with the hooks from `@confect/react`, which decode results with the function's schema. TanStack Query is for data that is not a live Convex subscription. The canvas page calls `canvas.open`, `canvas.changes`, `canvas.apply`, and `library.urls` this way. | Built |
 
 ## Sign-in
 
@@ -228,6 +228,6 @@ The owner decides these. Each row above shows the current default.
 - **H7.** Confirm the 50 MB limit.
 - **G2.** Choose which OAuth providers to add.
 - **E1.** Choose the gallery layout.
-- **D7, D12, D21.** Canvas input, snapping, and background.
+- **D6, D7, D12, D21.** Canvas zoom range, input, snapping, and background. D6 and D7 run on their defaults until the owner decides.
 - **A6.** Mobile behavior.
 - **K4.** The CLI's license.

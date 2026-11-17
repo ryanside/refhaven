@@ -7,7 +7,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - `verify.sh up` printed `ready:` for this checkout, and `verify.sh doctor` ends with `doctor: healthy`.
 - The app is at `http://localhost:3000`.
 - Every recipe starts signed out, in a new browser from `openPageWithPasskeyDevice()`, and signs up a username that no earlier run used.
-- Saving images and the texture lab need the four R2 variables on the deployment. `doctor` warns when they are missing.
+- Saving images and the canvas need the four R2 variables on the deployment. `doctor` warns when they are missing.
 
 ## Driving conventions
 
@@ -40,4 +40,4 @@ Keep implementation details out of the map. Name only user paths, stable handles
 
 - [Sign in](./sign-in.md) covers passkey sign-up, the session, sign-out, sign-in, and the redirect for a signed-out visitor.
 - [Library](./library.md) covers saving images, a duplicate, the grid, and what a second user can see.
-- [Texture lab](./texture.md) covers the throwaway page that draws library images with the PixiJS renderer.
+- [Canvas](./canvas.md) covers the library's canvas view: pan, zoom, selection, saved moves, a second page, and the 2048 px copy.

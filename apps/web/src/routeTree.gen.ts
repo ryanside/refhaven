@@ -13,7 +13,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppLibraryRouteImport } from './routes/_app/library'
-import { Route as AppLabTextureRouteImport } from './routes/_app/lab/texture'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,23 +33,16 @@ const AppLibraryRoute = AppLibraryRouteImport.update({
   path: '/library',
   getParentRoute: () => AppRoute,
 } as any)
-const AppLabTextureRoute = AppLabTextureRouteImport.update({
-  id: '/lab/texture',
-  path: '/lab/texture',
-  getParentRoute: () => AppRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/library': typeof AppLibraryRoute
-  '/lab/texture': typeof AppLabTextureRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/library': typeof AppLibraryRoute
-  '/lab/texture': typeof AppLabTextureRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -58,20 +50,13 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/_app/library': typeof AppLibraryRoute
-  '/_app/lab/texture': typeof AppLabTextureRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sign-in' | '/library' | '/lab/texture'
+  fullPaths: '/' | '/sign-in' | '/library'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sign-in' | '/library' | '/lab/texture'
-  id:
-    | '__root__'
-    | '/'
-    | '/_app'
-    | '/sign-in'
-    | '/_app/library'
-    | '/_app/lab/texture'
+  to: '/' | '/sign-in' | '/library'
+  id: '__root__' | '/' | '/_app' | '/sign-in' | '/_app/library'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -110,24 +95,15 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLibraryRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/lab/texture': {
-      id: '/_app/lab/texture'
-      path: '/lab/texture'
-      fullPath: '/lab/texture'
-      preLoaderRoute: typeof AppLabTextureRouteImport
-      parentRoute: typeof AppRoute
-    }
   }
 }
 
 interface AppRouteChildren {
   AppLibraryRoute: typeof AppLibraryRoute
-  AppLabTextureRoute: typeof AppLabTextureRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppLibraryRoute: AppLibraryRoute,
-  AppLabTextureRoute: AppLabTextureRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
