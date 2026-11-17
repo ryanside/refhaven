@@ -7,5 +7,6 @@ export const record = registeredFunctions.record;
 export const remove = registeredFunctions.remove;
 export const restore = registeredFunctions.restore;
 export const save = registeredFunctions.save;
+export const takeBack = registeredFunctions.takeBack;
 export const trash = registeredFunctions.trash;
 export const urls = registeredFunctions.urls;

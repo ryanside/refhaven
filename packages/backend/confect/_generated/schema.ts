@@ -5,6 +5,7 @@ import canvasItems from "./tables/canvasItems";
 import canvases from "./tables/canvases";
 import collectionRefs from "./tables/collectionRefs";
 import collections from "./tables/collections";
+import orphans from "./tables/orphans";
 import refs from "./tables/refs";
 import tags from "./tables/tags";
 import users from "./tables/users";
@@ -16,6 +17,7 @@ const databaseSchema: $DatabaseSchema.DatabaseSchema<{
   readonly canvases: typeof canvases;
   readonly collectionRefs: typeof collectionRefs;
   readonly collections: typeof collections;
+  readonly orphans: typeof orphans;
   readonly refs: typeof refs;
   readonly tags: typeof tags;
   readonly users: typeof users;
@@ -26,6 +28,7 @@ const databaseSchema: $DatabaseSchema.DatabaseSchema<{
   canvases,
   collectionRefs,
   collections,
+  orphans,
   refs,
   tags,
   users,

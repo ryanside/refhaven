@@ -46,6 +46,7 @@ export const TrashedItem = Schema.Struct({ ...GalleryItem.fields, deletedAt: Sch
 
 export const RefIds = Schema.Array(Id("refs")).check(Schema.isMaxLength(100));
 
+/** The object is not in R2, or the sweep is deleting it now. */
 export class UploadNotFound extends Schema.TaggedError<UploadNotFound>()("UploadNotFound", {}) {}
 
 export class UnsupportedImage extends Schema.TaggedError<UnsupportedImage>()(
@@ -93,6 +94,13 @@ export default GroupSpec.make()
   )
   .addFunction(
     FunctionSpec.internalMutation({
+      name: "takeBack",
+      args: () => ({ sha256: Sha256 }),
+      returns: () => Schema.Boolean,
+    }),
+  )
+  .addFunction(
+    FunctionSpec.internalMutation({
       name: "record",
       args: () => ({
         ...savedImage,
@@ -102,7 +110,7 @@ export default GroupSpec.make()
         collectionId: Schema.optionalKey(Id("collections")),
       }),
       returns: () => SavedRef,
-      error: () => CollectionNotFound,
+      error: () => Schema.Union([CollectionNotFound, UploadNotFound]),
     }),
   )
   .addFunction(

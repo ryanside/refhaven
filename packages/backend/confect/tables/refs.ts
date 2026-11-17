@@ -4,7 +4,8 @@ import { Id } from "../_generated/id";
 
 // A Ref with a `deletedAt` is in the trash. Convex indexes a missing field as `undefined`, which
 // sorts before every number, so `by_workspace_and_deletedAt` lists live Refs with `undefined` and
-// trashed Refs above it, in the order they were deleted.
+// trashed Refs above it, in the order they were deleted. `by_deletedAt` lists every workspace's
+// trashed Refs that way, for the purge. `by_blob` lists the Refs that share a Blob.
 // `searchText` is derived from the name, note, source, and tags by `writeSearchText`. A Ref saved
 // before it existed lacks it until `search.backfill` runs.
 export default Table.make(() =>
@@ -19,6 +20,8 @@ export default Table.make(() =>
   }),
 )
   .index("by_workspace_and_deletedAt", ["workspaceId", "deletedAt"])
+  .index("by_deletedAt", ["deletedAt"])
+  .index("by_blob", ["blobs.original"])
   .searchIndex("search_text", {
     searchField: "searchText",
     filterFields: ["workspaceId", "deletedAt"],

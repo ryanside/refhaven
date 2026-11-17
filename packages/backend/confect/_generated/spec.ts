@@ -5,6 +5,7 @@ import library from "../library.spec";
 import ref from "../ref.spec";
 import search from "../search.spec";
 import session from "../session.spec";
+import trash from "../trash.spec";
 import users from "../users.spec";
 import workspaces from "../workspaces.spec";
 
@@ -15,6 +16,7 @@ const spec: Spec.Spec<{
   readonly ref: GroupSpec.NamedAt<typeof ref, "ref">;
   readonly search: GroupSpec.NamedAt<typeof search, "search">;
   readonly session: GroupSpec.NamedAt<typeof session, "session">;
+  readonly trash: GroupSpec.NamedAt<typeof trash, "trash">;
   readonly users: GroupSpec.NamedAt<typeof users, "users">;
   readonly workspaces: GroupSpec.NamedAt<typeof workspaces, "workspaces">;
 }> = Spec.fromGroups({
@@ -24,6 +26,7 @@ const spec: Spec.Spec<{
   ["ref"]: ref,
   ["search"]: search,
   ["session"]: session,
+  ["trash"]: trash,
   ["users"]: users,
   ["workspaces"]: workspaces,
 }) as typeof spec;

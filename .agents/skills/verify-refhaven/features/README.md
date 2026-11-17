@@ -42,7 +42,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Sign in](./sign-in.md) covers passkey sign-up, the session, sign-out, sign-in, and the redirect for a signed-out visitor.
 - [Library](./library.md) covers saving images, a duplicate, the grid, and what a second user can see.
 - [Collections](./collections.md) covers making, opening, renaming, and filling a collection, and what a second user can see.
-- [Trash](./trash.md) covers deleting an image, the trash page, restoring an image to every place it was, and what a second user can do.
+- [Trash](./trash.md) covers deleting an image, the trash page and each image's days left, restoring an image to every place it was, the purge after 30 days and the sweep of its bytes, and what a second user can do.
 - [Image page](./ref-page.md) covers one image's page at `/r/{refId}`: its name, note, source, tags, collections, delete and restore, and what a second user sees.
 - [Search](./search.md) covers the search field and the tag filter on the library's and a collection's gallery, the URL, the back button, and what a second user finds.
 - [Canvas](./canvas.md) covers the canvas view of the library and of a collection: pan, zoom, selection by click and marquee, bring to front and send to back, saved moves, resizing and turning the selection, a second page, the 2048 px copy, images dropped, pasted, or picked onto it, removing images, undo and redo, the shortcuts, putting removed images back, notes, and groups.

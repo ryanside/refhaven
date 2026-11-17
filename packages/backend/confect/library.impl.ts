@@ -9,7 +9,6 @@ import refs from "./_generated/refs";
 import databaseSchema from "./_generated/schema";
 import { DatabaseReader, DatabaseWriter, MutationRunner } from "./_generated/services";
 import {
-  type Sha256,
   maxImageBytes,
   originalKey,
   servedKey,
@@ -21,22 +20,12 @@ import {
 } from "./blob";
 import library, { ImageTooLarge, UnsupportedImage, UploadNotFound } from "./library.spec";
 import { addMember, ownedCollection } from "./membership";
+import { storedBlob, takeBack } from "./orphan";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 import { hashBoundUpload, r2 } from "./r2";
 import { holdsEveryWord } from "./searchText";
 import { isLive, liveRefs, ownedRef, writeSearchText } from "./ref";
-
-const storedBlob = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
-  Effect.gen(function* () {
-    const reader = yield* DatabaseReader;
-    return yield* reader
-      .table("blobs")
-      .index("by_workspace_and_sha256", (q) =>
-        q.eq("workspaceId", workspaceId).eq("sha256", sha256),
-      )
-      .first();
-  }).pipe(Effect.orDie);
 
 // A variant is not bound to a hash. The browser makes it, so the server has no hash to hold it to.
 const variantUpload = (key: string) =>
@@ -105,9 +94,30 @@ const inspectUpload = (key: string) =>
     return { byteSize, mimeType };
   });
 
+const reclaim = FunctionImpl.make(databaseSchema, library, "takeBack", ({ sha256 }) =>
+  Effect.gen(function* () {
+    const { workspaceId } = yield* CurrentWorkspace;
+    return yield* takeBack(workspaceId, sha256);
+  }),
+);
+
+/**
+ * Takes the bytes back from the sweep, then looks at the objects, then records them. In that
+ * order no sweep can begin to delete an object between the look and the record: it has not begun,
+ * and it cannot begin for bytes with no orphan row. A new orphan row would be a week from its
+ * sweep, and Convex ends this action after 30 minutes at most. What this does not cover is a
+ * delete that a dead sweep left in flight, which `sweepLockMs` waits out.
+ */
 const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...image }) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
+    const { runMutation } = yield* MutationRunner;
+    const free = yield* runMutation(refs.internal.library.takeBack, {
+      sha256: image.sha256,
+    }).pipe(Effect.catchTags({ NotSignedIn: Effect.die, SchemaError: Effect.die }));
+    if (!free) {
+      return yield* new UploadNotFound();
+    }
     const stored = yield* inspectUpload(originalKey(workspaceId, image.sha256));
     const storedVariants = yield* Effect.forEach(
       variantRoles.flatMap((role) => {
@@ -125,7 +135,6 @@ const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...
           return [role, { byteSize, ...size }] as const;
         }),
     );
-    const { runMutation } = yield* MutationRunner;
     return yield* runMutation(refs.internal.library.record, {
       ...image,
       ...stored,
@@ -146,6 +155,10 @@ const record = FunctionImpl.make(
       const { workspaceId } = yield* CurrentWorkspace;
       const writer = yield* DatabaseWriter;
       const existing = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
+      // The purge may have written an orphan row since `save` took the bytes back.
+      if (!existing && !(yield* takeBack(workspaceId, sha256))) {
+        return yield* new UploadNotFound();
+      }
       const blobId = existing
         ? existing._id
         : yield* writer
@@ -374,6 +387,7 @@ const restore = FunctionImpl.make(databaseSchema, library, "restore", ({ refIds 
 
 export default GroupImpl.make(databaseSchema, library).pipe(
   Layer.provide(prepareUpload),
+  Layer.provide(reclaim),
   Layer.provide(save),
   Layer.provide(record),
   Layer.provide(list),

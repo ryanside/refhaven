@@ -116,9 +116,9 @@ export const outcome = (call: Promise<unknown>) =>
         : `refused (${error.message.split("\n")[1]?.trim()})`,
   );
 
-export const rows = async (table: string) => {
+export const rows = async (table: string, limit = 200) => {
   const dump = Bun.spawn(
-    ["bunx", "convex", "data", table, "--limit", "200", "--format", "jsonLines"],
+    ["bunx", "convex", "data", table, "--limit", String(limit), "--format", "jsonLines"],
     { cwd: `${import.meta.dir}/../../../packages/backend`, stdout: "pipe", stderr: "ignore" },
   );
   return (await new Response(dump.stdout).text())
@@ -127,10 +127,41 @@ export const rows = async (table: string) => {
     .map((line) => JSON.parse(line));
 };
 
+/**
+ * The page's access token with a few seconds of its life left. A token lives one minute, and the
+ * page fetches the next one shortly before the end.
+ */
+async function liveToken(page: Page) {
+  for (let tries = 0; tries < 40; tries += 1) {
+    const token = await accessToken(page);
+    const { exp } = JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString()) as {
+      exp: number;
+    };
+    if (exp * 1000 - Date.now() > 5000) return token;
+    await Bun.sleep(500);
+  }
+  throw new Error("The page did not fetch a new access token.");
+}
+
+/**
+ * An HTTP client that acts as the page's user. Each call takes the page's token of that moment. A
+ * token set once ends a minute later, which is in the middle of a long check.
+ */
 export const clientFor = async (page: Page) => {
   const client = new ConvexHttpClient(convexUrl());
-  client.setAuth(await accessToken(page));
-  return client;
+  client.setAuth(await liveToken(page));
+  return new Proxy(client, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target);
+      if (property !== "query" && property !== "mutation" && property !== "action") {
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+      return async (...args: Array<unknown>) => {
+        target.setAuth(await liveToken(page));
+        return value.apply(target, args);
+      };
+    },
+  });
 };
 
 export type Carried = { name: string; mimeType: string; buffer: Buffer };
