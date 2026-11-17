@@ -119,12 +119,17 @@ export function CanvasView({
   const placeAt = useCallback<PlaceAt>(
     (at) => {
       const box = host.current!.getBoundingClientRect();
-      const start = screenToWorld(
-        store.camera(),
-        at ? { x: at.x - box.left, y: at.y - box.top } : { x: box.width / 2, y: box.height / 2 },
-      );
+      const toWorld = () =>
+        screenToWorld(
+          store.camera(),
+          at ? { x: at.x - box.left, y: at.y - box.top } : { x: box.width / 2, y: box.height / 2 },
+        );
+      // The first snapshot fits the camera to the items. A point read before that would end up
+      // somewhere else on screen, so a drop that comes earlier is read when its first image is placed.
+      let start = latestBase.current ? toWorld() : null;
       let placed = 0;
       return async (refId) => {
+        start ??= toWorld();
         const x = start.x + placed++ * (placedEdge + placementGap);
         const canvasId = latestBase.current?.canvasId;
         const result = canvasId

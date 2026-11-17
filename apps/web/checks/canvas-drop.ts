@@ -24,6 +24,7 @@ import {
   settle,
   showRect,
   solidPng,
+  readout,
   toPage,
   toWorld,
   until,
@@ -206,6 +207,39 @@ try {
     `a second page with the same canvas open shows an image dropped in the first, without a reload: ${shown}`,
   );
   await second.close();
+
+  // A drop that comes before the first snapshot. Every message from the server is held back, so the
+  // canvas is still empty when the file is dropped, and the snapshot then fits the camera.
+  const late = await page.context().newPage();
+  watchConsole(late);
+  await late.setViewportSize({ width: 1400, height: 900 });
+  await late.routeWebSocket(/convex\.cloud/, (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((message) => server.send(message));
+    server.onMessage((message) => setTimeout(() => socket.send(message), 1500));
+  });
+  await late.goto(libraryCanvas);
+  await late.locator(canvas).waitFor();
+  const atDrop = await readout(late);
+  const pink = await image(late, "pink.png", [240, 90, 170], 200, 200);
+  const lateBox = (await late.locator(canvas).boundingBox())!;
+  const lateAt = { x: Math.round(lateBox.x + 900), y: Math.round(lateBox.y + 300) };
+  await send(late, "drop", [pink.carried], canvas, lateAt);
+  await waitForCanvas(late, 7);
+  const pinkItem = itemOf(
+    (await owner.mutation(api.canvas.open, {})).items,
+    await refIdOf(owner, "pink.png"),
+  );
+  const lateView = await pageView(late);
+  const landed = toPage(lateView, pinkItem!);
+  assert(
+    atDrop.items === 0 &&
+      JSON.stringify(atDrop.camera) !== JSON.stringify(lateView.camera) &&
+      Math.abs(landed.x - lateAt.x) < 1 &&
+      Math.abs(landed.y - lateAt.y) < 1,
+    `a file dropped before the canvas has loaded lands under the drop point ${lateAt.x}, ${lateAt.y} once the view has been fitted: ${landed.x.toFixed(1)}, ${landed.y.toFixed(1)}, with ${atDrop.items} items and the camera at ${JSON.stringify(atDrop.camera)} when dropped and ${JSON.stringify(lateView.camera)} after`,
+  );
+  await late.close();
 
   const outcomes = page.locator('[role="status"] li');
   const unsaved = async () => {
