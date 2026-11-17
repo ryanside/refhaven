@@ -20,14 +20,30 @@ test("a source with no note keeps its place after the name", () => {
   );
 });
 
+const text = "harbor-dusk.png Rim light https://example.com/cartoon mood";
+
 test.each([
   ["harbor", true],
   ["HARBOR rim", true],
   ["harb", true],
+  ["rim harb", true],
   ["rim-light", true],
   ["  dusk   mood ", true],
+  ["!!!", true],
+  ["harb rim", false],
+  ["art mood", false],
+  ["arbor", false],
   ["harbor forest", false],
   ["forest", false],
-])("a text holds every word of the search %j: %j", (q, expected) => {
-  expect(holdsEveryWord("harbor.png Rim light https://example.com/dusk mood", q)).toBe(expected);
+])(
+  "the text holds every word of the search %j, each whole and the last by its beginning: %j",
+  (q, expected) => {
+    expect(holdsEveryWord(text, q)).toBe(expected);
+  },
+);
+
+test("words past the sixteenth are ignored, as the index ignores them", () => {
+  const sixteen = Array.from({ length: 15 }, () => "mood").join(" ");
+  expect(holdsEveryWord(text, `${sixteen} harbor absent`)).toBe(true);
+  expect(holdsEveryWord(text, `${sixteen} absent harbor`)).toBe(false);
 });
