@@ -1,10 +1,7 @@
 import type { Camera, SceneItem } from "@refhaven/scene";
-import { worldToScreen } from "@refhaven/scene";
+import { stackOrder, worldToScreen } from "@refhaven/scene";
 import { Application, Sprite, Texture } from "pixi.js";
 import type { Renderer } from "./index";
-
-const drawOrder = (a: SceneItem, b: SceneItem) =>
-  a.z < b.z ? -1 : a.z > b.z ? 1 : a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
 
 export async function createPixiRenderer(container: HTMLElement): Promise<Renderer> {
   const app = new Application();
@@ -67,7 +64,7 @@ export async function createPixiRenderer(container: HTMLElement): Promise<Render
       if (reorder) {
         reorder = false;
         app.stage.removeChildren();
-        const ordered = [...drawn.values()].sort((a, b) => drawOrder(a.item, b.item));
+        const ordered = [...drawn.values()].sort((a, b) => stackOrder(a.item, b.item));
         for (const { sprite } of ordered) app.stage.addChild(sprite);
       }
       // Positions are made camera-relative here, in float64, so the GPU

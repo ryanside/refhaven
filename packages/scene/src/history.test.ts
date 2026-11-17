@@ -5,7 +5,7 @@ import {
   createHistory,
   maxOpsPerCall,
   patchEntry,
-  posesOf,
+  patchedFields,
   removalEntry,
 } from "./index";
 
@@ -88,7 +88,7 @@ test("a removal is undone by one add per item, at its old place and its old z", 
     { op: "remove", key: "r1" },
     { op: "remove", key: "r2" },
   ]);
-  expect(posesOf(entry.undo)).toEqual([]);
+  expect(patchedFields(entry.undo)).toEqual([]);
 });
 
 test("an add is undone by removing the Ref's item and redone by adding it at the same place", () => {
@@ -107,8 +107,8 @@ test("an add whose place in the stack is known is redone at that place", () => {
 });
 
 test("a move patches the old positions to undo and the new ones to redo", () => {
-  expect(posesOf(first.undo)).toEqual([{ key: "a", x: 0, y: 0 }]);
-  expect(posesOf(first.redo)).toEqual([{ key: "a", x: 10, y: 0 }]);
+  expect(patchedFields(first.undo)).toEqual([{ key: "a", x: 0, y: 0 }]);
+  expect(patchedFields(first.redo)).toEqual([{ key: "a", x: 10, y: 0 }]);
 });
 
 test("undoing a removal takes as many ops as the removal, so the largest removal one call can make can be undone", () => {
