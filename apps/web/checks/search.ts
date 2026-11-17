@@ -6,6 +6,7 @@ import {
   appUrl,
   assert,
   clientFor,
+  consoleWatch,
   openPageWithPasskeyDevice,
   outcome,
   pngOf,
@@ -75,13 +76,7 @@ const showsFor = (page: Page, q: string | null, tag: string | null, names: strin
 const searchField = (page: Page) => page.getByLabel("Search", { exact: true });
 const tagSelect = (page: Page) => page.getByLabel("Tag", { exact: true });
 
-const consoleErrors: Array<string> = [];
-const watchConsole = (page: Page) => {
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(String(error)));
-};
+const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 const first = await openPageWithPasskeyDevice();
 const second = await openPageWithPasskeyDevice();
@@ -405,10 +400,7 @@ try {
       "CollectionNotFound",
     "filter on the first user's collection fails with CollectionNotFound for the second user",
   );
-  assert(
-    consoleErrors.length === 0,
-    `the browser console shows no error: ${consoleErrors.join(" | ")}`,
-  );
+  assertCleanConsole();
 } finally {
   await first.browser.close();
   await second.browser.close();

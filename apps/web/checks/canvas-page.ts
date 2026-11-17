@@ -3,7 +3,14 @@ import { type Point, topmostAt } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
 import type { FunctionReturnType } from "convex/server";
 import type { Page, Route } from "playwright";
-import { appUrl, assert, clientFor, openPageWithPasskeyDevice, signInWithPasskey } from "./browser";
+import {
+  appUrl,
+  assert,
+  clientFor,
+  consoleWatch,
+  openPageWithPasskeyDevice,
+  signInWithPasskey,
+} from "./browser";
 import {
   type Item,
   type Rgb,
@@ -35,14 +42,7 @@ const images = [
 ] as const;
 
 const canvasUrl = `${appUrl}/library?view=canvas`;
-const consoleErrors: Array<string> = [];
-
-const watchConsole = (page: Page) => {
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(String(error)));
-};
+const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 const openCanvas = async (page: Page, count: number) => {
   await page.goto(canvasUrl);
@@ -609,10 +609,7 @@ try {
     );
   }
 
-  assert(
-    consoleErrors.length === 0,
-    `the browser console shows no error: ${consoleErrors.join(" | ")}`,
-  );
+  assertCleanConsole();
 } finally {
   await browser.close();
 }

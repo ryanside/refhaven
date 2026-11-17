@@ -24,6 +24,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Record the feature and the entry point with every artifact.
 - Report an unreachable path with the command you tried and the precondition that failed.
 - Never report a skipped entry point as verified through a different path.
+- End a check with `assertClean()` from `consoleWatch()` in `apps/web/checks/browser.ts`. It fails on any error a page logged, except `net::ERR_NETWORK_CHANGED`, which Chromium logs when the machine's network changes. It prints a `note` line for those. Repeat that note in your report.
 
 ## Feature entry contract
 

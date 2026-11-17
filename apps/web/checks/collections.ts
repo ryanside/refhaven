@@ -7,6 +7,7 @@ import {
   appUrl,
   assert,
   clientFor,
+  consoleWatch,
   convexUrl,
   openPageWithPasskeyDevice,
   outcome,
@@ -68,13 +69,9 @@ assert(
 
 const first = await openPageWithPasskeyDevice();
 const second = await openPageWithPasskeyDevice();
-const consoleErrors: Array<string> = [];
-for (const { page } of [first, second]) {
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(String(error)));
-}
+const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
+watchConsole(first.page);
+watchConsole(second.page);
 try {
   const { page } = first;
   await signInWithPasskey(page, `check-collections-a-${stamp}`);
@@ -381,10 +378,7 @@ try {
   await second.page.getByText("Collection not found.").waitFor();
   assert(true, "the first user's collection page shows the second user a not-found line");
 
-  assert(
-    consoleErrors.length === 0,
-    `the browser console shows no error: ${consoleErrors.join(" | ")}`,
-  );
+  assertCleanConsole();
 } finally {
   await first.browser.close();
   await second.browser.close();

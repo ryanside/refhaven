@@ -3,10 +3,11 @@ import { type Point, placedEdge, placementGap } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
 import {
-  type Carried,
   appUrl,
   assert,
+  type Carried,
   clientFor,
+  consoleWatch,
   openPageWithPasskeyDevice,
   send,
   signInWithPasskey,
@@ -33,14 +34,7 @@ import {
 
 const canvas = '[data-testid="canvas"]';
 const libraryCanvas = `${appUrl}/library?view=canvas`;
-const consoleErrors: Array<string> = [];
-
-const watchConsole = (page: Page) => {
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(String(error)));
-};
+const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 const image = async (page: Page, name: string, color: Rgb, width: number, height: number) => ({
   carried: {
@@ -279,10 +273,7 @@ try {
     `on the canvas a paste into a text field is left to the field: ${intoField}`,
   );
 
-  assert(
-    consoleErrors.length === 0,
-    `the browser console shows no error: ${consoleErrors.join(" | ")}`,
-  );
+  assertCleanConsole();
 } finally {
   await browser.close();
 }

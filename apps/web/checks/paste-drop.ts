@@ -2,9 +2,10 @@ import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
 import type { Page } from "playwright";
 import {
-  type Carried,
   assert,
+  type Carried,
   clientFor,
+  consoleWatch,
   openPageWithPasskeyDevice,
   pngOf,
   send,
@@ -25,11 +26,8 @@ const outcomeOf = async (page: Page, name: string) => {
 const png = (name: string, buffer: Buffer): Carried => ({ name, mimeType: "image/png", buffer });
 
 const { browser, page } = await openPageWithPasskeyDevice();
-const consoleErrors: Array<string> = [];
-page.on("console", (message) => {
-  if (message.type() === "error") consoleErrors.push(message.text());
-});
-page.on("pageerror", (error) => consoleErrors.push(String(error)));
+const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
+watchConsole(page);
 try {
   await signInWithPasskey(page, `check-paste-drop-${Date.now().toString(36)}`);
   await page.getByText("Nothing saved yet.").waitFor();
@@ -152,10 +150,7 @@ try {
     `the trash page refuses a drag of files, leaves a paste alone, and saves nothing: ${overTrash}`,
   );
 
-  assert(
-    consoleErrors.length === 0,
-    `the browser console shows no error: ${consoleErrors.join(" | ")}`,
-  );
+  assertCleanConsole();
 } finally {
   await browser.close();
 }
