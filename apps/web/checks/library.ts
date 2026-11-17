@@ -210,7 +210,7 @@ try {
   );
 
   type Upload = { url: string; headers: Record<string, string> };
-  const put = async ({ url, headers }: Upload, body: Uint8Array) =>
+  const put = async ({ url, headers }: Upload, body: Uint8Array<ArrayBuffer>) =>
     (
       await fetch(url, {
         method: "PUT",
@@ -218,7 +218,7 @@ try {
         headers: { "Content-Type": "image/png", ...headers },
       })
     ).status;
-  const putEach = (prepared: ReadonlyArray<Upload>, body: Uint8Array) =>
+  const putEach = (prepared: ReadonlyArray<Upload>, body: Uint8Array<ArrayBuffer>) =>
     Promise.all(prepared.map((upload) => put(upload, body)));
 
   const html = new TextEncoder().encode("<!DOCTYPE html><script>alert(1)</script>");
