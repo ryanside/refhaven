@@ -16,7 +16,11 @@ export const storedBlob = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
       .first();
   }).pipe(Effect.orDie);
 
-/** A save of bytes whose objects wait for the sweep takes them back, so the sweep leaves them. */
+/**
+ * A save of bytes whose objects wait for the sweep takes them back: it deletes their orphan row, so
+ * the sweep leaves the objects. False when the sweep has begun to delete them. The row then stays,
+ * and the save must not go on, because what it saw in R2 may be gone a moment later.
+ */
 export const takeBack = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
   Effect.gen(function* () {
     const reader = yield* DatabaseReader;
@@ -27,9 +31,10 @@ export const takeBack = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
         q.eq("workspaceId", workspaceId).eq("sha256", sha256),
       )
       .first();
-    if (Option.isSome(orphan)) {
-      yield* writer.table("orphans").delete(orphan.value._id);
-    }
+    if (Option.isNone(orphan)) return true;
+    if (orphan.value.sweepingAt !== undefined) return false;
+    yield* writer.table("orphans").delete(orphan.value._id);
+    return true;
   }).pipe(Effect.orDie);
 
 export const orphanKeys = ({ workspaceId, sha256, variants }: OrphansDoc) => [

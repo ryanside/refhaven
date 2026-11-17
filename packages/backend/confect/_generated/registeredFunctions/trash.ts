@@ -10,5 +10,6 @@ export default {
 ["purgeBatch"]: RegisteredConvexFunction.register({ ...definitions["purgeBatch"], handler: forward(definitions["purgeBatch"].handler) }),
 ["purge"]: RegisteredConvexFunction.register({ ...definitions["purge"], handler: forward(definitions["purge"].handler) }),
 ["sweepBatch"]: RegisteredConvexFunction.register({ ...definitions["sweepBatch"], handler: forward(definitions["sweepBatch"].handler) }),
+["sweepDone"]: RegisteredConvexFunction.register({ ...definitions["sweepDone"], handler: forward(definitions["sweepDone"].handler) }),
 ["sweep"]: RegisteredConvexFunction.register({ ...definitions["sweep"], handler: forward(definitions["sweep"].handler) }),
 } as RegisteredFunctions.RegisteredFunctionsForGroupSpec<typeof import("../../trash.spec")["default"]>;

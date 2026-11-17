@@ -20,7 +20,20 @@ export default GroupSpec.make()
     FunctionSpec.internalMutation({
       name: "sweepBatch",
       args,
-      returns: () => Schema.Struct({ swept: Schema.Int, keys: Schema.Array(Schema.String) }),
+      returns: () =>
+        Schema.Struct({
+          sweeping: Schema.Array(
+            Schema.Struct({ orphanId: Id("orphans"), keys: Schema.Array(Schema.String) }),
+          ),
+          more: Schema.Boolean,
+        }),
+    }),
+  )
+  .addFunction(
+    FunctionSpec.internalMutation({
+      name: "sweepDone",
+      args: () => ({ orphanIds: Schema.Array(Id("orphans")) }),
+      returns: () => Schema.Null,
     }),
   )
   .addFunction(

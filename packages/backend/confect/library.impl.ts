@@ -40,7 +40,6 @@ const prepareUpload = FunctionImpl.make(
   ({ sha256, roles }) =>
     Effect.gen(function* () {
       const { workspaceId } = yield* CurrentWorkspace;
-      yield* takeBack(workspaceId, sha256);
       const stored = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
       const original = stored
         ? []
@@ -95,9 +94,29 @@ const inspectUpload = (key: string) =>
     return { byteSize, mimeType };
   });
 
+const reclaim = FunctionImpl.make(databaseSchema, library, "takeBack", ({ sha256 }) =>
+  Effect.gen(function* () {
+    const { workspaceId } = yield* CurrentWorkspace;
+    return yield* takeBack(workspaceId, sha256);
+  }),
+);
+
+/**
+ * Takes the bytes back from the sweep, then looks at the objects, then records them. In that
+ * order no sweep can delete an object between the look and the record: the sweep has not begun,
+ * and it cannot begin for bytes with no orphan row. A new orphan row would be a week from its
+ * sweep, and this action lives ten minutes at most.
+ */
 const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...image }) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
+    const { runMutation } = yield* MutationRunner;
+    const free = yield* runMutation(refs.internal.library.takeBack, {
+      sha256: image.sha256,
+    }).pipe(Effect.catchTags({ NotSignedIn: Effect.die, SchemaError: Effect.die }));
+    if (!free) {
+      return yield* new UploadNotFound();
+    }
     const stored = yield* inspectUpload(originalKey(workspaceId, image.sha256));
     const storedVariants = yield* Effect.forEach(
       variantRoles.flatMap((role) => {
@@ -115,7 +134,6 @@ const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...
           return [role, { byteSize, ...size }] as const;
         }),
     );
-    const { runMutation } = yield* MutationRunner;
     return yield* runMutation(refs.internal.library.record, {
       ...image,
       ...stored,
@@ -136,8 +154,9 @@ const record = FunctionImpl.make(
       const { workspaceId } = yield* CurrentWorkspace;
       const writer = yield* DatabaseWriter;
       const existing = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
-      if (!existing) {
-        yield* takeBack(workspaceId, sha256);
+      // The purge may have written an orphan row since `save` took the bytes back.
+      if (!existing && !(yield* takeBack(workspaceId, sha256))) {
+        return yield* new UploadNotFound();
       }
       const blobId = existing
         ? existing._id
@@ -367,6 +386,7 @@ const restore = FunctionImpl.make(databaseSchema, library, "restore", ({ refIds 
 
 export default GroupImpl.make(databaseSchema, library).pipe(
   Layer.provide(prepareUpload),
+  Layer.provide(reclaim),
   Layer.provide(save),
   Layer.provide(record),
   Layer.provide(list),

@@ -9,7 +9,7 @@ import { DatabaseReader, DatabaseWriter, MutationRunner } from "./_generated/ser
 import { variantRoles } from "./blob";
 import { orphanKeys, storedBlob } from "./orphan";
 import { deleteObject } from "./r2";
-import { sweepMs, trashMs } from "./trash";
+import { sweepLockMs, sweepMs, trashMs } from "./trash";
 import trash from "./trash.spec";
 
 const batchSize = 50;
@@ -95,8 +95,10 @@ const purge = FunctionImpl.make(databaseSchema, trash, "purge", (args) =>
 );
 
 /**
- * Deletes the orphan rows a week old and returns their objects' keys. A Blob row of the same
- * bytes means a save took the objects back, so that row's keys are not returned.
+ * Begins the sweep of the orphan rows a week old: sets `sweepingAt` on each and returns its
+ * objects' keys. From then on no save of those bytes goes on, until `sweepDone` deletes the row.
+ * A row that another sweep set less than `sweepLockMs` ago is left to that sweep. `more` says
+ * whether to ask again.
  */
 const sweepBatch = FunctionImpl.make(databaseSchema, trash, "sweepBatch", ({ pretend }) =>
   Effect.gen(function* () {
@@ -114,18 +116,38 @@ const sweepBatch = FunctionImpl.make(databaseSchema, trash, "sweepBatch", ({ pre
           .table("orphans")
           .index("by_orphanedAt", (q) => q.lt("orphanedAt", now - sweepMs))
           .take(batchSize);
-    const keys = yield* Effect.forEach(due, (orphan) =>
+    const mine = due.filter(
+      ({ sweepingAt }) => sweepingAt === undefined || now - sweepingAt >= sweepLockMs,
+    );
+    const sweeping = yield* Effect.forEach(mine, (orphan) =>
       Effect.gen(function* () {
-        yield* writer.table("orphans").delete(orphan._id);
-        const stored = yield* storedBlob(orphan.workspaceId, orphan.sha256);
-        return Option.isSome(stored) ? [] : orphanKeys(orphan);
+        // `record` deletes the orphan row when it inserts a Blob row, so the two never coexist.
+        // Read again all the same, because a wrong delete here cannot be undone.
+        if (Option.isSome(yield* storedBlob(orphan.workspaceId, orphan.sha256))) {
+          yield* writer.table("orphans").delete(orphan._id);
+          return [];
+        }
+        yield* writer.table("orphans").patch(orphan._id, { sweepingAt: now });
+        return [{ orphanId: orphan._id, keys: orphanKeys(orphan) }];
       }),
     );
-    return { swept: due.length, keys: keys.flat() };
+    return { sweeping: sweeping.flat(), more: due.length === batchSize && mine.length > 0 };
   }).pipe(Effect.orDie),
 );
 
-// The objects are deleted only after the mutation that let them go has committed.
+const sweepDone = FunctionImpl.make(databaseSchema, trash, "sweepDone", ({ orphanIds }) =>
+  Effect.gen(function* () {
+    const writer = yield* DatabaseWriter;
+    yield* Effect.forEach(orphanIds, (orphanId) => writer.table("orphans").delete(orphanId), {
+      discard: true,
+    });
+    return null;
+  }).pipe(Effect.orDie),
+);
+
+// Each batch's objects are deleted between the mutation that sets `sweepingAt` on its rows and
+// the one that deletes them, so a save never records bytes that this is deleting. A delete of an
+// object that is already gone succeeds, so a sweep that died halfway is finished by a later one.
 const sweep = FunctionImpl.make(databaseSchema, trash, "sweep", (args) =>
   Effect.gen(function* () {
     const { runMutation } = yield* MutationRunner;
@@ -133,12 +155,16 @@ const sweep = FunctionImpl.make(databaseSchema, trash, "sweep", (args) =>
     let deleted = 0;
     for (;;) {
       const batch = yield* runMutation(refs.internal.trash.sweepBatch, args);
-      yield* Effect.forEach(batch.keys, (key) => Effect.promise(() => deleteObject(key)), {
+      const keys = batch.sweeping.flatMap((orphan) => orphan.keys);
+      yield* Effect.forEach(keys, (key) => Effect.promise(() => deleteObject(key)), {
         discard: true,
       });
-      swept += batch.swept;
-      deleted += batch.keys.length;
-      if (batch.swept < batchSize) return { swept, deleted };
+      yield* runMutation(refs.internal.trash.sweepDone, {
+        orphanIds: batch.sweeping.map(({ orphanId }) => orphanId),
+      });
+      swept += batch.sweeping.length;
+      deleted += keys.length;
+      if (!batch.more) return { swept, deleted };
     }
   }).pipe(Effect.orDie),
 );
@@ -147,6 +173,7 @@ export default GroupImpl.make(databaseSchema, trash).pipe(
   Layer.provide(purgeBatch),
   Layer.provide(purge),
   Layer.provide(sweepBatch),
+  Layer.provide(sweepDone),
   Layer.provide(sweep),
   GroupImpl.finalize,
 );
