@@ -32,7 +32,8 @@ const same = (a: ReadonlyArray<Item | undefined>, b: ReadonlyArray<Item | undefi
     );
   return canonical(a) === canonical(b);
 };
-const byKey = (items: ReadonlyArray<Item>) => new Map(items.map((item) => [item.key, item]));
+const byKey = <T extends { key: string }>(items: ReadonlyArray<T>) =>
+  new Map(items.map((item) => [item.key, item]));
 const sizes = (items: ReadonlyArray<Item>) =>
   items.map(({ width, height }) => `${width}x${height}`).sort();
 
