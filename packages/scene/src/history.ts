@@ -31,7 +31,7 @@ export const callsOf = <Op>(ops: ReadonlyArray<Op>): Array<ReadonlyArray<Op>> =>
 type Placed = Point & { readonly key: string };
 
 /** An item's key and the fields a patch sets on it. */
-export type Patch = ItemFields & { readonly key: string };
+type Patch = ItemFields & { readonly key: string };
 
 const patchTo = ({ key, ...fields }: Patch): ItemOp => ({ op: "patch", key, fields });
 
