@@ -73,27 +73,29 @@ export function CanvasView({ children }: { children: ReactNode }) {
     if (changes.value.items.length > snapshotAfterChanges) void takeSnapshot();
   }, [changes, store, takeSnapshot]);
 
-  const save = useRef<(drop: Drop) => void>(() => {});
-  save.current = (drop) => {
-    if (!base) return store.reject(drop.save);
-    apply({
-      canvasId: base.canvasId,
-      ops: drop.moves.map(({ key, x, y }) => ({ op: "patch" as const, key, fields: { x, y } })),
-    }).then(
-      (result) => {
-        if (Result.isSuccess(result)) {
-          store.acknowledge(drop.save, result.success);
-        } else {
+  const save = useRef((drop: Drop) => store.reject(drop.save));
+  useEffect(() => {
+    save.current = (drop) => {
+      if (!base) return store.reject(drop.save);
+      apply({
+        canvasId: base.canvasId,
+        ops: drop.moves.map(({ key, x, y }) => ({ op: "patch" as const, key, fields: { x, y } })),
+      }).then(
+        (result) => {
+          if (Result.isSuccess(result)) {
+            store.acknowledge(drop.save, result.success);
+          } else {
+            store.reject(drop.save);
+            setProblem("A move could not be saved.");
+          }
+        },
+        () => {
           store.reject(drop.save);
           setProblem("A move could not be saved.");
-        }
-      },
-      () => {
-        store.reject(drop.save);
-        setProblem("A move could not be saved.");
-      },
-    );
-  };
+        },
+      );
+    };
+  }, [apply, base, store]);
 
   useEffect(() => {
     const sign: Sign = async (refIds, role) => {
