@@ -55,8 +55,9 @@ export function CanvasView({ children }: { children: ReactNode }) {
         setProblem(opened.failure._tag);
         return;
       }
-      store.loadSnapshot(opened.success);
-      setBase({ canvasId: opened.success.canvasId, rev: opened.success.rev });
+      if (store.loadSnapshot(opened.success)) {
+        setBase({ canvasId: opened.success.canvasId, rev: opened.success.rev });
+      }
     } finally {
       snapshotting.current = false;
     }
@@ -263,11 +264,18 @@ function drive(
   const onPointerMove = (event: PointerEvent) => {
     if (event.pointerId === pointerId) store.move(at(event));
   };
-  const onPointerUp = (event: PointerEvent) => {
-    if (event.pointerId !== pointerId) return;
+  // A release outside the window, or a switch to another window, sends no pointerup. The gesture
+  // ends on a lost capture and on blur too, or the next pointer move would keep dragging.
+  const endGesture = () => {
+    if (pointerId === null) return;
+    const ended = pointerId;
     pointerId = null;
+    if (host.hasPointerCapture(ended)) host.releasePointerCapture(ended);
     const drop = store.release();
     if (drop) save(drop);
+  };
+  const onPointerUp = (event: PointerEvent) => {
+    if (event.pointerId === pointerId) endGesture();
   };
   const onWheel = (event: WheelEvent) => {
     event.preventDefault();
@@ -291,12 +299,16 @@ function drive(
   const onKeyUp = (event: KeyboardEvent) => {
     if (event.code === "Space") setSpace(false);
   };
-  const onBlur = () => setSpace(false);
+  const onBlur = () => {
+    setSpace(false);
+    endGesture();
+  };
 
   host.addEventListener("pointerdown", onPointerDown);
   host.addEventListener("pointermove", onPointerMove);
   host.addEventListener("pointerup", onPointerUp);
   host.addEventListener("pointercancel", onPointerUp);
+  host.addEventListener("lostpointercapture", onPointerUp);
   host.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
@@ -311,6 +323,7 @@ function drive(
     host.removeEventListener("pointermove", onPointerMove);
     host.removeEventListener("pointerup", onPointerUp);
     host.removeEventListener("pointercancel", onPointerUp);
+    host.removeEventListener("lostpointercapture", onPointerUp);
     host.removeEventListener("wheel", onWheel);
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);

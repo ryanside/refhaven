@@ -201,6 +201,15 @@ test("an item that arrives with deletedAt leaves the scene and the selection", (
   expect(store.summary().items).toBe(1);
 });
 
+test("a snapshot older than the store's state is left out", () => {
+  const { store, at } = setUp();
+  store.applyChanges({ rev: 5, items: [{ ...a, x: 50 }] });
+
+  expect(store.loadSnapshot({ rev: 4, items: [a, b] })).toBe(false);
+  expect(at("a")).toEqual({ x: 50, y: 0 });
+  expect(store.loadSnapshot({ rev: 5, items: [{ ...a, x: 50 }, b] })).toBe(true);
+});
+
 test("changes older than the store's state are ignored", () => {
   const { store, at } = setUp();
   store.applyChanges({ rev: 5, items: [{ ...a, x: 50 }] });

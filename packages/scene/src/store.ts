@@ -138,8 +138,13 @@ export function createSceneStore() {
     selection: () => selection,
     gesture: () => gesture,
 
-    /** Replaces every item with a snapshot. The first snapshot also fits the camera to the items. */
+    /**
+     * Replaces every item with a snapshot, and returns whether it did. A snapshot older than the
+     * state the store already holds is left out, because it would undo changes applied since.
+     * The first snapshot also fits the camera to the items.
+     */
     loadSnapshot(snapshot: ServerState) {
+      if (snapshot.rev < rev) return false;
       rev = snapshot.rev;
       server.clear();
       for (const item of snapshot.items) server.set(item.key, fromServer(item));
@@ -150,6 +155,7 @@ export function createSceneStore() {
         camera = fitCamera(viewport, server.values());
       }
       changed();
+      return true;
     },
 
     /** Applies the items written since the snapshot. An item in a drag keeps its drag position. */
