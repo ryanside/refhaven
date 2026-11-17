@@ -59,6 +59,7 @@
         "@convex-dev/auth": "2.0.0",
         "@convex-dev/r2": "0.10.4",
         "@effect/platform-node": "4.1.4",
+        "@refhaven/scene": "workspace:*",
         "convex": "catalog:",
         "effect": "catalog:",
       },
@@ -83,6 +84,9 @@
     "packages/scene": {
       "name": "@refhaven/scene",
       "version": "0.0.0",
+      "dependencies": {
+        "fractional-indexing": "4.0.0",
+      },
       "devDependencies": {
         "typescript": "catalog:",
         "vitest": "catalog:",
@@ -865,6 +869,8 @@
     "fill-range": ["fill-range@7.1.1", "", { "dependencies": { "to-regex-range": "^5.0.1" } }, "sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg=="],
 
     "find-up": ["find-up@3.0.0", "", { "dependencies": { "locate-path": "^3.0.0" } }, "sha512-1yD6RmLI1XBfxugvORwlck6f75tYL+iR0jqwsOrOxMZyGYqUuDhJ0l4AXdO1iX/FTs9cBAMEk1gWSEx1kSbylg=="],
+
+    "fractional-indexing": ["fractional-indexing@4.0.0", "", {}, "sha512-Nr2P1Yyaj2sy1Qdt/wI3GcByxrUdbSKg5+cGvw8f18hT2SkQt6V72iOjBpk7IO3UkzBsdlGRs2a4z6dLrJprgw=="],
 
     "fs-extra": ["fs-extra@11.4.1", "", { "dependencies": { "graceful-fs": "^4.2.0", "jsonfile": "^6.0.1", "universalify": "^2.0.0" } }, "sha512-KYAb4c9BJQI6QqGKthV68OHe0badztdXJWKo0WtBA9IuCFPTKvE5ZdUBglP833aMjhaSPNO4A5j/EkzZtGlKjA=="],
 

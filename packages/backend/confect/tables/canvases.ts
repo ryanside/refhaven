@@ -4,7 +4,7 @@ import { Id } from "../_generated/id";
 
 export default Table.make(() =>
   Schema.Struct({
-    userId: Id("users"),
+    workspaceId: Id("workspaces"),
     rev: Schema.Int,
   }),
-).index("by_user", ["userId"]);
+).index("by_workspace", ["workspaceId"]);

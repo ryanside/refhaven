@@ -5,6 +5,7 @@ import { canvasItemFields } from "../canvasItem";
 
 export default Table.make(() =>
   Schema.Struct({
+    workspaceId: Id("workspaces"),
     canvasId: Id("canvases"),
     rev: Schema.Int,
     ...canvasItemFields,

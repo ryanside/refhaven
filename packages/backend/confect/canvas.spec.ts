@@ -1,35 +1,44 @@
 import { FunctionSpec, GroupSpec } from "@confect/core";
 import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 import { Id } from "./_generated/id";
-import { canvasItemFields } from "./canvasItem";
+import { ItemKey, canvasItemFields, itemTransform } from "./canvasItem";
 import RequireWorkspace from "./middleware/RequireWorkspace.spec";
 
 export const CanvasItem = Schema.Struct(canvasItemFields);
 
+const Op = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literal("patch"),
+    key: ItemKey,
+    fields: Schema.Struct(itemTransform).mapFields(Struct.map(Schema.optionalKey)),
+  }),
+  Schema.Struct({ op: Schema.Literal("remove"), key: ItemKey }),
+]);
+
 export class CanvasNotFound extends Schema.TaggedError<CanvasNotFound>()("CanvasNotFound", {}) {}
+
+export class ItemNotFound extends Schema.TaggedError<ItemNotFound>()("ItemNotFound", {
+  key: Schema.String,
+}) {}
 
 export default GroupSpec.make()
   .middleware(RequireWorkspace)
   .addFunction(
     FunctionSpec.publicMutation({
-      name: "seed",
-      args: () => ({
-        count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5000 })),
-      }),
-      returns: () => Id("canvases"),
+      name: "open",
+      args: () => ({}),
+      returns: () =>
+        Schema.Struct({
+          canvasId: Id("canvases"),
+          rev: Schema.Int,
+          items: Schema.Array(CanvasItem),
+        }),
     }),
   )
   .addFunction(
     FunctionSpec.publicQuery({
-      name: "items",
-      args: () => ({ canvasId: Id("canvases") }),
-      returns: () => Schema.Array(CanvasItem),
-      error: () => CanvasNotFound,
-    }),
-  )
-  .addFunction(
-    FunctionSpec.publicQuery({
-      name: "itemsSince",
+      name: "changes",
       args: () => ({ canvasId: Id("canvases"), rev: Schema.Int }),
       returns: () => Schema.Struct({ rev: Schema.Int, items: Schema.Array(CanvasItem) }),
       error: () => CanvasNotFound,
@@ -37,18 +46,12 @@ export default GroupSpec.make()
   )
   .addFunction(
     FunctionSpec.publicMutation({
-      name: "moveItems",
+      name: "apply",
       args: () => ({
         canvasId: Id("canvases"),
-        moves: Schema.Array(
-          Schema.Struct({
-            key: Schema.String,
-            x: Schema.Finite,
-            y: Schema.Finite,
-          }),
-        ),
+        ops: Schema.Array(Op).check(Schema.isMinLength(1), Schema.isMaxLength(1000)),
       }),
       returns: () => Schema.Int,
-      error: () => CanvasNotFound,
+      error: () => Schema.Union([CanvasNotFound, ItemNotFound]),
     }),
   );

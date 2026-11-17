@@ -1,69 +1,25 @@
 import { createHash } from "node:crypto";
 import { api } from "@refhaven/backend/api";
 import { ConvexHttpClient } from "convex/browser";
-import { ConvexError } from "convex/values";
 import type { Page } from "playwright";
 import {
-  accessToken,
   assert,
+  clientFor,
   convexUrl,
   openPageWithPasskeyDevice,
+  outcome,
+  pngOf,
+  rows,
   signInWithPasskey,
 } from "./browser";
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
-
-const pngOf = async (page: Page, color: string, width: number, height = width) =>
-  Buffer.from(
-    await page.evaluate(
-      ({ color, width, height }) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext("2d")!;
-        const gradient = context.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, color);
-        gradient.addColorStop(1, "white");
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, width, height);
-        return canvas.toDataURL("image/png").split(",")[1]!;
-      },
-      { color, width, height },
-    ),
-    "base64",
-  );
 
 const isWebp = (bytes: Uint8Array) =>
   Buffer.from(bytes.subarray(0, 4)).toString() === "RIFF" &&
   Buffer.from(bytes.subarray(8, 12)).toString() === "WEBP";
 
 const bytesAt = async (url: string) => new Uint8Array(await (await fetch(url)).arrayBuffer());
-
-const outcome = (call: Promise<unknown>) =>
-  call.then(
-    () => "accepted",
-    (error: Error) =>
-      error instanceof ConvexError
-        ? String(error.data._tag)
-        : `refused (${error.message.split("\n")[1]?.trim()})`,
-  );
-
-const rows = async (table: string) => {
-  const dump = Bun.spawn(
-    ["bunx", "convex", "data", table, "--limit", "200", "--format", "jsonLines"],
-    { cwd: `${import.meta.dir}/../../../packages/backend`, stdout: "pipe", stderr: "ignore" },
-  );
-  return (await new Response(dump.stdout).text())
-    .split("\n")
-    .filter((line) => line.startsWith("{"))
-    .map((line) => JSON.parse(line));
-};
-
-const clientFor = async (page: Page) => {
-  const client = new ConvexHttpClient(convexUrl());
-  client.setAuth(await accessToken(page));
-  return client;
-};
 
 const cards = (page: Page) => page.locator("[data-ref-id]");
 const outcomes = (page: Page) => page.locator('[role="status"] li');

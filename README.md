@@ -2,7 +2,7 @@
 
 A reference library for images. You save images into a library, group them into collections, and view any set as a gallery or as a canvas. The rules for working in this repo are in [docs/decisions.md](docs/decisions.md).
 
-This repository is early. You can sign in with a passkey and save images into your library. Collections and the canvas are not built yet. The pages under `/lab` are throwaway.
+This repository is early. You can sign in with a passkey and save images into your library. The canvas has a backend and no page yet. Collections are not built. The pages under `/lab` are throwaway.
 
 ## Run it locally
 
@@ -44,7 +44,7 @@ The browser checks need `bun dev` running. Run them from `apps/web`. Most of the
 | `bun run check:auth` | Passkey sign-up, sign-out, and sign-in. |
 | `bun run check:confect` | A Confect function returns the signed-in user and refuses bad arguments. |
 | `bun run check:library` | Saving images with their thumbnail and display copy, a duplicate, byte-exact serving, and the rules between two users. It needs R2. |
-| `bun run check:canvas-sync` | The bytes and time one change costs on a canvas of 1,000 items. |
+| `bun run check:canvas` | The canvas functions: placing saved images, a patch, a removal, refused edits, and the rules between two users. It needs R2. |
 | `bun run check:renderer` | A local bitmap drawn as a WebGL texture by the PixiJS renderer. |
 | `bun run check:texture` | Saved images drawn as WebGL textures from their display copies. It needs R2. |
 

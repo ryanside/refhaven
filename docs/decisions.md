@@ -70,25 +70,25 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | B1 | The library is everything you have saved. Each saved thing is a Ref. | Built, lock |
 | B2 | A collection is a named set of Refs. A Ref can sit in many collections. | Planned, lock |
 | B3 | Any set of Refs can be shown as a gallery or as a canvas. The set is the whole library, a filter, or one collection. | Planned, lock |
-| B4 | A canvas is the canvas view of a collection or of the whole library. There are no separate boards. | Planned, lock |
-| B5 | Each collection keeps one saved layout. The whole library keeps one too. | Planned, lock |
-| B6 | An item dropped on the canvas lands where you dropped it. An item added anywhere else is placed beside the existing layout the next time the canvas opens. | Planned |
-| B7 | Removing an item from a canvas removes it from that collection. It stays in the library. | Planned |
-| B8 | A canvas holds one item per Ref. | Planned |
+| B4 | A canvas is the canvas view of a collection or of the whole library. There are no separate boards. Only the whole library's canvas exists, and no page shows it yet. | Built, lock |
+| B5 | Each collection keeps one saved layout. The whole library keeps one too, as the one canvas of its workspace. Only the whole library's layout exists. | Built, lock |
+| B6 | An item dropped on the canvas lands where you dropped it. An item added anywhere else is placed beside the existing layout the next time the canvas opens. `canvas.open` places each Ref that has no item in rows to the right of the layout, 40 units away, with its longer edge at 400 units. Dropping is not built. | Built |
+| B7 | Removing an item from a canvas removes it from that collection. It stays in the library. On the whole library's canvas, `open` does not place a removed item's Ref again. Collections are not built. | Built |
+| B8 | A canvas holds one item per Ref. | Built |
 | B9 | Notes and groups live on the canvas and not in the library. | Planned |
-| B10 | The whole library on one canvas works like any canvas. Loading thousands of items in pieces comes with the speed work. | Later |
+| B10 | The whole library on one canvas works like any canvas. Loading thousands of items in pieces comes with the speed work. Until then `canvas.open` reads every Ref and item of the canvas in one transaction, plus one Blob for each image it places. A Convex transaction allows 4,096 reads, so the first open of a library is good to about 2,000 images. That size is worked out from the limit, not measured. | Later |
 | B11 | In canvas view, a filter dims the items that do not match. | Later |
 
 ## Data
 
 | ID | Rule | State |
 |---|---|---|
-| C4 | Every document carries `workspaceId`. Each user gets a personal workspace at sign-up. The lab tables `canvases` and `canvasItems` still use the user and move over in the canvas step. | Built, lock |
+| C4 | Every document carries `workspaceId`. Each user gets a personal workspace at sign-up. | Built, lock |
 | C5 | The tables are Workspace, Blob, Ref, Collection, CollectionRef, Tag, Canvas, and CanvasItem. Workspace, Blob, and Ref exist. | Planned, lock |
 | C6 | A Blob is bytes keyed by SHA-256 inside a workspace. A Ref points at its original Blob, in `blobs.original`. The Blob records its variants, a thumbnail and a display copy, because they derive from its bytes. Every Ref that shares the Blob shares them. A page asks for a role, original, thumbnail, or display, and gets the variant when the Blob has it and the original otherwise. | Built, lock |
 | C16 | A Ref records its file name, and its creation time is the upload time. The Blob records the hash, byte size, MIME type, pixel size, ThumbHash, and the byte size and pixel size of each variant, because they describe the bytes. Source URL and note join the Ref with the first feature that sets them. | Built, lock |
-| C8 | IDs are Convex document IDs. A canvas item also carries a client-made `key`, so the canvas can create it at once. | Planned, lock |
-| C15 | A delete is a soft delete with a 30-day trash. | Planned |
+| C8 | IDs are Convex document IDs. A canvas item also carries a client-made `key`, so the canvas can create it at once. A key is unique inside its canvas. An item that `canvas.open` places takes its Ref's ID as its key. | Built, lock |
+| C15 | A delete is a soft delete with a 30-day trash. A removed canvas item already keeps its row with a `deletedAt`, so `canvas.changes` can report the removal. Nothing purges yet. | Planned |
 | C17 | The URLs are `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas`. Only `/library` exists. | Planned, lock |
 | C18 | Export is a zip with `manifest.json` and the original files. | Later |
 | I7 | One helper resolves the caller's workspace, and every function uses it. It is the `RequireWorkspace` middleware. Scopes join it with API keys. | Built, lock |
@@ -124,17 +124,17 @@ Known gaps in the upload path:
 
 | ID | Rule | State |
 |---|---|---|
-| C19 | Each canvas document carries a revision counter. A mutation raises the counter and stamps the items it wrote. The client loads a snapshot, then subscribes to the items written after the snapshot's revision. The client takes a new snapshot on every page load and when the change list passes a set size. A snapshot must not outlive the trash period of C15, or a purged item comes back. The page `/lab/canvas-sync` is a prototype of this. | Planned, lock |
-| C7 | A canvas item is a tagged union of image, note, and group. An image item points at a Ref. | Planned, lock |
-| C9 | A canvas stores one document per item. | Planned, lock |
-| C10 | An edit is saved as one mutation per gesture, carrying a list of item operations. | Planned, lock |
-| C11 | Each operation patches only the fields it changed, so the last write wins per field. | Planned |
-| C12 | An item has x, y, uniform scale, rotation, flip, crop rectangle, opacity, and grayscale. They are stored on the item and never baked into pixels. | Planned, lock |
-| C13 | Z-order is a fractional index string per item. | Planned, lock |
+| C19 | Each canvas document carries a revision counter. A mutation raises the counter once and stamps the items it wrote. The client loads a snapshot with `canvas.open`, then subscribes to `canvas.changes` for the items written after the snapshot's revision. The client takes a new snapshot on every page load and when the change list passes a set size. A snapshot must not outlive the trash period of C15, or a purged item comes back. The client part comes with the canvas page. The lab that measured this design is in git history. | Built, lock |
+| C7 | A canvas item is a tagged union of image, note, and group, with `kind` as the tag. An image item points at a Ref and copies the pixel size of its original, so a client can hit-test with no join. Only images exist. | Built, lock |
+| C9 | A canvas stores one document per item. | Built, lock |
+| C10 | An edit is saved as one mutation per gesture, carrying a list of item operations. `canvas.apply` takes up to 1,000 patch and remove operations. An operation on a missing or removed key fails the whole call with `ItemNotFound`, and nothing is written. | Built, lock |
+| C11 | Each operation patches only the fields it changed, so the last write wins per field. | Built |
+| C12 | An item has x, y, uniform scale, rotation, flip, crop rectangle, opacity, and grayscale. They are stored on the item and never baked into pixels. The server refuses a scale of 0 or less, an opacity outside 0 to 1, and a number that is not finite. Crop joins with the feature that sets it. | Built, lock |
+| C13 | Z-order is a fractional index string per item, from `fractional-indexing` 4.0.0. The server refuses a z that is not a valid key, because the next key above it could not be made. | Built, lock |
 | C14 | A group is a parent reference on its items. The UI shows one level at first. | Planned |
 | D1 | The canvas draws with PixiJS 8 on WebGL behind the `Renderer` interface in `packages/renderer`. The interface is set camera, upsert items, remove items, upload texture, evict texture, and draw. | Built |
 | D2 | Pixi types stay inside `packages/renderer`. The scene and the canvas model never import them. | Built, lock |
-| D5 | World units are float64 with y down. An item's x and y are its center. The renderer turns positions into camera-relative values before the GPU sees them. | Built, lock |
+| D5 | World units are float64 with y down. An item's x and y are its center, and its rotation is in radians. The renderer turns positions into camera-relative values before the GPU sees them. | Built, lock |
 | D3 | Scene state is a plain TypeScript store owned by the canvas, outside React state. React reads selection, tool, and zoom from it. | Planned, lock |
 | D4 | The scene applies changes from the server, except to items in a gesture. A drag stays local until release. | Planned |
 | D9 | Shortcuts come from one keymap table through TanStack Hotkeys. They do not fire while a text field has focus. | Planned |
@@ -146,7 +146,7 @@ Known gaps in the upload path:
 | D6 | Zoom runs from 1% to 6400%, toward the cursor. | Later |
 | D8 | Touch and pen do pan and pinch only at first. | Later |
 | D10 | Selection is click, shift-add, and marquee, with eight handles plus rotate and a locked aspect ratio. | Later |
-| D13 | Arrange offers grid, pack, align, and distribute. The same packing places new items for B6. | Later |
+| D13 | Arrange offers grid, pack, align, and distribute. `placeBeside` in `packages/scene` places new items for B6 in rows, and arrange can build on it. | Later |
 | D15 | Paste takes images, files, and image URLs. Copy puts the selection on the clipboard as PNG. | Later |
 | D19 | An animated image shows its first frame at first. | Later |
 | D22 | A cached snapshot is shown before the server answers. This is part of the speed work. | Later |

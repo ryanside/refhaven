@@ -1,6 +1,5 @@
 import registeredFunctions from "../confect/_generated/registeredFunctions/canvas";
 
-export const items = registeredFunctions.items;
-export const itemsSince = registeredFunctions.itemsSince;
-export const moveItems = registeredFunctions.moveItems;
-export const seed = registeredFunctions.seed;
+export const apply = registeredFunctions.apply;
+export const changes = registeredFunctions.changes;
+export const open = registeredFunctions.open;

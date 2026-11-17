@@ -13,7 +13,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppLibraryRouteImport } from './routes/_app/library'
-import { Route as AppLabCanvasSyncRouteImport } from './routes/_app/lab/canvas-sync'
 import { Route as AppLabTextureRouteImport } from './routes/_app/lab/texture'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,11 +34,6 @@ const AppLibraryRoute = AppLibraryRouteImport.update({
   path: '/library',
   getParentRoute: () => AppRoute,
 } as any)
-const AppLabCanvasSyncRoute = AppLabCanvasSyncRouteImport.update({
-  id: '/lab/canvas-sync',
-  path: '/lab/canvas-sync',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppLabTextureRoute = AppLabTextureRouteImport.update({
   id: '/lab/texture',
   path: '/lab/texture',
@@ -50,14 +44,12 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/library': typeof AppLibraryRoute
-  '/lab/canvas-sync': typeof AppLabCanvasSyncRoute
   '/lab/texture': typeof AppLabTextureRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/library': typeof AppLibraryRoute
-  '/lab/canvas-sync': typeof AppLabCanvasSyncRoute
   '/lab/texture': typeof AppLabTextureRoute
 }
 export interface FileRoutesById {
@@ -66,21 +58,19 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/_app/library': typeof AppLibraryRoute
-  '/_app/lab/canvas-sync': typeof AppLabCanvasSyncRoute
   '/_app/lab/texture': typeof AppLabTextureRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sign-in' | '/library' | '/lab/canvas-sync' | '/lab/texture'
+  fullPaths: '/' | '/sign-in' | '/library' | '/lab/texture'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sign-in' | '/library' | '/lab/canvas-sync' | '/lab/texture'
+  to: '/' | '/sign-in' | '/library' | '/lab/texture'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/sign-in'
     | '/_app/library'
-    | '/_app/lab/canvas-sync'
     | '/_app/lab/texture'
   fileRoutesById: FileRoutesById
 }
@@ -120,13 +110,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLibraryRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/lab/canvas-sync': {
-      id: '/_app/lab/canvas-sync'
-      path: '/lab/canvas-sync'
-      fullPath: '/lab/canvas-sync'
-      preLoaderRoute: typeof AppLabCanvasSyncRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/lab/texture': {
       id: '/_app/lab/texture'
       path: '/lab/texture'
@@ -139,13 +122,11 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppLibraryRoute: typeof AppLibraryRoute
-  AppLabCanvasSyncRoute: typeof AppLabCanvasSyncRoute
   AppLabTextureRoute: typeof AppLabTextureRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppLibraryRoute: AppLibraryRoute,
-  AppLabCanvasSyncRoute: AppLabCanvasSyncRoute,
   AppLabTextureRoute: AppLabTextureRoute,
 }
 
