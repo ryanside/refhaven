@@ -12,7 +12,6 @@ import {
   signInWithPasskey,
 } from "./browser";
 import {
-  type Item,
   type PageView,
   type Rgb,
   openCanvas,
