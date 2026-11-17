@@ -48,7 +48,14 @@ export default GroupSpec.make()
     FunctionSpec.publicMutation({
       name: "prepareUpload",
       args: () => ({ sha256: Sha256, roles: Schema.Array(VariantRole) }),
-      returns: () => Schema.Array(Schema.Struct({ role: ImageRole, url: Schema.String })),
+      returns: () =>
+        Schema.Array(
+          Schema.Struct({
+            role: ImageRole,
+            url: Schema.String,
+            headers: Schema.Record(Schema.String, Schema.String),
+          }),
+        ),
     }),
   )
   .addFunction(

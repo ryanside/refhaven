@@ -25,7 +25,7 @@ import library, {
 } from "./library.spec";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
-import { r2 } from "./r2";
+import { hashBoundUpload, r2 } from "./r2";
 
 const storedBlob = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
   Effect.gen(function* () {
@@ -38,8 +38,11 @@ const storedBlob = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
       .first();
   }).pipe(Effect.orDie);
 
-const uploadUrl = (key: string) =>
-  Effect.promise(() => r2.generateUploadUrl(key)).pipe(Effect.map(({ url }) => url));
+// A variant is not bound to a hash. The browser makes it, so the server has no hash to hold it to.
+const variantUpload = (key: string) =>
+  Effect.promise(() => r2.generateUploadUrl(key)).pipe(
+    Effect.map(({ url }) => ({ url, headers: {} })),
+  );
 
 const prepareUpload = FunctionImpl.make(
   databaseSchema,
@@ -51,12 +54,19 @@ const prepareUpload = FunctionImpl.make(
       const stored = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
       const original = stored
         ? []
-        : [{ role: "original" as const, url: yield* uploadUrl(originalKey(workspaceId, sha256)) }];
+        : [
+            {
+              role: "original" as const,
+              ...(yield* Effect.promise(() =>
+                hashBoundUpload(originalKey(workspaceId, sha256), sha256),
+              )),
+            },
+          ];
       const variants = yield* Effect.forEach(
         variantRoles.filter((role) => roles.includes(role) && !stored?.variants?.[role]),
         (role) =>
-          uploadUrl(variantKey(workspaceId, sha256, role)).pipe(
-            Effect.map((url) => ({ role, url })),
+          variantUpload(variantKey(workspaceId, sha256, role)).pipe(
+            Effect.map((upload) => ({ role, ...upload })),
           ),
       );
       return [...original, ...variants];

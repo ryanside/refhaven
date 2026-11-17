@@ -56,6 +56,8 @@
       "name": "@refhaven/backend",
       "version": "0.0.0",
       "dependencies": {
+        "@aws-sdk/client-s3": "3.1170.0",
+        "@aws-sdk/s3-request-presigner": "3.1170.0",
         "@confect/core": "10.6.0",
         "@confect/server": "10.6.0",
         "@convex-dev/auth": "2.0.0",

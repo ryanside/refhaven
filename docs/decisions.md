@@ -48,7 +48,8 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 
 ### R2
 
-- The bucket is private. Its CORS policy lists the app's origin, the methods `GET` and `PUT`, and the header `Content-Type`.
+- The bucket is private. Its CORS policy lists the app's origin, the methods `GET` and `PUT`, and the headers `Content-Type` and `x-amz-checksum-sha256`.
+- R2 checks an upload's SHA-256 only when the hash is a signed header, `x-amz-checksum-sha256`. As a URL parameter, the presigner's default, R2 ignores it.
 - The Convex deployment needs `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. `R2_ENDPOINT` is the account URL, `https://<account-id>.r2.cloudflarestorage.com`, with no bucket name after it.
 
 ### Sign-in
@@ -103,7 +104,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | H3 | Originals are kept byte-exact. | Built, lock |
 | H4 | Object keys are `w/{workspaceId}/o/{sha256}` for an original and `w/{workspaceId}/v/{sha256}/{file}` for a variant. A variant's `{sha256}` is the original's hash, and `{file}` is `512.webp` or `2048.webp`. | Built, lock |
 | H5 | Bytes are de-duplicated per workspace, never across workspaces. | Built, lock |
-| H6 | The browser uploads straight to R2 through a signed URL. The server makes the object key from the workspace and the hash. After the upload the server reads the object's size and first 12 bytes from R2 before it records anything. | Built |
+| H6 | The browser uploads straight to R2 through a signed URL. The server makes the object key from the workspace and the hash. An original's URL is signed for its hash, so R2 stores no other bytes under that key. After the upload the server reads the object's size and first 12 bytes from R2 before it records anything. | Built |
 | L1 | The server records the file type that the bytes show and ignores the client's claim. | Built |
 | D18 | The formats are PNG, JPEG, WebP, GIF, and AVIF. SVG is rasterized at upload. The server refuses SVG until the rasterizing step exists. Variants are WebP, and the server refuses a variant whose bytes are not WebP. | Built |
 | H7 | An image is at most 50 MB. The server checks the size when the image is saved, after the upload. | Built |
@@ -116,7 +117,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 
 Known gaps in the upload path:
 
-- Nothing checks that the uploaded bytes match the hash in the key. The upload URL also stays valid for 15 minutes, so a client can replace the bytes after the server read them. Signing the hash into the upload URL closes both. R2 enforces a signed SHA-256 only when the browser sends it as the `x-amz-checksum-sha256` header, so the bucket's CORS policy must list that header first. As a URL parameter R2 ignores it.
+- A variant's upload URL is bound to no hash, because the browser makes the variant. The URL stays valid for 15 minutes, so a client can replace its own variant after the server read it.
 - A retried save adds another Ref, because nothing identifies one save attempt. The web app never retries. Give each save a client-made ID before the CLI or an agent saves.
 - An upload that is too large, refused, or abandoned stays in R2 with no Blob. The same holds for a variant.
 - A new signed URL makes the browser download the image again, so an open page reloads its images about once an hour. Signing with a rounded date gives a URL the browser can cache.
