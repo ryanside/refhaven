@@ -3,6 +3,7 @@ import type { Id } from "@refhaven/backend/id";
 import { Button } from "@refhaven/ui/components/button";
 import { Input } from "@refhaven/ui/components/input";
 import { Label } from "@refhaven/ui/components/label";
+import { Link } from "@tanstack/react-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { thumbHashToDataURL } from "thumbhash";
 import { useRefUrls } from "@/library/use-ref-urls";
@@ -140,7 +141,9 @@ export function Gallery<E extends { readonly _tag: string }>({
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
         {items.results.map((item) => (
           <li key={item.refId} data-ref-id={item.refId} className="flex flex-col gap-1">
-            <Thumbnail item={item} url={urls.get(item.refId)?.url} />
+            <Link to="/r/$refId" params={{ refId: item.refId }}>
+              <Thumbnail item={item} url={urls.get(item.refId)?.url} />
+            </Link>
             <p className="truncate">{item.fileName}</p>
             {action(item.refId)}
           </li>
