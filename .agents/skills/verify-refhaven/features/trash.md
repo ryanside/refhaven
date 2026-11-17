@@ -40,5 +40,5 @@ Preconditions:
 - `Delete` and `Restore` save with no message on the page. Wait for the card to leave, not for text.
 - The Ref keeps its collection memberships and canvas items while it is in the trash. `verify.sh rows` still shows them. Only the readers leave them out.
 - An item removed from a canvas before the delete stays removed after the restore. Count the canvas's items with that in mind.
-- `canvas.open` through the API places images. A Ref restored after its canvas was opened without it is placed by the next `open`, beside the layout.
+- A restored Ref that had an item on a canvas comes back at once, at its old place, through `canvas.changes`. A restored Ref that never had one is placed by the next `open`, beside the layout. `canvas.open` through the API places images.
 - Saving bytes whose Ref is in the trash adds a new card to the library and leaves the old Ref in the trash.
