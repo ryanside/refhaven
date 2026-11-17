@@ -1,7 +1,11 @@
+import { CollectionName } from "@refhaven/backend/collection";
 import { Button } from "@refhaven/ui/components/button";
 import { Input } from "@refhaven/ui/components/input";
 import { Label } from "@refhaven/ui/components/label";
+import * as Schema from "effect/Schema";
 import { useId, useState } from "react";
+
+const isName = Schema.is(CollectionName);
 
 /** A collection's name, trimmed before it is sent. `save` resolves to an error tag or null. */
 export function NameForm({
@@ -32,13 +36,8 @@ export function NameForm({
     >
       <Label htmlFor={id}>{label}</Label>
       <div className="flex gap-2">
-        <Input
-          id={id}
-          value={name}
-          maxLength={100}
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
-        <Button type="submit" disabled={trimmed === ""}>
+        <Input id={id} value={name} onChange={(event) => setName(event.currentTarget.value)} />
+        <Button type="submit" disabled={!isName(trimmed)}>
           {submit}
         </Button>
       </div>
