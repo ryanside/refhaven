@@ -10,9 +10,12 @@ import {
   type Sha256,
   maxImageBytes,
   originalKey,
+  servedKey,
   signedUrlSeconds,
   sniffImageType,
   sniffedBytes,
+  variantKey,
+  variantRoles,
 } from "./blob";
 import library, {
   ImageTooLarge,
@@ -35,17 +38,29 @@ const storedBlob = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
       .first();
   }).pipe(Effect.orDie);
 
-const prepareUpload = FunctionImpl.make(databaseSchema, library, "prepareUpload", ({ sha256 }) =>
-  Effect.gen(function* () {
-    const { workspaceId } = yield* CurrentWorkspace;
-    if (Option.isSome(yield* storedBlob(workspaceId, sha256))) {
-      return { status: "stored" as const };
-    }
-    const { url } = yield* Effect.promise(() =>
-      r2.generateUploadUrl(originalKey(workspaceId, sha256)),
-    );
-    return { status: "upload" as const, url };
-  }),
+const uploadUrl = (key: string) =>
+  Effect.promise(() => r2.generateUploadUrl(key)).pipe(Effect.map(({ url }) => url));
+
+const prepareUpload = FunctionImpl.make(
+  databaseSchema,
+  library,
+  "prepareUpload",
+  ({ sha256, roles }) =>
+    Effect.gen(function* () {
+      const { workspaceId } = yield* CurrentWorkspace;
+      const stored = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
+      const original = stored
+        ? []
+        : [{ role: "original" as const, url: yield* uploadUrl(originalKey(workspaceId, sha256)) }];
+      const variants = yield* Effect.forEach(
+        variantRoles.filter((role) => roles.includes(role) && !stored?.variants?.[role]),
+        (role) =>
+          uploadUrl(variantKey(workspaceId, sha256, role)).pipe(
+            Effect.map((url) => ({ role, url })),
+          ),
+      );
+      return [...original, ...variants];
+    }),
 );
 
 /** Reads the size and the real type of an uploaded object from R2 with one ranged request. */
@@ -80,14 +95,32 @@ const inspectUpload = (key: string) =>
     return { byteSize, mimeType };
   });
 
-const save = FunctionImpl.make(databaseSchema, library, "save", (image) =>
+const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...image }) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
     const stored = yield* inspectUpload(originalKey(workspaceId, image.sha256));
-    const { runMutation } = yield* MutationRunner;
-    return yield* runMutation(refs.internal.library.record, { ...image, ...stored }).pipe(
-      Effect.orDie,
+    const storedVariants = yield* Effect.forEach(
+      variantRoles.flatMap((role) => {
+        const size = variants[role];
+        return size ? [{ role, size }] : [];
+      }),
+      ({ role, size }) =>
+        Effect.gen(function* () {
+          const { byteSize, mimeType } = yield* inspectUpload(
+            variantKey(workspaceId, image.sha256, role),
+          );
+          if (mimeType !== "image/webp") {
+            return yield* new UnsupportedImage();
+          }
+          return [role, { byteSize, ...size }] as const;
+        }),
     );
+    const { runMutation } = yield* MutationRunner;
+    return yield* runMutation(refs.internal.library.record, {
+      ...image,
+      ...stored,
+      variants: Object.fromEntries(storedVariants),
+    }).pipe(Effect.orDie);
   }),
 );
 
@@ -95,20 +128,37 @@ const record = FunctionImpl.make(
   databaseSchema,
   library,
   "record",
-  ({ sha256, fileName, width, height, byteSize, mimeType }) =>
+  ({ sha256, fileName, width, height, byteSize, mimeType, thumbHash, variants }) =>
     Effect.gen(function* () {
       const { workspaceId } = yield* CurrentWorkspace;
       const writer = yield* DatabaseWriter;
-      const existing = yield* storedBlob(workspaceId, sha256);
-      const blobId = Option.isSome(existing)
-        ? existing.value._id
-        : yield* writer
-            .table("blobs")
-            .insert({ workspaceId, sha256, byteSize, mimeType, width, height });
+      const existing = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
+      const blobId = existing
+        ? existing._id
+        : yield* writer.table("blobs").insert({
+            workspaceId,
+            sha256,
+            byteSize,
+            mimeType,
+            width,
+            height,
+            thumbHash,
+            variants,
+          });
+      if (
+        existing &&
+        (existing.thumbHash === undefined ||
+          variantRoles.some((role) => variants[role] && !existing.variants?.[role]))
+      ) {
+        yield* writer.table("blobs").patch(existing._id, {
+          thumbHash: existing.thumbHash ?? thumbHash,
+          variants: { ...variants, ...existing.variants },
+        });
+      }
       const refId = yield* writer
         .table("refs")
         .insert({ workspaceId, blobs: { original: blobId }, fileName });
-      return { refId, duplicate: Option.isSome(existing) };
+      return { refId, duplicate: existing !== undefined };
     }).pipe(Effect.orDie),
 );
 
@@ -130,6 +180,7 @@ const list = FunctionImpl.make(databaseSchema, library, "list", ({ paginationOpt
             fileName: ref.fileName,
             width: blob.width,
             height: blob.height,
+            thumbHash: blob.thumbHash ?? null,
             savedAt: ref._creationTime,
           })),
         ),
@@ -140,7 +191,7 @@ const list = FunctionImpl.make(databaseSchema, library, "list", ({ paginationOpt
 
 // A mutation, not a query. Convex caches a query's result, so a query would keep handing out
 // the same signed URL after it expired.
-const urls = FunctionImpl.make(databaseSchema, library, "urls", ({ refIds }) =>
+const urls = FunctionImpl.make(databaseSchema, library, "urls", ({ refIds, role }) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
     const reader = yield* DatabaseReader;
@@ -155,7 +206,7 @@ const urls = FunctionImpl.make(databaseSchema, library, "urls", ({ refIds }) =>
         }
         const blob = yield* reader.table("blobs").get(ref.blobs.original).pipe(Effect.orDie);
         const url = yield* Effect.promise(() =>
-          r2.getUrl(originalKey(workspaceId, blob.sha256), { expiresIn: signedUrlSeconds }),
+          r2.getUrl(servedKey(workspaceId, blob, role), { expiresIn: signedUrlSeconds }),
         );
         return { refId, url };
       }),

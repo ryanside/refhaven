@@ -1,9 +1,16 @@
 import { useAction, useMutation } from "@confect/react";
-import { Sha256 } from "@refhaven/backend/blob";
+import {
+  type ImageRole,
+  Sha256,
+  type VariantRole,
+  variantRoles,
+  variantSize,
+} from "@refhaven/backend/blob";
 import refs from "@refhaven/backend/refs";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { useCallback } from "react";
+import { rgbaToThumbHash } from "thumbhash";
 
 export type SaveOutcome =
   | { status: "saved"; duplicate: boolean }
@@ -11,50 +18,110 @@ export type SaveOutcome =
 
 const rejected = (reason: string): SaveOutcome => ({ status: "rejected", reason });
 
+const thumbHashMaxEdge = 100;
+
 async function sha256Of(file: File) {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
   const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0"));
   return Schema.decodeSync(Sha256)(hex.join(""));
 }
 
-async function pixelSizeOf(file: File) {
-  const bitmap = await createImageBitmap(file).catch(() => null);
-  if (!bitmap) return null;
-  const size = { width: bitmap.width, height: bitmap.height };
-  bitmap.close();
-  return size;
+function drawn(bitmap: ImageBitmap, width: number, height: number) {
+  const canvas = new OffscreenCanvas(width, height);
+  const context = canvas.getContext("2d")!;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(bitmap, 0, 0, width, height);
+  return { canvas, context };
 }
 
-/** Saves one image file into the library. The bytes go straight to R2, and only when the library does not hold them yet. */
+function thumbHashOf(bitmap: ImageBitmap) {
+  const scale = Math.min(1, thumbHashMaxEdge / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const { data } = drawn(bitmap, width, height).context.getImageData(0, 0, width, height);
+  return btoa(String.fromCharCode(...rgbaToThumbHash(width, height, data)));
+}
+
+type Needed = { role: VariantRole; size: { width: number; height: number } };
+
+/** WebP copies of the image at the given sizes, or none when the browser cannot encode WebP. */
+async function variantsOf(bitmap: ImageBitmap, needed: ReadonlyArray<Needed>) {
+  const variants = await Promise.all(
+    needed.map(async ({ role, size }) => {
+      const bytes = await drawn(bitmap, size.width, size.height).canvas.convertToBlob({
+        type: "image/webp",
+      });
+      return { role, size, bytes };
+    }),
+  );
+  // Safari answers a WebP request with a PNG.
+  return variants.every(({ bytes }) => bytes.type === "image/webp") ? variants : [];
+}
+
+/**
+ * Saves one image file into the library, with a thumbnail, a display copy, and a ThumbHash
+ * made in the browser. The bytes go straight to R2, and only when the library lacks them.
+ */
 export function useSaveImage() {
   const prepareUpload = useMutation(refs.public.library.prepareUpload);
   const save = useAction(refs.public.library.save);
 
   return useCallback(
     (file: File): Promise<SaveOutcome> => {
-      const saveImage = async (): Promise<SaveOutcome> => {
-        const size = await pixelSizeOf(file);
-        if (!size) return rejected("UnsupportedImage");
+      /** Everything that needs the decoded pixels, so the bitmap can be closed before any upload starts. */
+      const prepare = async (bitmap: ImageBitmap) => {
         const sha256 = await sha256Of(file);
-
-        const prepared = await prepareUpload({ sha256 });
+        const needed = variantRoles.flatMap((role): Array<Needed> => {
+          const size = variantSize(bitmap, role);
+          return size ? [{ role, size }] : [];
+        });
+        const prepared = await prepareUpload({ sha256, roles: needed.map(({ role }) => role) });
         if (Result.isFailure(prepared)) return rejected(prepared.failure._tag);
-        if (prepared.success.status === "upload") {
-          const uploaded = await fetch(prepared.success.url, {
-            method: "PUT",
-            body: file,
-            headers: { "Content-Type": file.type },
-          });
-          if (!uploaded.ok) return rejected("UploadFailed");
-        }
 
-        const saved = await save({ sha256, fileName: file.name, ...size });
+        const variants = await variantsOf(
+          bitmap,
+          needed.filter(({ role }) => prepared.success.some((upload) => upload.role === role)),
+        );
+        const bodies = new Map<ImageRole, Blob>([
+          ["original", file],
+          ...variants.map(({ role, bytes }) => [role, bytes] as const),
+        ]);
+        return {
+          uploads: prepared.success.flatMap(({ role, url }) => {
+            const body = bodies.get(role);
+            return body ? [{ url, body }] : [];
+          }),
+          image: {
+            sha256,
+            fileName: file.name,
+            width: bitmap.width,
+            height: bitmap.height,
+            thumbHash: thumbHashOf(bitmap),
+            variants: Object.fromEntries(variants.map(({ role, size }) => [role, size])),
+          },
+        };
+      };
+
+      const decodeAndSave = async (): Promise<SaveOutcome> => {
+        const bitmap = await createImageBitmap(file).catch(() => null);
+        if (!bitmap) return rejected("UnsupportedImage");
+        const prepared = await prepare(bitmap).finally(() => bitmap.close());
+        if ("status" in prepared) return prepared;
+
+        const uploaded = await Promise.all(
+          prepared.uploads.map(({ url, body }) =>
+            fetch(url, { method: "PUT", body, headers: { "Content-Type": body.type } }),
+          ),
+        );
+        if (uploaded.some((response) => !response.ok)) return rejected("UploadFailed");
+
+        const saved = await save(prepared.image);
         return Result.isFailure(saved)
           ? rejected(saved.failure._tag)
           : { status: "saved", duplicate: saved.success.duplicate };
       };
       // A network error or a server fault rejects. The caller still gets an outcome for the file.
-      return saveImage().catch(() => rejected("Failed"));
+      return decodeAndSave().catch(() => rejected("Failed"));
     },
     [prepareUpload, save],
   );

@@ -43,10 +43,10 @@ The browser checks need `bun dev` running. Run them from `apps/web`. Most of the
 |---|---|
 | `bun run check:auth` | Passkey sign-up, sign-out, and sign-in. |
 | `bun run check:confect` | A Confect function returns the signed-in user and refuses bad arguments. |
-| `bun run check:library` | Saving images, a duplicate, byte-exact serving, and the rules between two users. It needs R2. |
+| `bun run check:library` | Saving images with their thumbnail and display copy, a duplicate, byte-exact serving, and the rules between two users. It needs R2. |
 | `bun run check:canvas-sync` | The bytes and time one change costs on a canvas of 1,000 items. |
 | `bun run check:renderer` | A local bitmap drawn as a WebGL texture by the PixiJS renderer. |
-| `bun run check:texture` | A saved image drawn as a WebGL texture. It needs R2. |
+| `bun run check:texture` | Saved images drawn as WebGL textures from their display copies. It needs R2. |
 
 Agents verify a change in the running app with the `verify-refhaven` skill in `.agents/skills/verify-refhaven`. Its helper script starts the app, checks it, runs a drive script, and keeps the evidence.
 

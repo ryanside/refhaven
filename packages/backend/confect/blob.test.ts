@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 import { expect, test } from "vitest";
-import { Sha256, originalKey, sniffImageType } from "./blob";
+import { Sha256, originalKey, servedKey, sniffImageType, variantKey, variantSize } from "./blob";
 
 const bytes = (...parts: Array<string | number>) =>
   Uint8Array.from(
@@ -38,12 +38,50 @@ test("a SHA-256 is 64 lowercase hex characters", () => {
   expect(() => decode(`../${valid}`)).toThrow();
 });
 
-test("an original's object key sits under its workspace and is named by its hash", () => {
-  const sha256 = Schema.decodeUnknownSync(Sha256)(
-    "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-  );
+const sha256 = Schema.decodeUnknownSync(Sha256)(
+  "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+);
 
+test("an original's object key sits under its workspace and is named by its hash", () => {
   expect(originalKey("ws1", sha256)).toBe(
     "w/ws1/o/9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
   );
+});
+
+test("a variant's object key is named by the original's hash and the role's file", () => {
+  expect(variantKey("ws1", sha256, "thumbnail")).toBe(`w/ws1/v/${sha256}/512.webp`);
+  expect(variantKey("ws1", sha256, "display")).toBe(`w/ws1/v/${sha256}/2048.webp`);
+});
+
+test.each([
+  ["a landscape image", { width: 3000, height: 2000 }, "thumbnail", { width: 512, height: 341 }],
+  ["a landscape image", { width: 3000, height: 2000 }, "display", { width: 2048, height: 1365 }],
+  ["a portrait image", { width: 1000, height: 4000 }, "thumbnail", { width: 128, height: 512 }],
+  ["a thin strip", { width: 10_000, height: 1 }, "thumbnail", { width: 512, height: 1 }],
+  [
+    "an image one pixel past the edge",
+    { width: 513, height: 513 },
+    "thumbnail",
+    { width: 512, height: 512 },
+  ],
+] as const)("%s gets a %s whose longer edge is the role's edge", (_name, original, role, size) => {
+  expect(variantSize(original, role)).toEqual(size);
+});
+
+test.each([
+  ["an image exactly at the edge", { width: 512, height: 300 }, "thumbnail"],
+  ["a small image", { width: 300, height: 300 }, "thumbnail"],
+  ["an image between the two edges", { width: 1500, height: 1000 }, "display"],
+] as const)("%s gets no %s, because the original serves in its place", (_name, original, role) => {
+  expect(variantSize(original, role)).toBeNull();
+});
+
+test("a role is served from its variant when the Blob has one, and from the original otherwise", () => {
+  const variant = { byteSize: 1, width: 512, height: 341 };
+  const withThumbnail = { sha256, variants: { thumbnail: variant } };
+
+  expect(servedKey("ws1", withThumbnail, "thumbnail")).toBe(variantKey("ws1", sha256, "thumbnail"));
+  expect(servedKey("ws1", withThumbnail, "display")).toBe(originalKey("ws1", sha256));
+  expect(servedKey("ws1", withThumbnail, "original")).toBe(originalKey("ws1", sha256));
+  expect(servedKey("ws1", { sha256 }, "thumbnail")).toBe(originalKey("ws1", sha256));
 });
