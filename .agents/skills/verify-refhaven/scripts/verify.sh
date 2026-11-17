@@ -87,12 +87,15 @@ On a machine with no Convex project yet, run: cd packages/backend && bunx convex
 }
 
 cmd_doctor() {
+  local dev_log=""
   if [ -n "${1:-}" ]; then
     local dir
     dir=$(run_dir "$1")
     echo "run=$1 mode=$(cat "$dir/mode") checkout=$(cat "$dir/checkout")"
+    # Only a run that started the dev server has its log.
+    [ "$(cat "$dir/mode")" = started ] && dev_log="$dir/dev.log"
   fi
-  ROOT="$ROOT" VERIFY_URL="$URL" bun "$HERE/doctor.ts"
+  ROOT="$ROOT" VERIFY_URL="$URL" DEV_LOG="$dev_log" bun "$HERE/doctor.ts"
 }
 
 cmd_drive() {

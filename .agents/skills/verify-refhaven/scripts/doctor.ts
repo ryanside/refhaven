@@ -1,5 +1,5 @@
 // Read-only health check for the refhaven instance of this checkout. Run it through `verify.sh doctor`.
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 
 const root = process.env.ROOT!;
 const url = process.env.VERIFY_URL!;
@@ -78,6 +78,49 @@ if (spec.exitCode !== 0) {
     `the deployment runs this checkout's ${local.size} functions` +
       (missing.length ? `. Not deployed: ${missing.join(", ")}` : "") +
       (extra.length ? `. Deployed but not in this checkout: ${extra.join(", ")}` : ""),
+  );
+}
+
+// The names above cannot show a function whose code changed. `convex dev` logs the time of each
+// push, so a backend file saved after the last push means the deployment still runs older code.
+const devLog = process.env.DEV_LOG;
+if (!devLog) {
+  report(
+    "warn",
+    "cannot tell whether the last backend change was pushed. Name a run whose `up` started the dev server",
+  );
+} else {
+  const sources = [`${backend}/confect`, `${backend}/convex`, `${root}/packages/scene/src`];
+  const savedAt = () =>
+    Math.max(
+      ...sources.flatMap((directory) =>
+        readdirSync(directory, { recursive: true, encoding: "utf8" }).map(
+          (file) => statSync(`${directory}/${file}`).mtimeMs,
+        ),
+      ),
+    );
+  const pushedAt = () => {
+    const time = [
+      ...readFileSync(devLog, "utf8").matchAll(/(\d\d):(\d\d):(\d\d) Convex functions ready/g),
+    ].at(-1);
+    if (!time) return 0;
+    const pushed = new Date();
+    pushed.setHours(Number(time[1]), Number(time[2]), Number(time[3]), 999);
+    // The log holds a time of day. One that lies ahead of now was written before midnight.
+    return pushed.getTime() > Date.now() + 60_000
+      ? pushed.getTime() - 86_400_000
+      : pushed.getTime();
+  };
+  // A push takes a few seconds after a save, so a save just now gets time to land.
+  for (let waited = 0; waited < 20 && pushedAt() < savedAt(); waited++) {
+    await Bun.sleep(1000);
+  }
+  const clock = (time: number) => new Date(time).toTimeString().slice(0, 8);
+  report(
+    pushedAt() >= savedAt(),
+    pushedAt() >= savedAt()
+      ? `the last push, at ${clock(pushedAt())}, is newer than every backend file`
+      : `a backend file was saved at ${clock(savedAt())}, after the last push at ${clock(pushedAt())}. \`convex dev\` has not pushed it. Read ${devLog}, then run \`verify.sh down\` and \`verify.sh up\``,
   );
 }
 

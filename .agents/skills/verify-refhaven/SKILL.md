@@ -23,7 +23,7 @@ It prints `ready: run=<run> url=http://localhost:3000 mode=<started|reused> evid
 - `mode=started` means the run started `bun dev` itself. Ready means the page answers 200, `convex dev` has pushed the functions, and `confect dev` has finished codegen. Allow up to three minutes.
 - `up` stops with an error when another process owns port 3000, or when another checkout runs `convex dev` against the same deployment. Report the error to the operator. It names the path that holds the instance.
 
-The dev server hot-reloads the web app and re-pushes the backend on every save. Wait for the push before you drive a backend change. `$H doctor` shows whether the deployment matches the checkout.
+The dev server hot-reloads the web app and re-pushes the backend on every save. Before you drive a backend change, run `$H doctor <run>`. It waits up to 20 seconds for the push and fails when a backend file is newer than the last push.
 
 No seed data is needed. A drive signs up its own user through the real sign-in page.
 
@@ -33,7 +33,7 @@ No seed data is needed. A drive signs up its own user through the real sign-in p
 $H doctor [run]
 ```
 
-Read-only. It checks that the backend targets a dev deployment, that port 3000 is served from this checkout, that `/` and `/sign-in` answer 200, that the deployment runs exactly this checkout's functions, that the deployment has the R2 variables, and that headless Chromium starts. Run it first whenever anything looks off. Drive only when it ends with `doctor: healthy`.
+Read-only. It checks that the backend targets a dev deployment, that port 3000 is served from this checkout, that `/` and `/sign-in` answer 200, that the deployment has exactly this checkout's functions by name, that the last push is newer than every backend file, that the deployment has the R2 variables, and that headless Chromium starts. The push check needs the dev server's log, so it only warns unless you name a run whose `up` printed `mode=started`. Run it first whenever anything looks off. Drive only when it ends with `doctor: healthy`.
 
 ## Drive
 
