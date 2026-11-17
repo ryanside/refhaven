@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type { RefsDoc } from "./_generated/docs";
+import type { Id } from "./_generated/id";
 import refs from "./_generated/refs";
 import databaseSchema from "./_generated/schema";
 import { DatabaseReader, DatabaseWriter, MutationRunner } from "./_generated/services";
@@ -15,33 +16,54 @@ import trash from "./trash.spec";
 const batchSize = 50;
 
 /**
- * Deletes a Ref and every row that points at it. Its canvas items go as rows, with no new rev:
- * every canvas heard that they were removed when the Ref went to the trash. When no other Ref
- * points at its Blob, the Blob row goes too, and an orphan row keeps its objects for the sweep.
+ * The most rows pointing at Refs that one purge mutation deletes. A Ref has one membership and one
+ * canvas item per collection it is in, so 50 Refs have no bound, and Convex writes 16,000
+ * documents in a mutation at most.
  */
-const purgeRef = (ref: RefsDoc, now: number) =>
+const maxPointers = 500;
+
+/** Deletes up to `limit` of the rows that point at a Ref, and returns how many it deleted. */
+const deletePointers = (refId: Id<"refs">, limit: number) =>
   Effect.gen(function* () {
     const reader = yield* DatabaseReader;
     const writer = yield* DatabaseWriter;
     const tags = yield* reader
       .table("tags")
-      .index("by_ref", (q) => q.eq("refId", ref._id))
-      .collect();
+      .index("by_ref", (q) => q.eq("refId", refId))
+      .take(limit);
     yield* Effect.forEach(tags, ({ _id }) => writer.table("tags").delete(_id), { discard: true });
-    const memberships = yield* reader
-      .table("collectionRefs")
-      .index("by_ref", (q) => q.eq("refId", ref._id))
-      .collect();
+    const memberships =
+      tags.length === limit
+        ? []
+        : yield* reader
+            .table("collectionRefs")
+            .index("by_ref", (q) => q.eq("refId", refId))
+            .take(limit - tags.length);
     yield* Effect.forEach(memberships, ({ _id }) => writer.table("collectionRefs").delete(_id), {
       discard: true,
     });
-    const items = yield* reader
-      .table("canvasItems")
-      .index("by_ref", (q) => q.eq("refId", ref._id))
-      .collect();
+    const found = tags.length + memberships.length;
+    const items =
+      found === limit
+        ? []
+        : yield* reader
+            .table("canvasItems")
+            .index("by_ref", (q) => q.eq("refId", refId))
+            .take(limit - found);
     yield* Effect.forEach(items, ({ _id }) => writer.table("canvasItems").delete(_id), {
       discard: true,
     });
+    return found + items.length;
+  }).pipe(Effect.orDie);
+
+/**
+ * Deletes a Ref that no row points at any more. When no other Ref points at its Blob, the Blob row
+ * goes too, and an orphan row keeps its objects for the sweep.
+ */
+const purgeRef = (ref: RefsDoc, now: number) =>
+  Effect.gen(function* () {
+    const reader = yield* DatabaseReader;
+    const writer = yield* DatabaseWriter;
     yield* writer.table("refs").delete(ref._id);
 
     const shared = yield* reader
@@ -59,6 +81,12 @@ const purgeRef = (ref: RefsDoc, now: number) =>
     });
   }).pipe(Effect.orDie);
 
+/**
+ * Purges the Refs that have been in the trash the longest, each with every row that points at it.
+ * A Ref's canvas items go as rows, with no new rev: every canvas heard that they were removed when
+ * the Ref went to the trash. A Ref with more rows than the batch may still delete keeps its own
+ * row, and the next batch goes on with it. `more` says whether to ask again.
+ */
 const purgeBatch = FunctionImpl.make(databaseSchema, trash, "purgeBatch", ({ pretend }) =>
   Effect.gen(function* () {
     const now = pretend?.now ?? Date.now();
@@ -77,8 +105,15 @@ const purgeBatch = FunctionImpl.make(databaseSchema, trash, "purgeBatch", ({ pre
           .table("refs")
           .index("by_deletedAt", (q) => q.gt("deletedAt", undefined).lt("deletedAt", now - trashMs))
           .take(batchSize);
-    yield* Effect.forEach(expired, (ref) => purgeRef(ref, now), { discard: true });
-    return expired.length;
+    let left = maxPointers;
+    let purged = 0;
+    for (const ref of expired) {
+      left -= yield* deletePointers(ref._id, left);
+      if (left === 0) break;
+      yield* purgeRef(ref, now);
+      purged += 1;
+    }
+    return { purged, more: purged < expired.length || expired.length === batchSize };
   }).pipe(Effect.orDie),
 );
 
@@ -88,8 +123,8 @@ const purge = FunctionImpl.make(databaseSchema, trash, "purge", (args) =>
     let purged = 0;
     for (;;) {
       const batch = yield* runMutation(refs.internal.trash.purgeBatch, args);
-      purged += batch;
-      if (batch < batchSize) return purged;
+      purged += batch.purged;
+      if (!batch.more) return purged;
     }
   }).pipe(Effect.orDie),
 );

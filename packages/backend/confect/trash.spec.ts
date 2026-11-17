@@ -13,7 +13,11 @@ const args = () => ({
 
 export default GroupSpec.make()
   .addFunction(
-    FunctionSpec.internalMutation({ name: "purgeBatch", args, returns: () => Schema.Int }),
+    FunctionSpec.internalMutation({
+      name: "purgeBatch",
+      args,
+      returns: () => Schema.Struct({ purged: Schema.Int, more: Schema.Boolean }),
+    }),
   )
   .addFunction(FunctionSpec.internalAction({ name: "purge", args, returns: () => Schema.Int }))
   .addFunction(
