@@ -20,8 +20,19 @@ export async function createPixiRenderer(container: HTMLElement): Promise<Render
 
   let camera: Camera = { x: 0, y: 0, zoom: 1 };
   let reorder = false;
-  const textures = new Map<string, Texture>();
+  const textures = new Map<string, { texture: Texture; source: ImageBitmap }>();
   const drawn = new Map<string, { item: SceneItem; sprite: Sprite }>();
+
+  const evict = (key: string) => {
+    const entry = textures.get(key);
+    if (!entry) return;
+    for (const { sprite } of drawn.values()) {
+      if (sprite.texture === entry.texture) sprite.texture = Texture.EMPTY;
+    }
+    entry.texture.destroy(true);
+    entry.source.close();
+    textures.delete(key);
+  };
 
   return {
     setCamera(next) {
@@ -48,18 +59,10 @@ export async function createPixiRenderer(container: HTMLElement): Promise<Render
       }
     },
     uploadTexture(key, source) {
-      textures.get(key)?.destroy(true);
-      textures.set(key, Texture.from(source));
+      evict(key);
+      textures.set(key, { texture: Texture.from(source), source });
     },
-    evictTexture(key) {
-      const texture = textures.get(key);
-      if (!texture) return;
-      for (const { sprite } of drawn.values()) {
-        if (sprite.texture === texture) sprite.texture = Texture.EMPTY;
-      }
-      texture.destroy(true);
-      textures.delete(key);
-    },
+    evictTexture: evict,
     draw() {
       if (reorder) {
         reorder = false;
@@ -70,7 +73,7 @@ export async function createPixiRenderer(container: HTMLElement): Promise<Render
       // Positions are made camera-relative here, in float64, so the GPU
       // only ever sees small float32 screen coordinates.
       for (const { item, sprite } of drawn.values()) {
-        const texture = textures.get(item.texture);
+        const texture = textures.get(item.texture)?.texture;
         sprite.visible = texture !== undefined;
         if (!texture) continue;
         const screen = worldToScreen(camera, item);
@@ -86,8 +89,10 @@ export async function createPixiRenderer(container: HTMLElement): Promise<Render
       app.render();
     },
     destroy() {
-      app.destroy(true, { children: true, texture: true });
-      textures.clear();
+      // Destroying the stage frees only the textures its sprites show. An uploaded texture that
+      // no sprite shows, such as a thumbnail its display copy replaced, is freed here.
+      for (const key of textures.keys()) evict(key);
+      app.destroy(true, { children: true });
       drawn.clear();
     },
   };

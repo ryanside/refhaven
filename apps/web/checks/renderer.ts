@@ -74,7 +74,18 @@ try {
       renderer.setCamera({ x: 100, y: 0, zoom: 1 });
       renderer.draw();
       const insideItemAfterPan = pixelAt(60, 160);
+      const shown = await bitmapOf(color, 64);
+      const spare = await bitmapOf(smallColor, 64);
+      renderer.uploadTexture("local", shown);
+      renderer.uploadTexture("spare", spare);
+      renderer.draw();
+      const widthsBeforeDestroy = [shown.width, spare.width];
+      renderer.destroy();
+      const widthsAfterDestroy = [shown.width, spare.width];
       return {
+        widthsBeforeDestroy,
+        widthsAfterDestroy,
+        canvasesLeft: host.querySelectorAll("canvas").length,
         insideItem,
         outsideItem,
         sizedByItem,
@@ -113,6 +124,12 @@ try {
   assert(
     same(pixels.insideItemAfterPan, smallColor),
     "the item moves 100 px left when the camera moves 100 world units right",
+  );
+  assert(
+    same(pixels.widthsBeforeDestroy, [64, 64]) &&
+      same(pixels.widthsAfterDestroy, [0, 0]) &&
+      pixels.canvasesLeft === 0,
+    `destroy closes every uploaded bitmap, also one no item shows, and removes the canvas: widths ${pixels.widthsBeforeDestroy} then ${pixels.widthsAfterDestroy}`,
   );
 } finally {
   await browser.close();
