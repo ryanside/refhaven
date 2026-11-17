@@ -3,15 +3,18 @@ import type { Id } from "@refhaven/backend/id";
 import type { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
 import {
+  appUrl,
   assert,
   clientFor,
   openPageWithPasskeyDevice,
   outcome,
   pngOf,
+  rows,
   signInWithPasskey,
 } from "./browser";
 
 const stamp = Date.now().toString(36);
+const evidence = process.env.EVIDENCE;
 
 const cards = (page: Page) => page.locator("[data-ref-id]");
 
@@ -37,8 +40,53 @@ const found = async (client: ConvexHttpClient, filter: Filter) =>
     .sort()
     .join();
 
+/** The file names on the page's cards, sorted. */
+const shown = (page: Page) =>
+  cards(page)
+    .locator("p")
+    .evaluateAll((names) =>
+      names
+        .map((name) => name.textContent)
+        .sort()
+        .join(),
+    );
+
+const until = async (condition: () => Promise<boolean>, message: string) => {
+  for (let tries = 0; tries < 75; tries++) {
+    if (await condition()) return;
+    await Bun.sleep(200);
+  }
+  throw new Error(`FAIL timed out waiting until ${message}`);
+};
+
+const searchParam = (page: Page, name: string) => new URL(page.url()).searchParams.get(name);
+
+/** Waits until the URL holds `q` and `tag` as given, absent when null, and the cards show `names`. */
+const showsFor = (page: Page, q: string | null, tag: string | null, names: string) =>
+  until(
+    async () =>
+      searchParam(page, "q") === q &&
+      searchParam(page, "tag") === tag &&
+      (await shown(page)) === names &&
+      (names !== "" || (await page.getByText("No images match.").count()) === 1),
+    `the URL holds q=${q} and tag=${tag} and the gallery shows "${names}"`,
+  );
+
+const searchField = (page: Page) => page.getByLabel("Search", { exact: true });
+const tagSelect = (page: Page) => page.getByLabel("Tag", { exact: true });
+
+const consoleErrors: Array<string> = [];
+const watchConsole = (page: Page) => {
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => consoleErrors.push(String(error)));
+};
+
 const first = await openPageWithPasskeyDevice();
 const second = await openPageWithPasskeyDevice();
+watchConsole(first.page);
+watchConsole(second.page);
 try {
   const { page } = first;
   await signInWithPasskey(page, `check-search-a-${stamp}`);
@@ -133,9 +181,194 @@ try {
     "an image saved now is found by its file name at once",
   );
 
+  const everything = "desert-dune.png,forest-path.png,lighthouse-cliff.png,quay-night.png";
+  await page.goto(`${appUrl}/trash`);
+  await page.goto(`${appUrl}/library`);
+  await showsFor(page, null, null, everything);
+  await searchField(page).pressSequentially("quay", { delay: 50 });
+  await showsFor(page, "quay", null, "quay-night.png");
+  assert(
+    true,
+    "typing a word of an image's name in Search shows that image alone, and the URL holds q",
+  );
+  await searchField(page).pressSequentially(" night", { delay: 50 });
+  await showsFor(page, "quay night", null, "quay-night.png");
+  await page.goBack();
+  await showsFor(page, null, null, everything);
+  assert(
+    new URL(page.url()).pathname === "/library" && (await searchField(page).inputValue()) === "",
+    "one press of the back button after two searches leaves the filtered view and empties the field",
+  );
+
+  for (const [word, names] of [
+    ["ember", "quay-night.png"],
+    ["wharfside", "quay-night.png"],
+    ["seascape", "forest-path.png,quay-night.png"],
+    ["lighth", "lighthouse-cliff.png"],
+  ] as const) {
+    await searchField(page).fill(word);
+    await showsFor(page, word, null, names);
+  }
+  assert(
+    true,
+    `on the page, a word of the note, a word of the source, a tag, and the start of a name each find the image`,
+  );
+  await searchField(page).fill("  ");
+  await showsFor(page, null, null, everything);
+  assert(true, "an empty Search field leaves q out of the URL and shows the whole library");
+
+  await tagSelect(page).selectOption("seascape");
+  await showsFor(page, null, "seascape", "forest-path.png,quay-night.png");
+  await searchField(page).fill("forest");
+  await showsFor(page, "forest", "seascape", "forest-path.png");
+  assert(
+    true,
+    "choosing a tag shows exactly its images and the URL holds tag, and a search with a tag shows images that match both",
+  );
+  if (evidence) {
+    await page.screenshot({ path: `${evidence}/01-filtered-library.png`, fullPage: true });
+  }
+  await page.reload();
+  await showsFor(page, "forest", "seascape", "forest-path.png");
+  assert(
+    (await searchField(page).inputValue()) === "forest" &&
+      (await tagSelect(page).inputValue()) === "seascape",
+    "a reload keeps both filters, the fields, and the results",
+  );
+  await page.getByRole("link", { name: "Clear filters" }).click();
+  await showsFor(page, null, null, everything);
+  assert(
+    (await searchField(page).inputValue()) === "" && (await tagSelect(page).inputValue()) === "",
+    "Clear filters brings the whole library back and empties both fields",
+  );
+
+  await page.goto(`${appUrl}/library?tag=Seascape`);
+  await until(
+    async () => (await shown(page)) === "forest-path.png,quay-night.png",
+    "?tag=Seascape shows the seascape images",
+  );
+  assert(
+    (await tagSelect(page).inputValue()) === "seascape",
+    "a tag typed into the URL as Seascape filters by seascape",
+  );
+
+  await page.goto(`${appUrl}/c/${board}`);
+  await showsFor(page, null, null, "desert-dune.png,quay-night.png");
+  await tagSelect(page).selectOption("seascape");
+  await showsFor(page, null, "seascape", "quay-night.png");
+  await tagSelect(page).selectOption("");
+  await searchField(page).fill("dune");
+  await showsFor(page, "dune", null, "desert-dune.png");
+  await searchField(page).fill("forest");
+  await showsFor(page, "forest", null, "");
+  assert(true, "on a collection's page the filters show only the collection's members");
+
+  await page.goto(`${appUrl}/library`);
+  await searchField(page).fill("beacon");
+  await showsFor(page, "beacon", null, "");
+  await page.getByLabel("Add images").setInputFiles([
+    {
+      name: "beacon-tower.png",
+      mimeType: "image/png",
+      buffer: await pngOf(page, "rgb(220, 90, 20)", 300),
+    },
+  ]);
+  await showsFor(page, "beacon", null, "beacon-tower.png");
+  assert(
+    true,
+    "the file input stays on a filtered gallery, and an image saved there shows in it at once by its file name",
+  );
+
+  await searchField(page).fill("quay");
+  await showsFor(page, "quay", null, "quay-night.png");
+  await cards(page).locator("img").click();
+  await page.waitForURL(`${appUrl}/r/${harbor}`);
+  await page.getByRole("link", { name: "seascape", exact: true }).click();
+  await page.waitForURL(`${appUrl}/library?tag=seascape`);
+  await showsFor(page, null, "seascape", "forest-path.png,quay-night.png");
+  assert(true, "a tag on the image page links to the library filtered by that tag");
+
+  await page.goto(`${appUrl}/r/${harbor}`);
+  const submit = async (label: string, button: string, value: string) => {
+    await page.getByLabel(label, { exact: true }).fill(value);
+    await page.getByRole("button", { name: button, exact: true }).click();
+  };
+  await submit("Name", "Save name", "pier-morning.png");
+  await page.getByRole("heading", { name: "pier-morning.png" }).waitFor();
+  await submit("Note", "Save note", "Painted for the coral glow.");
+  await page.getByRole("button", { name: "Remove the tag seascape" }).click();
+  await page.locator('[data-tag="seascape"]').waitFor({ state: "detached" });
+  await until(
+    async () =>
+      (await owner.query(api.ref.get, { refId: harbor })).note?.includes("coral") ?? false,
+    "the note is saved",
+  );
+  for (const [query, names] of [
+    ["q=quay", ""],
+    ["q=pier", "pier-morning.png"],
+    ["q=ember", ""],
+    ["q=coral", "pier-morning.png"],
+    ["tag=seascape", "forest-path.png"],
+  ] as const) {
+    await page.goto(`${appUrl}/library?${query}`);
+    const [key, value] = query.split("=") as [string, string];
+    await showsFor(page, key === "q" ? value : null, key === "tag" ? value : null, names);
+  }
+  assert(
+    true,
+    "renaming, a new note, and removing a tag on the image page each change what Search finds",
+  );
+
+  await page.goto(`${appUrl}/library?q=pier`);
+  await showsFor(page, "pier", null, "pier-morning.png");
+  await cards(page).getByRole("button", { name: "Delete" }).click();
+  await showsFor(page, "pier", null, "");
+  await page.goto(`${appUrl}/trash`);
+  await cards(page).getByRole("button", { name: "Restore" }).click();
+  await cards(page).first().waitFor({ state: "detached" });
+  await page.goto(`${appUrl}/library?q=pier`);
+  await showsFor(page, "pier", null, "pier-morning.png");
+  assert(true, "an image deleted from a filtered gallery is not found, and after a restore it is");
+
+  await page.goto(`${appUrl}/library?q=pier&view=canvas`);
+  await page.locator("canvas").waitFor();
+  assert(
+    (await searchField(page).count()) === 0 && (await tagSelect(page).count()) === 0,
+    "the canvas view shows neither filter",
+  );
+
+  owner = await clientFor(page);
+  const original = (await rows("refs")).find((row) => row._id === desert)?.blobs.original;
+  const blob = (await rows("blobs")).find((row) => row._id === original);
+  for (let batch = 0; batch < 201; batch += 25) {
+    await Promise.all(
+      Array.from({ length: Math.min(25, 201 - batch) }, (_, index) =>
+        owner.action(api.library.save, {
+          sha256: blob.sha256,
+          fileName: `crowd-${batch + index}.png`,
+          width: blob.width,
+          height: blob.height,
+          thumbHash: blob.thumbHash,
+          variants: {},
+        }),
+      ),
+    );
+  }
+  const crowd = await owner.query(api.library.filter, { q: "crowd" });
+  assert(
+    crowd.items.length === 200 && crowd.more,
+    `with 201 matches, filter returns 200 and says there are more: ${crowd.items.length}, more ${crowd.more}`,
+  );
+  await page.goto(`${appUrl}/library?q=crowd`);
+  await page.getByText("Showing the first 200 matches.").waitFor();
+  assert((await cards(page).count()) === 200, "the page shows 200 cards and says there are more");
+
   await signInWithPasskey(second.page, `check-search-b-${stamp}`);
+  await searchField(second.page).fill("pier");
+  await showsFor(second.page, "pier", null, "");
+  assert(true, "a second user's Search finds none of the first user's images");
   const other = await clientFor(second.page);
-  const words = ["quay", "harb", "ember", "wharfside", "seascape", "dune", "forest", "lighthouse"];
+  const words = ["pier", "coral", "wharfside", "seascape", "dune", "forest", "lighthouse", "crowd"];
   const foreign = await Promise.all(words.map((q) => found(other, { q })));
   assert(
     foreign.every((names) => names === "") && (await found(other, { tag: "seascape" })) === "",
@@ -145,6 +378,10 @@ try {
     (await outcome(other.query(api.library.filter, { q: "dune", collectionId: board }))) ===
       "CollectionNotFound",
     "filter on the first user's collection fails with CollectionNotFound for the second user",
+  );
+  assert(
+    consoleErrors.length === 0,
+    `the browser console shows no error: ${consoleErrors.join(" | ")}`,
   );
 } finally {
   await first.browser.close();

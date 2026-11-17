@@ -231,7 +231,9 @@ function Tags({ refId, tags }: { refId: Id<"refs">; tags: ReadonlyArray<string> 
       <ul className="flex flex-col gap-1">
         {tags.map((tag) => (
           <li key={tag} data-tag={tag} className="flex items-center gap-2">
-            {tag}
+            <Link to="/library" search={{ tag }} className="underline">
+              {tag}
+            </Link>
             <Button
               variant="outline"
               size="sm"
