@@ -76,7 +76,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | B7 | Removing an item from a canvas removes it from that collection. It stays in the library. On the whole library's canvas, `open` does not place a removed item's Ref again. Collections are not built. | Built |
 | B8 | A canvas holds one item per Ref. | Built |
 | B9 | Notes and groups live on the canvas and not in the library. | Planned |
-| B10 | The whole library on one canvas works like any canvas. Loading thousands of items in pieces comes with the speed work. Until then `canvas.open` reads every Ref and item of the canvas and returns the shown items in one array. A Convex value holds at most 8,192 array elements, so a canvas is good to about 8,000 items. The first open of a library that size reads 8,000 Refs and 8,000 Blobs, half the 32,000 documents a transaction may scan. | Later |
+| B10 | The whole library on one canvas works like any canvas. Loading thousands of items in pieces comes with the speed work. Until then `canvas.open` reads every Ref and item of the canvas in one transaction, plus one Blob for each image it places. A Convex transaction allows 4,096 reads, so the first open of a library is good to about 2,000 images. That size is worked out from the limit, not measured. | Later |
 | B11 | In canvas view, a filter dims the items that do not match. | Later |
 
 ## Data
