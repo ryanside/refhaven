@@ -6,6 +6,7 @@ import {
   variantRoles,
   variantSize,
 } from "@refhaven/backend/blob";
+import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -59,10 +60,11 @@ async function variantsOf(bitmap: ImageBitmap, needed: ReadonlyArray<Needed>) {
 }
 
 /**
- * Saves one image file into the library, with a thumbnail, a display copy, and a ThumbHash
- * made in the browser. The bytes go straight to R2, and only when the library lacks them.
+ * Saves one image file into the library, and into the collection when one is given, with a
+ * thumbnail, a display copy, and a ThumbHash made in the browser. The bytes go straight to R2,
+ * and only when the library lacks them.
  */
-export function useSaveImage() {
+export function useSaveImage(collectionId?: Id<"collections">) {
   const prepareUpload = useMutation(refs.public.library.prepareUpload);
   const save = useAction(refs.public.library.save);
 
@@ -119,7 +121,9 @@ export function useSaveImage() {
           return rejected("UploadFailed");
         }
 
-        const saved = await save(prepared.image);
+        const saved = await save(
+          collectionId ? { ...prepared.image, collectionId } : prepared.image,
+        );
         return Result.isFailure(saved)
           ? rejected(saved.failure._tag)
           : { status: "saved", duplicate: saved.success.duplicate };
@@ -130,6 +134,6 @@ export function useSaveImage() {
         return rejected("Failed");
       });
     },
-    [prepareUpload, save],
+    [prepareUpload, save, collectionId],
   );
 }
