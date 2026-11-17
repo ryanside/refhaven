@@ -5,6 +5,7 @@ import type { ConvexHttpClient } from "convex/browser";
 import type { FunctionReturnType } from "convex/server";
 import type { Page } from "playwright";
 import {
+  appUrl,
   assert,
   clientFor,
   openPageWithPasskeyDevice,
@@ -36,6 +37,12 @@ const oneChange = (
   changes.items[0]!.deletedAt === deletedAt;
 
 const cards = (page: Page) => page.locator("[data-ref-id]");
+const cardIds = async (page: Page) =>
+  (
+    await cards(page).evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("data-ref-id")),
+    )
+  ).join();
 
 const save = async (page: Page, files: Array<{ name: string; buffer: Buffer }>) => {
   const outcomes = page.locator('[role="status"] li');
@@ -72,8 +79,30 @@ const refRow = async (refId: string) => (await rows("refs")).find((row) => row._
 const revOf = async (client: ConvexHttpClient, canvasId: Id<"canvases">) =>
   (await client.query(api.canvas.changes, { canvasId, rev: 0 })).rev;
 
+const evidence = process.env.EVIDENCE;
+const consoleErrors: Array<string> = [];
+const watchConsole = (page: Page) => {
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => consoleErrors.push(String(error)));
+};
+
+const until = async (condition: () => Promise<boolean>, message: string) => {
+  for (let tries = 0; tries < 75; tries++) {
+    if (await condition()) return;
+    await Bun.sleep(200);
+  }
+  throw new Error(`FAIL timed out waiting until ${message}`);
+};
+
+const shownOnCanvas = async (page: Page) =>
+  Number(await page.getByTestId("canvas-readout").getAttribute("data-items"));
+
 const first = await openPageWithPasskeyDevice();
 const second = await openPageWithPasskeyDevice();
+watchConsole(first.page);
+watchConsole(second.page);
 try {
   const { page } = first;
   await signInWithPasskey(page, `check-trash-a-${stamp}`);
@@ -120,7 +149,45 @@ try {
     "before the delete, the image is moved on the library's canvas and a second image is removed from it",
   );
 
-  await owner.mutation(api.library.remove, { refIds: [a] });
+  const canvasPage = await page.context().newPage();
+  watchConsole(canvasPage);
+  await canvasPage.goto(`${appUrl}/library?view=canvas`);
+  await until(
+    async () => (await shownOnCanvas(canvasPage)) === 2,
+    "a second page shows the canvas",
+  );
+  await canvasPage.evaluate(() => {
+    document.body.dataset.loadedOnce = "yes";
+  });
+
+  await page.locator(`[data-ref-id="${a}"]`).getByRole("button", { name: "Delete" }).click();
+  await page.locator(`[data-ref-id="${a}"]`).waitFor({ state: "detached" });
+  assert(
+    (await cards(page).count()) === 2,
+    "clicking Delete on a card takes the card out of the library's gallery",
+  );
+  await page.getByRole("link", { name: "Trash", exact: true }).click();
+  await page.getByRole("heading", { name: "Trash" }).waitFor();
+  await page.locator(`[data-ref-id="${d}"]`).waitFor();
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll<HTMLImageElement>("[data-ref-id] img")].every(
+      (image) => image.complete && image.naturalWidth > 0,
+    ),
+  );
+  await page.screenshot({ path: `${evidence}/01-trash.png`, fullPage: true });
+  assert(
+    (await cardIds(page)) === [a, d].join() && (await page.getByLabel("Add images").count()) === 0,
+    "the Trash link opens /trash, which shows the deleted images newest deleted first with their thumbnails, and no file input",
+  );
+  await until(
+    async () => (await shownOnCanvas(canvasPage)) === 1,
+    "the open canvas page drops the image",
+  );
+  assert(
+    (await canvasPage.evaluate(() => document.body.dataset.loadedOnce)) === "yes",
+    "a second page with the library's canvas open drops the image without a reload: 2 images, then 1",
+  );
+
   const deletedRow = await refRow(a);
   assert(
     typeof deletedRow?.deletedAt === "number" &&
@@ -213,7 +280,22 @@ try {
     "a remove of one own Ref and one foreign Ref fails with RefNotFound and trashes neither",
   );
 
-  await owner.mutation(api.library.restore, { refIds: [a] });
+  await page.locator(`[data-ref-id="${a}"]`).getByRole("button", { name: "Restore" }).click();
+  await page.locator(`[data-ref-id="${a}"]`).waitFor({ state: "detached" });
+  const leftInTrash = await cardIds(page);
+  await page.getByRole("link", { name: "Library", exact: true }).click();
+  await page.locator(`[data-ref-id="${a}"]`).waitFor();
+  await until(
+    async () => (await shownOnCanvas(canvasPage)) === 2,
+    "the open canvas page shows the image again",
+  );
+  await canvasPage.screenshot({ path: `${evidence}/02-canvas-after-restore.png` });
+  assert(
+    leftInTrash === d &&
+      (await page.locator(`[data-ref-id="${a}"]`).count()) === 1 &&
+      (await canvasPage.evaluate(() => document.body.dataset.loadedOnce)) === "yes",
+    "clicking Restore on /trash takes the card out of the trash, back into the library's gallery and onto the open canvas page",
+  );
   assert(
     (await refRow(a))?.deletedAt === undefined &&
       (await libraryOf(owner)).includes(a) &&
@@ -278,6 +360,10 @@ try {
       (await trashOf(owner)).includes(e) &&
       (await blobOf(again!)) === (await blobOf(e)),
     "saving the bytes of a Ref in the trash adds a second, live Ref on the same Blob",
+  );
+  assert(
+    consoleErrors.length === 0,
+    `the browser console shows no error: ${consoleErrors.join(" | ")}`,
   );
 } finally {
   await first.browser.close();
