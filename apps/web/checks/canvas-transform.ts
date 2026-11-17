@@ -328,12 +328,12 @@ try {
   assert(
     turn.rose === 1 &&
       turn.calls.length === 1 &&
-      patchedFields(turn.calls)[0] === "patch rotation,x,y" &&
+      patchedFields(turn.calls)[0] === "patch rotation" &&
       Math.abs(redTurned.rotation - expectedTurn) < 1e-9 &&
       Math.abs(redTurned.rotation - Math.PI / 2) < 0.01 &&
       redTurned.scale === redEdge.scale &&
       Math.hypot(redTurned.x - redEdge.x, redTurned.y - redEdge.y) < 1e-9,
-    `dragging the rotate handle a quarter turn around the center gives a rotation of ${degrees(redTurned.rotation)} degrees, in one apply call: ${patchedFields(turn.calls).join(" | ")}`,
+    `dragging the rotate handle a quarter turn around the center gives a rotation of ${degrees(redTurned.rotation)} degrees, in one apply call that names only the rotation, because one image turned about its own center does not move: ${patchedFields(turn.calls).join(" | ")}`,
   );
   const turnedLength = rectFor(redTurned).width;
   const onlyTurned = toPage(view, { x: redTurned.x, y: redTurned.y - 0.4 * turnedLength });
@@ -384,9 +384,9 @@ try {
       sameTransform(itemOf(redoTurn.after, redKey), redTurned) &&
       sameTransform(itemOf(undoTurnAgain.after, redKey), redEdge) &&
       [undoTurn, redoTurn, undoTurnAgain].every(
-        ({ calls, rose }) => rose === 1 && patchedFields(calls)[0] === "patch rotation,x,y",
+        ({ calls, rose }) => rose === 1 && patchedFields(calls)[0] === "patch rotation",
       ),
-    `undo after a turn restores rotation ${degrees(redEdge.rotation)} and x, y, and redo turns it to ${degrees(redTurned.rotation)} degrees again, one apply call each`,
+    `undo after a turn restores rotation ${degrees(redEdge.rotation)}, and redo turns it to ${degrees(redTurned.rotation)} degrees again, one apply call each that names only the rotation`,
   );
 
   await click(page, toPage(view, redEdge));
