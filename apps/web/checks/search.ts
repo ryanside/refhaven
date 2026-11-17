@@ -121,8 +121,9 @@ try {
   assert(
     (await found(owner, { q: "harb" })) === "harbor-dusk.png" &&
       (await found(owner, { q: "lantern harb" })) === "harbor-dusk.png" &&
-      (await found(owner, { q: "harb zzz" })) === "",
-    `the beginning of the last word finds the image: "harb" and "lantern harb" find it, "harb zzz" finds nothing`,
+      (await found(owner, { q: "harb lantern" })) === "" &&
+      (await found(owner, { q: "arbor lantern" })) === "",
+    `only the last word matches by its beginning, and no word matches from its middle: "harb" and "lantern harb" find the image, "harb lantern" and "arbor lantern" do not`,
   );
   assert(
     (await found(owner, { q: "dune" })) === "desert-dune.png" &&
@@ -245,6 +246,27 @@ try {
     (await searchField(page).inputValue()) === "" && (await tagSelect(page).inputValue()) === "",
     "Clear filters brings the whole library back and empties both fields",
   );
+
+  // Typing that has not reached the URL yet must not put a filter back after Clear.
+  await searchField(page).fill("forest");
+  await showsFor(page, "forest", null, "forest-path.png");
+  await searchField(page).fill("dune");
+  await page.getByRole("link", { name: "Clear filters" }).click();
+  await Bun.sleep(900);
+  assert(
+    searchParam(page, "q") === null &&
+      (await searchField(page).inputValue()) === "" &&
+      (await shown(page)) === everything,
+    `Clear filters right after typing leaves no filter, though the typed text had not reached the URL: q=${searchParam(page, "q")}`,
+  );
+
+  await page.goto(`${appUrl}/library?q=true`);
+  await until(
+    async () => (await searchField(page).inputValue()) === "true",
+    "?q=true puts the text true in the Search field",
+  );
+  await page.getByText("No images match.").waitFor();
+  assert(true, "a hand-typed ?q=true is the search text true, not a missing filter");
 
   await page.goto(`${appUrl}/library?tag=Seascape`);
   await until(

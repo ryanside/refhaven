@@ -4,7 +4,7 @@ The library's gallery and each collection's gallery have a field labelled `Searc
 
 ## Sub-features
 
-- `search-text` finds an image by a word of its name, note, source, or tags. The last word matches as a prefix, and every other word matches whole. An image that matches any one word is found, best matches first.
+- `search-text` finds an image by words of its name, note, source, or tags. An image is found only when it holds every word typed. The last word matches by its beginning, and every other word matches whole. Best matches come first.
 - `search-tag` shows exactly the images with the chosen tag, newest tagged first. With a search text, it shows only images that match both.
 - `search-url` keeps the filters in the URL. An empty field is absent from it. A reload keeps them, and one press of the back button leaves the filtered view.
 - `search-clear` brings the whole gallery back with `Clear filters`.
@@ -44,7 +44,8 @@ Preconditions:
 ## Gotchas
 
 - Wait for the URL and the cards together. Right after typing, the old results still show until the pause ends.
-- Convex matches the last word as a prefix and every other word whole. `harb` finds `harbor`, and `harb zzz` finds nothing.
+- The last word matches by its beginning and every other word whole. `harb` finds `harbor`, `lantern harb` finds it too, and `harb lantern` does not.
 - An image matches only when its text holds every word typed, so each added word narrows the result. Convex's index alone would return an image that holds any one word, and `library.filter` drops those.
-- Search terms after the 16th are dropped without an error.
+- Words after the 16th are ignored without an error, by Convex's index and by `library.filter` alike.
+- The Search field waits 300 ms after the last key before the URL changes. "Clear filters" and the back button cancel typing that has not reached the URL.
 - Tags are lowercase. Choose `seascape`, not `Seascape`, in the select.
