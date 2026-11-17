@@ -84,7 +84,7 @@ Preconditions:
 - `data-shown-thumbnails="0"` shows before the first snapshot loads. An image is placed when its save ends, so a drop that early is still placed once the snapshot has loaded by then.
 - A selected image's outline is 2 px wide and covers its edges. Allow 3 px when you compare its drawn rectangle.
 - The count of images off the library's canvas comes from the snapshot. A removal on the page shows in it after a reload.
-- The canvas page has no text field of its own. To prove that shortcuts leave a text field alone, add one with `page.evaluate` and focus it.
+- The note editor is the canvas page's one text field. Open it with `Add note` or a double click on a note, and find it with `page.getByLabel("Note")`. While it has focus no canvas shortcut fires: `n`, Backspace, and Mod+A edit the text. It stops at 2,000 characters.
 - Give a second page the same viewport as the first, or its view is fitted differently and the panel can cover the point you read.
 - A press near a selected image's corner, edge middle, or above its top edge lands on a handle and resizes or turns instead of selecting. Click other images away from those points.
 - A handle of a turned frame is a turned square, so its bounding box is larger than 10 px. Compare sizes between zooms at one rotation.
