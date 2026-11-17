@@ -312,6 +312,19 @@ try {
     "each request for a URL signs a fresh one, so an expired URL is never handed out again",
   );
 
+  await page.getByLabel("Add images").setInputFiles([
+    {
+      name: " outer spaces.png ",
+      mimeType: "image/png",
+      buffer: await pngOf(page, "rgb(90, 90, 90)", 30),
+    },
+  ]);
+  await page.locator("[data-ref-id]").filter({ hasText: "outer spaces.png" }).waitFor();
+  assert(
+    (await page.locator("[data-ref-id] p").first().textContent()) === "outer spaces.png",
+    "a file whose name has outer spaces is saved under the trimmed name",
+  );
+
   await signInWithPasskey(second.page, `check-b-${stamp}`);
   await second.page.getByText("Nothing saved yet.").waitFor();
   assert(true, "a second user's library is empty");

@@ -95,7 +95,8 @@ export function useSaveImage(collectionId?: Id<"collections">) {
           }),
           image: {
             sha256,
-            fileName: file.name,
+            // The name's schema refuses outer spaces when it encodes, and a file can have them.
+            fileName: file.name.trim(),
             width: bitmap.width,
             height: bitmap.height,
             thumbHash: thumbHashOf(bitmap),
