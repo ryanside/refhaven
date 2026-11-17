@@ -42,4 +42,5 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Library](./library.md) covers saving images, a duplicate, the grid, and what a second user can see.
 - [Collections](./collections.md) covers making, opening, renaming, and filling a collection, and what a second user can see.
 - [Trash](./trash.md) covers deleting an image, the trash page, restoring an image to every place it was, and what a second user can do.
+- [Image page](./ref-page.md) covers one image's page at `/r/{refId}`: its name, note, source, tags, collections, delete and restore, and what a second user sees.
 - [Canvas](./canvas.md) covers the canvas view of the library and of a collection: pan, zoom, selection, saved moves, a second page, and the 2048 px copy.
