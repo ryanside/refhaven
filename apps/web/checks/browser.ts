@@ -101,3 +101,60 @@ export const clientFor = async (page: Page) => {
   client.setAuth(await accessToken(page));
   return client;
 };
+
+export type Carried = { name: string; mimeType: string; buffer: Buffer };
+
+/**
+ * Sends the page one event of the kind a real drag or paste makes, carrying files or text, and
+ * returns what the page did with it. `at` is a drop's point in the page's client coordinates. A
+ * page that saves files takes an event by cancelling it on `document`. The app refuses a stray
+ * drag of files by cancelling it later, on `window`, so the browser does not open the file.
+ * Chromium ignores `dropEffect` on a made-up event, so the cursor is not checked.
+ */
+export const send = (
+  page: Page,
+  kind: "dragstart" | "dragend" | "dragover" | "drop" | "paste",
+  carried: ReadonlyArray<Carried> | string,
+  target = "body",
+  at?: { x: number; y: number },
+) =>
+  page.evaluate(
+    ({ kind, files, text, target, at }) => {
+      const transfer = new DataTransfer();
+      for (const { name, mimeType, base64 } of files) {
+        const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+        transfer.items.add(new File([bytes], name, { type: mimeType }));
+      }
+      if (text !== null) transfer.setData("text/plain", text);
+      // During a real `dragover` a browser hides the files and shows only their type.
+      if (kind === "dragover") {
+        Object.defineProperty(transfer, "files", { value: new DataTransfer().files });
+      }
+      const init = { bubbles: true, cancelable: true, clientX: at?.x ?? 0, clientY: at?.y ?? 0 };
+      const event =
+        kind === "paste"
+          ? new ClipboardEvent(kind, { ...init, clipboardData: transfer })
+          : new DragEvent(kind, { ...init, dataTransfer: transfer });
+      let cancelledOnDocument = false;
+      // Added last, so it runs after the page's own listeners on `document` and before `window`'s.
+      document.addEventListener(kind, () => (cancelledOnDocument = event.defaultPrevented), {
+        once: true,
+      });
+      document.querySelector(target)!.dispatchEvent(event);
+      return cancelledOnDocument ? "taken" : event.defaultPrevented ? "refused" : "left alone";
+    },
+    {
+      kind,
+      target,
+      at,
+      files:
+        typeof carried === "string"
+          ? []
+          : carried.map(({ name, mimeType, buffer }) => ({
+              name,
+              mimeType,
+              base64: buffer.toString("base64"),
+            })),
+      text: typeof carried === "string" ? carried : null,
+    },
+  );

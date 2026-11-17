@@ -13,6 +13,9 @@ import {
   createSceneStore,
   imageRole,
   itemsInView,
+  placedEdge,
+  placementGap,
+  screenToWorld,
   worldToScreen,
 } from "@refhaven/scene";
 import * as Result from "effect/Result";
@@ -24,6 +27,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { type PlaceAt, SaveImages } from "@/library/save-images";
 import { type Need, type Sign, createTextureLoader, textureKey } from "./textures";
 
 /** A change list longer than this is replaced by a new snapshot. */
@@ -105,6 +109,38 @@ export function CanvasView({
     };
   }, [apply, base, store]);
 
+  // An upload can outlast the first snapshot, so a placement reads the canvas when it runs.
+  const latestBase = useRef(base);
+  useEffect(() => {
+    latestBase.current = base;
+  }, [base]);
+  // The images of one drop or paste go in a row from its point, a placed image's longer edge plus
+  // the gap apart, so they never overlap.
+  const placeAt = useCallback<PlaceAt>(
+    (at) => {
+      const box = host.current!.getBoundingClientRect();
+      const toWorld = () =>
+        screenToWorld(
+          store.camera(),
+          at ? { x: at.x - box.left, y: at.y - box.top } : { x: box.width / 2, y: box.height / 2 },
+        );
+      // The first snapshot fits the camera to the items. A point read before that would end up
+      // somewhere else on screen, so a drop that comes earlier is read when its first image is placed.
+      let start = latestBase.current ? toWorld() : null;
+      let placed = 0;
+      return async (refId) => {
+        start ??= toWorld();
+        const x = start.x + placed++ * (placedEdge + placementGap);
+        const canvasId = latestBase.current?.canvasId;
+        const result = canvasId
+          ? await apply({ canvasId, ops: [{ op: "add", refId, x, y: start.y }] }).catch(() => null)
+          : null;
+        if (!result || Result.isFailure(result)) setProblem("An image could not be placed.");
+      };
+    },
+    [apply, store],
+  );
+
   useEffect(() => {
     const sign: Sign = async (refIds, role) => {
       const result = await urls({ refIds: refIds as Array<Id<"refs">>, role });
@@ -119,6 +155,7 @@ export function CanvasView({
       <div ref={outlines} className="pointer-events-none absolute inset-0" />
       <div className="absolute top-3 left-3 flex flex-col gap-1 rounded-md border bg-background p-2">
         {children}
+        <SaveImages collectionId={collectionId} placeAt={placeAt} />
         <Readout store={store} />
         {problem ? <p role="alert">{problem}</p> : null}
       </div>

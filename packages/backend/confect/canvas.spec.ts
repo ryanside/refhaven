@@ -4,6 +4,7 @@ import * as Struct from "effect/Struct";
 import { Id } from "./_generated/id";
 import { CollectionNotFound } from "./collection";
 import { ItemKey, canvasItemFields, itemTransform } from "./canvasItem";
+import { RefNotFound } from "./library.spec";
 import RequireWorkspace from "./middleware/RequireWorkspace.spec";
 
 export const CanvasItem = Schema.Struct(canvasItemFields);
@@ -15,6 +16,12 @@ const Op = Schema.Union([
     fields: Schema.Struct(itemTransform).mapFields(Struct.map(Schema.optionalKey)),
   }),
   Schema.Struct({ op: Schema.Literal("remove"), key: ItemKey }),
+  Schema.Struct({
+    op: Schema.Literal("add"),
+    refId: Id("refs"),
+    x: itemTransform.x,
+    y: itemTransform.y,
+  }),
 ]);
 
 export class CanvasNotFound extends Schema.TaggedError<CanvasNotFound>()("CanvasNotFound", {}) {}
@@ -54,6 +61,6 @@ export default GroupSpec.make()
         ops: Schema.Array(Op).check(Schema.isMinLength(1), Schema.isMaxLength(1000)),
       }),
       returns: () => Schema.Int,
-      error: () => Schema.Union([CanvasNotFound, ItemNotFound]),
+      error: () => Schema.Union([CanvasNotFound, ItemNotFound, RefNotFound]),
     }),
   );

@@ -21,6 +21,9 @@ export const placedEdge = 400;
 /** The space between placed items, and between them and the layout, in world units. */
 export const placementGap = 40;
 
+/** The scale that gives an item of this pixel size its longer edge at `placedEdge`. */
+export const placedScale = ({ width, height }: Size) => placedEdge / Math.max(width, height);
+
 export function boundsOf(frames: Iterable<Frame>): Box | null {
   let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity];
   for (const { x, y, width, height, scale, rotation } of frames) {
@@ -50,7 +53,7 @@ export function placeBeside<Item extends Size>(
   const placed: Array<Item & Placement> = [];
   for (let start = 0; start < items.length; start += perRow) {
     const row = items.slice(start, start + perRow).map((item) => {
-      const scale = placedEdge / Math.max(item.width, item.height);
+      const scale = placedScale(item);
       return { item, scale, width: item.width * scale, height: item.height * scale };
     });
     let x = left;

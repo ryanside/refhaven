@@ -1,61 +1,15 @@
 import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
 import type { Page } from "playwright";
-import { assert, clientFor, openPageWithPasskeyDevice, pngOf, signInWithPasskey } from "./browser";
-
-type Carried = { name: string; mimeType: string; buffer: Buffer };
-
-/**
- * Sends the page one event of the kind a real drag or paste makes, carrying files or text, and
- * returns what the page did with it. The gallery takes an event by cancelling it on `document`.
- * The app refuses a stray drag of files by cancelling it later, on `window`, so the browser does
- * not open the file. Chromium ignores `dropEffect` on a made-up event, so the cursor is not checked.
- */
-const send = (
-  page: Page,
-  kind: "dragstart" | "dragend" | "dragover" | "drop" | "paste",
-  carried: ReadonlyArray<Carried> | string,
-  target = "body",
-) =>
-  page.evaluate(
-    ({ kind, files, text, target }) => {
-      const transfer = new DataTransfer();
-      for (const { name, mimeType, base64 } of files) {
-        const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-        transfer.items.add(new File([bytes], name, { type: mimeType }));
-      }
-      if (text !== null) transfer.setData("text/plain", text);
-      // During a real `dragover` a browser hides the files and shows only their type.
-      if (kind === "dragover") {
-        Object.defineProperty(transfer, "files", { value: new DataTransfer().files });
-      }
-      const init = { bubbles: true, cancelable: true };
-      const event =
-        kind === "paste"
-          ? new ClipboardEvent(kind, { ...init, clipboardData: transfer })
-          : new DragEvent(kind, { ...init, dataTransfer: transfer });
-      let cancelledOnDocument = false;
-      // Added last, so it runs after the page's own listeners on `document` and before `window`'s.
-      document.addEventListener(kind, () => (cancelledOnDocument = event.defaultPrevented), {
-        once: true,
-      });
-      document.querySelector(target)!.dispatchEvent(event);
-      return cancelledOnDocument ? "taken" : event.defaultPrevented ? "refused" : "left alone";
-    },
-    {
-      kind,
-      target,
-      files:
-        typeof carried === "string"
-          ? []
-          : carried.map(({ name, mimeType, buffer }) => ({
-              name,
-              mimeType,
-              base64: buffer.toString("base64"),
-            })),
-      text: typeof carried === "string" ? carried : null,
-    },
-  );
+import {
+  type Carried,
+  assert,
+  clientFor,
+  openPageWithPasskeyDevice,
+  pngOf,
+  send,
+  signInWithPasskey,
+} from "./browser";
 
 const taken = "taken";
 const refused = "refused";
@@ -185,15 +139,6 @@ try {
   );
 
   // Every move below is a link, so the page is not reloaded and a listener left behind would still run.
-  await page.getByRole("link", { name: "Canvas" }).click();
-  await page.locator('[data-testid="canvas-readout"]').waitFor();
-  const overCanvas = await send(page, "dragover", [red]);
-  const onCanvas = await send(page, "drop", [red]);
-  assert(
-    overCanvas === refused && onCanvas === refused && (await libraryNames()).length === 5,
-    `a canvas refuses a drag of files, so the browser does not open the file, and saves nothing: ${overCanvas}`,
-  );
-
   await page.getByRole("link", { name: "refhaven" }).click();
   await page.locator("[data-ref-id]").nth(4).waitFor();
   await page.getByRole("link", { name: "Trash" }).click();
