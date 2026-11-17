@@ -6,7 +6,7 @@ The library lets a signed-in user save image files and see every saved image in 
 
 - `library-empty` shows `Nothing saved yet.` for a new user.
 - `library-save` saves one or more picked files and reports an outcome for each.
-- `library-paste-drop` saves image files pasted or dropped anywhere on the page, the same way.
+- `library-paste-drop` saves image files pasted or dropped anywhere on the page, the same way. The canvas takes them too and places each image, as the Canvas recipe says.
 - `library-grid` shows each saved image with its file name, newest first, and the images load.
 - `library-variants` uploads a thumbnail and a display copy for an image larger than 512 px and 2048 px, and the grid shows the thumbnail.
 - `library-placeholder` shows the ThumbHash as the image's background until the thumbnail loads.
@@ -20,7 +20,7 @@ The library lets a signed-in user save image files and see every saved image in 
 - Choose the `refhaven` link in the header from any app page.
 - Choose `Open your library` on the landing page `/`.
 
-Images are added through the `Add images` file picker on `/library`, by dropping files anywhere on the page, or by pasting an image. A collection's page takes the same three and saves into the collection. The canvas view and `/trash` save none. Every signed-in page refuses a dropped file it does not save, so the browser never opens it.
+Images are added through the `Add images` file picker on `/library`, by dropping files anywhere on the page, or by pasting an image. A collection's page takes the same three and saves into the collection. The canvas view of the library and of a collection takes the same three and places each saved image on the canvas. `/trash` saves none. Every signed-in page refuses a dropped file it does not save, so the browser never opens it.
 
 ## Driving it with Playwright
 
@@ -32,7 +32,7 @@ Preconditions:
 
 - **Empty state.** Run `await page.getByText("Nothing saved yet.").waitFor()`.
 - **Save.** Pick files. Run `await page.getByLabel("Add images").setInputFiles([{ name: "red.png", mimeType: "image/png", buffer }])`. One `[role="status"] li` appears per file, with `data-outcome="saved"` and the text `red.png: saved.`
-- **Paste or drop.** Send the page a `drop` or `paste` event that carries files, as `send` does in `apps/web/checks/paste-drop.ts`. The page cancels the event, and one outcome line appears per file. An event that carries only text is not cancelled and saves nothing. A paste into a text field, and a drag that began on the page itself, save nothing either.
+- **Paste or drop.** Send the page a `drop` or `paste` event that carries files, with `send` from `apps/web/checks/browser.ts`. The page cancels the event, and one outcome line appears per file. An event that carries only text is not cancelled and saves nothing. A paste into a text field, and a drag that began on the page itself, save nothing either.
 - **Grid.** Run `await page.locator("[data-ref-id]").first().waitFor()`. Each card holds an `img` and the file name. The newest card is first. Wait until every image has loaded with `page.waitForFunction(() => [...document.querySelectorAll<HTMLImageElement>("[data-ref-id] img")].every((image) => image.complete && image.naturalWidth > 0))`.
 - **Variants.** Count the `PUT` requests to `*.r2.cloudflarestorage.com` with `page.on("request", ...)`. A 3000 by 2000 image sends three, to `/w/{workspaceId}/o/{sha256}`, `/w/{workspaceId}/v/{sha256}/512.webp`, and `/w/{workspaceId}/v/{sha256}/2048.webp`. A 300 px image sends one. The card's `img` has a `naturalWidth` of 512 for the large image and 300 for the small one.
 - **Placeholder.** Abort `GET` requests to R2 with `page.route`, then reload. Each card's `img` has `style.backgroundImage` starting with `url("data:image/png;base64`. Once the image loads the style is empty.
