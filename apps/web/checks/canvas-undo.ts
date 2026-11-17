@@ -558,6 +558,76 @@ try {
   );
   await screenshot(page, "04-collection-undone.png");
 
+  // An undo pressed while the save of the edit before it is still on its way, and then a new edit
+  // before either has landed. Every message from the server is held back, so all three overlap.
+  // The undo must take back the first move, and the new edit must stay and empty redo.
+  const slow = await page.context().newPage();
+  watchConsole(slow);
+  await slow.setViewportSize({ width: 1400, height: 900 });
+  await slow.routeWebSocket(/convex\.cloud/, (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((message) => server.send(message));
+    server.onMessage((message) => setTimeout(() => socket.send(message), 1200));
+  });
+  await slow.goto(canvasUrl);
+  const onLibrary = await snapshotOf(owner);
+  await waitForCanvas(slow, onLibrary.items.length);
+  // Two images whose points are clear of the panel, which sits over the canvas's corner.
+  const slowView = await pageView(slow);
+  const panel = (await slow.getByTestId("canvas-panel").boundingBox())!;
+  const clear = onLibrary.items
+    .map((item) => ({ item, at: toPage(slowView, exposedPoint(item, onLibrary.items)) }))
+    .filter(({ at }) => at.x > panel.x + panel.width + 20 || at.y > panel.y + panel.height + 20);
+  const [{ item: one, at: oneAt }, { item: other, at: otherAt }] = clear as [
+    (typeof clear)[number],
+    (typeof clear)[number],
+  ];
+  // A click on each first, to be sure that both points are on their images and not under the panel.
+  for (const at of [oneAt, otherAt]) {
+    await click(slow, at);
+    await until(
+      () => readout(slow),
+      (r) => r.selected === 1,
+      "a click on the slow page to select the image under it",
+    );
+  }
+  await drag(slow, oneAt, { x: 0, y: 60 });
+  await press(slow, "ControlOrMeta+z");
+  await drag(slow, otherAt, { x: 0, y: 60 });
+  // Three saves: the first move, its undo, and the second move.
+  const overlapped = await until(
+    () => snapshotOf(owner),
+    (snapshot) => snapshot.rev === onLibrary.rev + 3,
+    "the first move, its undo, and the second move to be saved",
+  );
+  const written = (
+    await owner.query(api.canvas.changes, { canvasId: onLibrary.canvasId, rev: onLibrary.rev })
+  ).items.map((item) => item.key);
+  await until(
+    () => slow.getByRole("button", { name: "Undo", exact: true }).isEnabled(),
+    (enabled) => enabled,
+    "Undo to be enabled for the second move",
+  );
+  assert(
+    written.includes(one.key) &&
+      samePlace(find(overlapped.items, one.key), one) &&
+      find(overlapped.items, other.key)?.y !== other.y &&
+      (await slow.getByRole("button", { name: "Redo", exact: true }).isDisabled()),
+    "an undo pressed before the move's save has landed takes back that move, and a drag made right after it stays and empties redo",
+  );
+  await press(slow, "ControlOrMeta+z");
+  const bothBack = await until(
+    () => snapshotOf(owner),
+    (snapshot) => samePlace(find(snapshot.items, other.key), other),
+    "the next undo to take back the second move",
+  );
+  assert(
+    samePlace(find(bothBack.items, other.key), other) &&
+      samePlace(find(bothBack.items, one.key), one),
+    "the next undo takes back the second move, and the first stays undone",
+  );
+  await slow.close();
+
   assertCleanConsole();
 } finally {
   await browser.close();
