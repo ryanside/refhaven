@@ -1,5 +1,12 @@
 import { fitCamera, panBy, zoomAt } from "./camera";
-import { type Entry, type ItemFields, type ItemOp, patchEntry, patchedFields } from "./history";
+import {
+  type Entry,
+  type ItemFields,
+  type ItemOp,
+  type NoteFields,
+  patchEntry,
+  patchedFields,
+} from "./history";
 import { stackOrder, topmostAt, touching } from "./hit";
 import { type Camera, type Point, screenToWorld } from "./index";
 import { type Size, zAbove, zBelow } from "./layout";
@@ -13,24 +20,23 @@ import {
   rotated,
 } from "./transform";
 
-/** An image on the canvas, sized in world units: its pixel size times its scale. */
-export type CanvasItem = Pose &
-  Size & {
-    readonly key: string;
-    readonly refId: string;
-    readonly z: string;
-  };
+/** What an item shows: an image of a Ref, or a note's text. */
+export type Content =
+  | { readonly kind: "image"; readonly refId: string }
+  | ({ readonly kind: "note" } & Omit<NoteFields, keyof Size>);
 
-/** An item as the server sends it, with the image's pixel size and a scale. */
-export type ServerItem = Point &
-  Size & {
-    readonly key: string;
-    readonly refId: string;
-    readonly scale: number;
-    readonly rotation: number;
-    readonly z: string;
-    readonly deletedAt?: number;
-  };
+/**
+ * An item as the server sends it. `width` and `height` are its size at scale 1: an image's pixel
+ * size, or a note's box in world units.
+ */
+export type ServerItem = Pose &
+  Size &
+  Content & { readonly key: string; readonly z: string; readonly deletedAt?: number };
+
+/** An item on the canvas, sized in world units: its size at scale 1, kept as `base`, times its scale. */
+export type CanvasItem = Pose &
+  Size &
+  Content & { readonly key: string; readonly z: string; readonly base: Size };
 
 export type ServerState = { readonly rev: number; readonly items: ReadonlyArray<ServerItem> };
 
@@ -109,6 +115,7 @@ export const dragThreshold = 3;
 
 const sized = ({ deletedAt, ...item }: ServerItem): CanvasItem => ({
   ...item,
+  base: { width: item.width, height: item.height },
   width: item.width * item.scale,
   height: item.height * item.scale,
 });
@@ -116,7 +123,7 @@ const sized = ({ deletedAt, ...item }: ServerItem): CanvasItem => ({
 /**
  * The canvas's state outside React: items, camera, selection, and gesture. An edited item keeps its
  * local pose from the start of the gesture, or from `hold`, until the server state includes the
- * save.
+ * save. A note this client adds shows at once, because its key is made here.
  */
 export function createSceneStore() {
   let rev = -1;
@@ -132,6 +139,13 @@ export function createSceneStore() {
   const pending = new Map<string, Map<keyof ItemFields, Held>>();
   const heldFields = (key: string): ItemFields =>
     Object.fromEntries([...(pending.get(key) ?? [])].map(([field, { value }]) => [field, value]));
+  // A note added by a save that the server state does not hold yet.
+  const added = new Map<string, { item: ServerItem; save: number; rev: number | null }>();
+  const exists = (key: string) => server.has(key) || added.has(key);
+  const all = () => [
+    ...server.values(),
+    ...[...added.values()].flatMap(({ item }) => (server.has(item.key) ? [] : [item])),
+  ];
   const listeners = new Set<() => void>();
 
   let shown: ReadonlyArray<CanvasItem> | null = null;
@@ -139,7 +153,7 @@ export function createSceneStore() {
 
   const changed = () => {
     shown = null;
-    const next = { items: server.size, selected: selection.size, camera };
+    const next = { items: all().length, selected: selection.size, camera };
     if (
       next.items !== summary.items ||
       next.selected !== summary.selected ||
@@ -189,9 +203,7 @@ export function createSceneStore() {
   const items = (): ReadonlyArray<CanvasItem> => {
     if (shown) return shown;
     const now = live();
-    shown = [...server.values()].map((item) =>
-      sized({ ...item, ...heldFields(item.key), ...now?.get(item.key) }),
-    );
+    shown = all().map((item) => sized({ ...item, ...heldFields(item.key), ...now?.get(item.key) }));
     return shown;
   };
 
@@ -202,7 +214,10 @@ export function createSceneStore() {
       for (const [field, local] of held) {
         if (local.rev !== null && local.rev <= rev) held.delete(field);
       }
-      if (held.size === 0 || !server.has(key)) pending.delete(key);
+      if (held.size === 0 || !exists(key)) pending.delete(key);
+    }
+    for (const [key, { rev: savedRev }] of added) {
+      if (savedRev !== null && savedRev <= rev) added.delete(key);
     }
   };
 
@@ -211,10 +226,10 @@ export function createSceneStore() {
    * edits, and in the gesture. A gesture whose last item left has nothing to edit, so it ends.
    */
   const forgetMissing = () => {
-    selection = new Set([...selection].filter((key) => server.has(key)));
+    selection = new Set([...selection].filter(exists));
     settle();
     if (gesture.kind === "idle" || gesture.kind === "panning" || gesture.kind === "marquee") return;
-    const origins = new Map([...gesture.origins].filter(([key]) => server.has(key)));
+    const origins = new Map([...gesture.origins].filter(([key]) => exists(key)));
     if (origins.size === 0) {
       gesture = { kind: "idle" };
     } else if (gesture.kind === "dragging") {
@@ -222,7 +237,7 @@ export function createSceneStore() {
       gesture = {
         ...gesture,
         origins,
-        collapseTo: collapseTo !== null && server.has(collapseTo) ? collapseTo : null,
+        collapseTo: collapseTo !== null && exists(collapseTo) ? collapseTo : null,
       };
     } else {
       gesture = { ...gesture, origins };
@@ -230,14 +245,19 @@ export function createSceneStore() {
   };
 
   /**
-   * Shows the fields the ops' patches set at once, and keeps them until their save is settled. A
-   * field held by an earlier save that is not settled yet stays, so a resize right after a turn
-   * keeps both.
+   * Shows the notes the ops add and the fields their patches set at once, and keeps them until
+   * their save is settled. A field held by an earlier save that is not settled yet stays, so a
+   * resize right after a turn keeps both.
    */
   const hold = (ops: ReadonlyArray<ItemOp>) => {
     const save = ++saves;
+    for (const op of ops) {
+      if (op.op !== "addNote") continue;
+      const { op: _, ...note } = op;
+      added.set(note.key, { item: { kind: "note", ...note }, save, rev: null });
+    }
     for (const { key, ...fields } of patchedFields(ops)) {
-      if (!server.has(key)) continue;
+      if (!exists(key)) continue;
       const held = pending.get(key) ?? new Map<keyof ItemFields, Held>();
       for (const [field, value] of Object.entries(fields) as Array<
         [keyof ItemFields, number | string]
@@ -309,8 +329,12 @@ export function createSceneStore() {
 
     /** Whether every item the ops patch or remove is on the canvas, or added by the same ops. */
     applies(ops: ReadonlyArray<ItemOp>) {
-      const added = new Set(ops.flatMap((op) => (op.op === "add" ? [op.refId] : [])));
-      return ops.every((op) => op.op === "add" || server.has(op.key) || added.has(op.key));
+      const adding = new Set(
+        ops.flatMap((op) => (op.op === "add" ? [op.refId] : op.op === "addNote" ? [op.key] : [])),
+      );
+      return ops.every(
+        (op) => op.op === "add" || op.op === "addNote" || exists(op.key) || adding.has(op.key),
+      );
     },
 
     /** The save of a hold wrote `savedRev`. Its items show the server state from that rev on. */
@@ -319,6 +343,9 @@ export function createSceneStore() {
         for (const local of held.values()) {
           if (local.save === save) local.rev = savedRev;
         }
+      }
+      for (const note of added.values()) {
+        if (note.save === save) note.rev = savedRev;
       }
       settle();
       changed();
@@ -330,6 +357,9 @@ export function createSceneStore() {
         for (const [field, local] of held) {
           if (local.save === save) held.delete(field);
         }
+      }
+      for (const [key, note] of added) {
+        if (note.save === save) added.delete(key);
       }
       settle();
       changed();
@@ -349,7 +379,7 @@ export function createSceneStore() {
     },
 
     selectAll() {
-      selection = new Set(server.keys());
+      selection = new Set(all().map(({ key }) => key));
       changed();
     },
 

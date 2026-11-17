@@ -4,17 +4,18 @@ import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 import { Id } from "./_generated/id";
 import { CollectionNotFound } from "./collection";
-import { ItemKey, canvasItemFields, itemTransform } from "./canvasItem";
+import { CanvasItem, ItemKey, itemTransform, noteFields } from "./canvasItem";
 import { RefNotFound } from "./library.spec";
 import RequireWorkspace from "./middleware/RequireWorkspace.spec";
 
-export const CanvasItem = Schema.Struct(canvasItemFields);
-
-const Op = Schema.Union([
+export const Op = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("patch"),
     key: ItemKey,
-    fields: Schema.Struct(itemTransform).mapFields(Struct.map(Schema.optionalKey)),
+    // A note's own fields too. Which of these an item takes depends on its kind, so apply checks it.
+    fields: Schema.Struct({ ...itemTransform, ...noteFields }).mapFields(
+      Struct.map(Schema.optionalKey),
+    ),
   }),
   Schema.Struct({ op: Schema.Literal("remove"), key: ItemKey }),
   // Without a `z` the item goes on top. Undoing a removal names the `z` the item had.
@@ -25,12 +26,34 @@ const Op = Schema.Union([
     y: itemTransform.y,
     z: Schema.optionalKey(itemTransform.z),
   }),
+  // A note under a key the client made. Under the key of a removed note it brings that row back.
+  Schema.Struct({
+    op: Schema.Literal("addNote"),
+    key: ItemKey,
+    x: itemTransform.x,
+    y: itemTransform.y,
+    scale: itemTransform.scale,
+    rotation: itemTransform.rotation,
+    z: Schema.optionalKey(itemTransform.z),
+    ...noteFields,
+  }),
 ]);
 
 export class CanvasNotFound extends Schema.TaggedError<CanvasNotFound>()("CanvasNotFound", {}) {}
 
 export class ItemNotFound extends Schema.TaggedError<ItemNotFound>()("ItemNotFound", {
   key: Schema.String,
+}) {}
+
+/** A note's key that a live item, or a removed image, already has. */
+export class KeyTaken extends Schema.TaggedError<KeyTaken>()("KeyTaken", {
+  key: Schema.String,
+}) {}
+
+/** A patch of a field that the item's kind does not have, such as a note's text on an image. */
+export class FieldNotOnItem extends Schema.TaggedError<FieldNotOnItem>()("FieldNotOnItem", {
+  key: Schema.String,
+  field: Schema.String,
 }) {}
 
 export default GroupSpec.make()
@@ -70,6 +93,7 @@ export default GroupSpec.make()
         ops: Schema.Array(Op).check(Schema.isMinLength(1), Schema.isMaxLength(maxOpsPerCall)),
       }),
       returns: () => Schema.Int,
-      error: () => Schema.Union([CanvasNotFound, ItemNotFound, RefNotFound]),
+      error: () =>
+        Schema.Union([CanvasNotFound, ItemNotFound, RefNotFound, KeyTaken, FieldNotOnItem]),
     }),
   );

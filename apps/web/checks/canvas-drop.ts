@@ -30,6 +30,7 @@ import {
   toWorld,
   until,
   waitForCanvas,
+  refOf,
 } from "./canvas-screen";
 
 const canvas = '[data-testid="canvas"]';
@@ -57,7 +58,7 @@ const refIdOf = async (client: ConvexHttpClient, name: string) =>
   ).page.find((item) => item.fileName === name)?.refId;
 
 const itemOf = (items: ReadonlyArray<Item>, refId: string | undefined) =>
-  items.find((item) => item.refId === refId);
+  items.find((item) => refOf(item) === refId);
 
 const at = (item: Item | undefined, world: Point) =>
   item !== undefined && Math.abs(item.x - world.x) < 1e-6 && Math.abs(item.y - world.y) < 1e-6;

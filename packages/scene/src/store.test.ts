@@ -13,6 +13,7 @@ import {
 } from "./index";
 
 const serverItem = (key: string, x: number, z: string): ServerItem => ({
+  kind: "image",
   key,
   refId: `ref-${key}`,
   x,
@@ -657,4 +658,69 @@ test("a selection already at the front, or at the back, in its order, or no sele
   expect(store.restack("back")).toBeNull();
   select("a", "c");
   expect(store.restack("front")).not.toBeNull();
+});
+
+const note = {
+  op: "addNote",
+  key: "n",
+  text: "hello",
+  color: "blue",
+  x: 0,
+  y: 300,
+  scale: 2,
+  rotation: 0,
+  z: "a2",
+  width: 60,
+  height: 30,
+} as const;
+
+test("a note this page adds shows at once, sized by its scale, and stays until the server state holds it", () => {
+  const { store, screen } = setUp();
+  const save = store.hold([note]);
+
+  expect(store.summary().items).toBe(3);
+  expect(store.items().find((item) => item.key === "n")).toMatchObject({
+    kind: "note",
+    text: "hello",
+    width: 120,
+    height: 60,
+    base: { width: 60, height: 30 },
+  });
+  store.press(screen({ x: 0, y: 300 }), false);
+  store.release();
+  expect([...store.selection()]).toEqual(["n"]);
+
+  store.acknowledge(save, 2);
+  expect(store.summary().items).toBe(3);
+  const { op: _, ...saved } = note;
+  store.applyChanges({ rev: 2, items: [{ kind: "note", ...saved }] });
+  expect(store.summary().items).toBe(3);
+  store.applyChanges({ rev: 3, items: [{ kind: "note", ...saved, deletedAt: 1 }] });
+  expect(store.summary().items).toBe(2);
+  expect(store.selection().size).toBe(0);
+});
+
+test("a note whose save fails leaves, and so does its selection", () => {
+  const { store } = setUp();
+  const save = store.hold([note]);
+  store.selectAll();
+  expect(store.selection().size).toBe(3);
+
+  store.reject(save);
+  expect(store.summary().items).toBe(2);
+  expect(store.items().some((item) => item.key === "n")).toBe(false);
+});
+
+test("a held patch of a note's text and box shows at once", () => {
+  const { store } = setUp();
+  const { op: _, ...saved } = note;
+  store.applyChanges({ rev: 2, items: [{ kind: "note", ...saved }] });
+  store.hold([{ op: "patch", key: "n", fields: { text: "longer", width: 90 } }]);
+
+  expect(store.items().find((item) => item.key === "n")).toMatchObject({
+    text: "longer",
+    width: 180,
+    base: { width: 90, height: 30 },
+  });
+  expect(store.applies([{ op: "remove", key: "n" }, note])).toBe(true);
 });

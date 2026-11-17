@@ -24,6 +24,7 @@ import {
   toPage,
   until,
   waitForCanvas,
+  refOf,
 } from "./canvas-screen";
 
 const images = {
@@ -131,7 +132,7 @@ try {
   const owner = await clientFor(page);
   const placed = await snapshotOf(owner);
   const canvasId = placed.canvasId;
-  const keyOf = (name: Color) => placed.items.find((item) => item.refId === refs[name])!.key;
+  const keyOf = (name: Color) => placed.items.find((item) => refOf(item) === refs[name])!.key;
   const key = { red: keyOf("red"), green: keyOf("green"), blue: keyOf("blue") };
   const colorOfKey = new Map((Object.keys(key) as Array<Color>).map((name) => [key[name], name]));
   const layOut = (places: Record<Color, Point & { rotation?: number; z?: string }>) =>

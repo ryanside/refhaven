@@ -32,6 +32,7 @@ import {
   until,
   waitForCanvas,
   worldSize,
+  refOf,
 } from "./canvas-screen";
 
 type Snapshot = FunctionReturnType<typeof api.canvas.open>;
@@ -50,7 +51,7 @@ const openCanvas = async (page: Page, count: number) => {
   await waitForCanvas(page, count);
 };
 
-const colorOf = (item: Item, refs: ReadonlyMap<string, Rgb>) => refs.get(item.refId)!;
+const colorOf = (item: Item, refs: ReadonlyMap<string, Rgb>) => refs.get(refOf(item))!;
 
 const drag = async (page: Page, from: Point, by: Point) => {
   await page.mouse.move(from.x, from.y);
@@ -110,7 +111,7 @@ try {
   const opened = await snapshotOf(owner);
   const { canvasId } = opened;
   const [red, blue, green] = refIds.map((refId) =>
-    opened.items.find((item) => item.refId === refId)!,
+    opened.items.find((item) => refOf(item) === refId)!,
   ) as [Item, Item, Item];
 
   let view = await pageView(page);
@@ -487,7 +488,7 @@ try {
   const board = await owner.mutation(api.collections.create, { name: "Board" });
   await owner.mutation(api.collections.addRefs, {
     collectionId: board,
-    refIds: [red.refId, blue.refId],
+    refIds: [refOf(red), refOf(blue)],
   });
   await page.goto(`${appUrl}/library`);
   await page.locator(`[data-collection-id="${board}"]`).click();
@@ -523,9 +524,9 @@ try {
     (await readout(page)).items === 3 &&
       inCollection.canvasId !== canvasId &&
       inCollection.items
-        .map((item) => item.refId)
+        .map((item) => refOf(item))
         .sort()
-        .join() === [red.refId, blue.refId, yellowRefId].sort().join(),
+        .join() === [refOf(red), refOf(blue), yellowRefId].sort().join(),
     "the collection's canvas page shows its 3 members in the readout, from its own canvas",
   );
   for (const item of inCollection.items) {

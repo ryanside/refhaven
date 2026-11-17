@@ -121,7 +121,13 @@ export function CanvasView({
           setOffCanvas(opened.success.removed);
           // Putting images back is an edit like a drop, so it can be undone and it empties redo.
           if (placeRemoved && opened.success.placed > 0) {
-            history.record(addEntry(opened.success.items.slice(-opened.success.placed)));
+            history.record(
+              addEntry(
+                opened.success.items
+                  .slice(-opened.success.placed)
+                  .flatMap((item) => (item.kind === "image" ? [item] : [])),
+              ),
+            );
           }
         }
       } finally {
@@ -403,6 +409,8 @@ function Readout({ store }: { store: SceneStore }) {
   );
 }
 
+type Image = Extract<CanvasItem, { readonly kind: "image" }>;
+
 const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || target.matches("input, textarea, select, button"));
@@ -427,7 +435,7 @@ function drive(
     if (!frame && !disposed) frame = requestAnimationFrame(draw);
   };
 
-  const textureFor = (item: CanvasItem, wanted: ImageRole): Need => {
+  const textureFor = (item: Image, wanted: ImageRole): Need => {
     const display = { refId: item.refId, role: "display" } as const;
     const thumbnail = { refId: item.refId, role: "thumbnail" } as const;
     if (wanted === "display" && textures!.has(display)) return display;
@@ -441,14 +449,16 @@ function drive(
     const camera = store.camera();
     const viewport = store.viewport();
     const items = store.items();
+    const images = items.flatMap((item) => (item.kind === "image" ? [item] : []));
     const roles = new Map(
-      itemsInView(items, camera, viewport, loadMargin).map((item) => [
+      itemsInView(images, camera, viewport, loadMargin).map((item) => [
         item.key,
         imageRole(item, camera.zoom * devicePixelRatio),
       ]),
     );
     const byKey = new Map(items.map((item) => [item.key, item]));
-    const near = [...roles].map(([key, role]) => ({ refId: byKey.get(key)!.refId, role }));
+    const imageByKey = new Map(images.map((item) => [item.key, item]));
+    const near = [...roles].map(([key, role]) => ({ refId: imageByKey.get(key)!.refId, role }));
     textures.update([
       ...near.map(({ refId }) => ({ refId, role: "thumbnail" as const })),
       ...near.filter(({ role }) => role === "display"),
@@ -459,14 +469,15 @@ function drive(
     const displays: Array<string> = [];
     const changed: Array<SceneItem> = [];
     for (const item of items) {
-      const need = textureFor(item, roles.get(item.key) ?? "thumbnail");
-      if (visible.has(item.key) && textures.has(need)) {
+      const need =
+        item.kind === "image" ? textureFor(item, roles.get(item.key) ?? "thumbnail") : null;
+      if (need && visible.has(item.key) && textures.has(need)) {
         if (need.role === "display") displays.push(item.key);
         else thumbnails += 1;
       }
       const next: SceneItem = {
         key: item.key,
-        texture: textureKey(need),
+        texture: need ? textureKey(need) : "",
         x: item.x,
         y: item.y,
         width: item.width,

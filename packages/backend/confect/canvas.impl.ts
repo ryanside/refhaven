@@ -15,7 +15,14 @@ import type { CanvasItemsDoc, CanvasesDoc, RefsDoc } from "./_generated/docs";
 import type { Id } from "./_generated/id";
 import databaseSchema from "./_generated/schema";
 import { DatabaseReader, DatabaseWriter } from "./_generated/services";
-import canvas, { CanvasNotFound, ItemNotFound } from "./canvas.spec";
+import canvas, {
+  CanvasNotFound,
+  FieldNotOnItem,
+  ItemNotFound,
+  KeyTaken,
+  type Op,
+} from "./canvas.spec";
+import { patchable } from "./canvasItem";
 import { addMember, canvasOf, leaveCollection, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
@@ -46,6 +53,18 @@ const itemsOf = (canvasId: Id<"canvases">) =>
       .index("by_canvas_and_key", (q) => q.eq("canvasId", canvasId))
       .collect();
   }).pipe(Effect.orDie);
+
+/**
+ * When the item went out of view with its Ref: the time its Ref went to the trash. A note has no
+ * Ref, so only its own `deletedAt` removes it.
+ */
+const trashedAt = (item: CanvasItemsDoc) =>
+  item.kind === "note"
+    ? Effect.succeed(undefined)
+    : Effect.gen(function* () {
+        const reader = yield* DatabaseReader;
+        return (yield* reader.table("refs").get(item.refId)).deletedAt;
+      }).pipe(Effect.orDie);
 
 const sizeOf = (ref: RefsDoc) =>
   Effect.gen(function* () {
@@ -101,15 +120,17 @@ const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: bool
           )
     ).filter(isLive);
     const liveIds = new Set(live.map((ref) => ref._id));
-    const shown = items.filter((item) => item.deletedAt === undefined && liveIds.has(item.refId));
+    const shown = items.filter(
+      (item) => item.deletedAt === undefined && (item.kind === "note" || liveIds.has(item.refId)),
+    );
+    const refsOf = (list: ReadonlyArray<CanvasItemsDoc>) =>
+      new Set(list.flatMap((item) => (item.kind === "image" ? [item.refId] : [])));
 
     // On the library's canvas a removed item still counts as placed, so a Ref removed from it is
     // not placed again. On a collection's canvas removal means leaving the collection, so a member
     // with a removed item was added again, and its item comes back.
-    const placedRefs = new Set(
-      (collectionId === undefined && !placeRemoved ? items : shown).map((item) => item.refId),
-    );
-    const shownRefs = new Set(shown.map((item) => item.refId));
+    const placedRefs = refsOf(collectionId === undefined && !placeRemoved ? items : shown);
+    const shownRefs = refsOf(shown);
     const unplaced = live.filter((ref) => !placedRefs.has(ref._id));
     const removed = live.filter((ref) => !shownRefs.has(ref._id)).length - unplaced.length;
     if (unplaced.length === 0) {
@@ -171,16 +192,10 @@ const changes = FunctionImpl.make(databaseSchema, canvas, "changes", ({ canvasId
       .collect()
       .pipe(Effect.orDie);
     const shown = yield* Effect.forEach(items, (item) =>
-      reader
-        .table("refs")
-        .get(item.refId)
-        .pipe(
-          Effect.orDie,
-          Effect.map((ref) => {
-            const deletedAt = item.deletedAt ?? ref.deletedAt;
-            return deletedAt === undefined ? toItem(item) : { ...toItem(item), deletedAt };
-          }),
-        ),
+      Effect.map(trashedAt(item), (trashed) => {
+        const deletedAt = item.deletedAt ?? trashed;
+        return deletedAt === undefined ? toItem(item) : { ...toItem(item), deletedAt };
+      }),
     );
     return { rev: found.rev, items: shown };
   }),
@@ -228,6 +243,52 @@ const place = (
       .pipe(Effect.orDie);
   });
 
+/**
+ * Puts a note on a canvas under the key the client made: inserts it, or brings back the removed
+ * note under that key with the values the op names. Any other row under the key fails the call.
+ */
+const putNote = (
+  found: CanvasesDoc,
+  rev: number,
+  { op, key, ...note }: Extract<typeof Op.Type, { readonly op: "addNote" }>,
+  z: string,
+) =>
+  Effect.gen(function* () {
+    const { workspaceId } = yield* CurrentWorkspace;
+    const reader = yield* DatabaseReader;
+    const writer = yield* DatabaseWriter;
+    const existing = yield* reader
+      .table("canvasItems")
+      .index("by_canvas_and_key", (q) => q.eq("canvasId", found._id).eq("key", key))
+      .first()
+      .pipe(Effect.orDie);
+    if (Option.isSome(existing)) {
+      if (existing.value.kind !== "note" || existing.value.deletedAt === undefined) {
+        return yield* new KeyTaken({ key });
+      }
+      return yield* writer
+        .table("canvasItems")
+        .patch(existing.value._id, { ...note, z, rev, deletedAt: undefined })
+        .pipe(Effect.orDie);
+    }
+    yield* writer
+      .table("canvasItems")
+      .insert({
+        workspaceId,
+        canvasId: found._id,
+        rev,
+        key,
+        kind: "note",
+        ...note,
+        flipX: false,
+        flipY: false,
+        opacity: 1,
+        grayscale: false,
+        z,
+      })
+      .pipe(Effect.orDie);
+  });
+
 // A typed error is thrown as a ConvexError, so Convex rolls back every write of a failed call.
 const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, ops }) =>
   Effect.gen(function* () {
@@ -237,16 +298,17 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
     const rev = found.rev + 1;
     yield* writer.table("canvases").patch(canvasId, { rev }).pipe(Effect.orDie);
     // An add with no z goes above every item, and above every z that this call writes.
-    const adds = ops.flatMap((op, index) => (op.op === "add" && op.z === undefined ? [index] : []));
+    const zOf = (op: (typeof ops)[number]) =>
+      op.op === "patch" ? op.fields.z : op.op === "remove" ? undefined : op.z;
+    const adds = ops.flatMap((op, index) =>
+      op.op !== "patch" && op.op !== "remove" && op.z === undefined ? [index] : [],
+    );
     const below =
       adds.length === 0
         ? []
         : [
             ...(yield* itemsOf(canvasId)).map((item) => item.z),
-            ...ops.flatMap((op) => {
-              const z = op.op === "patch" ? op.fields.z : op.op === "add" ? op.z : undefined;
-              return z === undefined ? [] : [z];
-            }),
+            ...ops.flatMap((op) => zOf(op) ?? []),
           ];
     const addedZ = new Map(Arr.zip(adds, zAbove(below, adds.length)));
     yield* Effect.forEach(
@@ -256,23 +318,32 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
           if (op.op === "add") {
             return yield* place(found, rev, op, op.z ?? addedZ.get(index)!);
           }
+          if (op.op === "addNote") {
+            return yield* putNote(found, rev, op, op.z ?? addedZ.get(index)!);
+          }
           const item = yield* reader
             .table("canvasItems")
             .get("by_canvas_and_key", canvasId, op.key)
             .pipe(Effect.mapError(() => new ItemNotFound({ key: op.key })));
-          const ref = yield* reader.table("refs").get(item.refId).pipe(Effect.orDie);
-          if (item.deletedAt !== undefined || !isLive(ref)) {
+          if (item.deletedAt !== undefined || (yield* trashedAt(item)) !== undefined) {
             return yield* new ItemNotFound({ key: op.key });
           }
-          if (op.op === "remove" && found.collectionId !== undefined) {
-            return yield* leaveCollection(found.collectionId, [item.refId], { canvasId, rev });
+          if (op.op === "remove") {
+            if (item.kind === "image" && found.collectionId !== undefined) {
+              return yield* leaveCollection(found.collectionId, [item.refId], { canvasId, rev });
+            }
+            return yield* writer
+              .table("canvasItems")
+              .patch(item._id, { deletedAt: Date.now(), rev })
+              .pipe(Effect.orDie);
+          }
+          const field = Object.keys(op.fields).find((name) => !patchable[item.kind].has(name));
+          if (field !== undefined) {
+            return yield* new FieldNotOnItem({ key: op.key, field });
           }
           yield* writer
             .table("canvasItems")
-            .patch(
-              item._id,
-              op.op === "patch" ? { ...op.fields, rev } : { deletedAt: Date.now(), rev },
-            )
+            .patch(item._id, { ...op.fields, rev })
             .pipe(Effect.orDie);
         }),
       { discard: true },

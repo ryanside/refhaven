@@ -1,8 +1,18 @@
 import type { Point } from "./index";
+import type { Size } from "./layout";
+import type { NoteColor } from "./note";
+import type { CanvasItem } from "./store";
 import type { Pose } from "./transform";
 
-/** The fields of an item that an op of this client sets. */
-export type ItemFields = Partial<Pose & { readonly z: string }>;
+/** A note's own fields: its text, its color, and its box at scale 1. */
+export type NoteFields = Size & { readonly text: string; readonly color: NoteColor };
+
+/** The fields of an item that an op of this client sets. A note's own fields go to notes only. */
+export type ItemFields = Partial<Pose & { readonly z: string } & NoteFields>;
+
+/** A note as an op adds it, under a key this client made. */
+export type NoteAdd = Pose &
+  NoteFields & { readonly op: "addNote"; readonly key: string; readonly z: string };
 
 /** One operation of a canvas edit, in the shape `canvas.apply` takes. */
 export type ItemOp =
@@ -14,7 +24,8 @@ export type ItemOp =
       readonly x: number;
       readonly y: number;
       readonly z?: string;
-    };
+    }
+  | NoteAdd;
 
 /** One edit: the ops that undo it and the ops that redo it. */
 export type Entry = { readonly undo: ReadonlyArray<ItemOp>; readonly redo: ReadonlyArray<ItemOp> };
@@ -28,8 +39,6 @@ export const callsOf = <Op>(ops: ReadonlyArray<Op>): Array<ReadonlyArray<Op>> =>
     ops.slice(call * maxOpsPerCall, (call + 1) * maxOpsPerCall),
   );
 
-type Placed = Point & { readonly key: string };
-
 /** An item's key and the fields a patch sets on it. */
 type Patch = ItemFields & { readonly key: string };
 
@@ -41,15 +50,36 @@ export const patchEntry = (from: ReadonlyArray<Patch>, to: ReadonlyArray<Patch>)
   redo: to.map(patchTo),
 });
 
+/** The op that puts an item back as it is, at its place in the stack. */
+const restoreOp = (item: CanvasItem): ItemOp =>
+  item.kind === "image"
+    ? { op: "add", refId: item.refId, x: item.x, y: item.y, z: item.z }
+    : {
+        op: "addNote",
+        key: item.key,
+        x: item.x,
+        y: item.y,
+        scale: item.scale,
+        rotation: item.rotation,
+        z: item.z,
+        text: item.text,
+        color: item.color,
+        ...item.base,
+      };
+
 /**
  * Removing items. An add with the old z puts each back at its old place in the stack. That is one
  * op per item each way, so a removal that one call could make can be undone by one call.
  */
-export const removalEntry = (
-  items: ReadonlyArray<Placed & { readonly refId: string; readonly z: string }>,
-): Entry => ({
-  undo: items.map(({ refId, x, y, z }) => ({ op: "add", refId, x, y, z })),
+export const removalEntry = (items: ReadonlyArray<CanvasItem>): Entry => ({
+  undo: items.map(restoreOp),
   redo: items.map(({ key }) => ({ op: "remove", key })),
+});
+
+/** Adding a note: the removal of it, the other way round. */
+export const noteEntry = (note: NoteAdd): Entry => ({
+  undo: [{ op: "remove", key: note.key }],
+  redo: [note],
 });
 
 /**
