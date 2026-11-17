@@ -13,6 +13,8 @@ export type Sign = (
 const budgets: Record<ImageRole, number> = { thumbnail: 200, display: 12 };
 const concurrentLoads = 4;
 const urlsPerCall = 100;
+const retryAfterMs = 2000;
+const longestRetryMs = 30_000;
 
 export const textureKey = ({ refId, role }: Need) => `${refId}/${role}`;
 
@@ -25,6 +27,7 @@ export function createTextureLoader(renderer: Renderer, sign: Sign, onChange: ()
   const loading = new Map<string, ImageRole>();
   const urls = new Map<string, { url: string; signedAt: number }>();
   const signing = new Map<string, Promise<void>>();
+  const failed = new Map<string, { attempts: number; retryAt: number }>();
   let queue: Array<Need> = [];
   let pass = 0;
   let stopped = false;
@@ -78,9 +81,9 @@ export function createTextureLoader(renderer: Renderer, sign: Sign, onChange: ()
     try {
       if (!freshUrl(key)) await signFor(need);
       const url = freshUrl(key);
-      if (!url) return;
+      if (!url) throw new Error("no signed URL");
       const response = await fetch(url);
-      if (!response.ok) return;
+      if (!response.ok) throw new Error(`R2 answered ${response.status}`);
       const bitmap = await createImageBitmap(await response.blob());
       if (stopped) {
         bitmap.close();
@@ -88,9 +91,15 @@ export function createTextureLoader(renderer: Renderer, sign: Sign, onChange: ()
       }
       renderer.uploadTexture(key, bitmap);
       loaded.set(key, { role: need.role, lastNeeded: pass });
+      failed.delete(key);
       onChange();
     } catch {
-      // A failed load is asked for again by the next update that needs it.
+      // A failed load is tried again after a wait that doubles each time, with no input needed.
+      // Until then `update` leaves it out, so panning does not repeat the request every frame.
+      const attempts = (failed.get(key)?.attempts ?? 0) + 1;
+      const wait = Math.min(retryAfterMs * 2 ** (attempts - 1), longestRetryMs);
+      failed.set(key, { attempts, retryAt: Date.now() + wait });
+      if (!stopped) setTimeout(onChange, wait);
     } finally {
       loading.delete(key);
       if (!stopped) pump();
@@ -112,9 +121,10 @@ export function createTextureLoader(renderer: Renderer, sign: Sign, onChange: ()
         const entry = loaded.get(textureKey(need));
         if (entry) entry.lastNeeded = pass;
       }
+      const now = Date.now();
       queue = needs.filter((need) => {
         const key = textureKey(need);
-        return !loaded.has(key) && !loading.has(key);
+        return !loaded.has(key) && !loading.has(key) && (failed.get(key)?.retryAt ?? 0) <= now;
       });
       pump();
     },
