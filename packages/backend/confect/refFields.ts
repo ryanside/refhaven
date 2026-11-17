@@ -14,14 +14,23 @@ export const SourceUrl = Schema.Trim.check(
   Schema.makeFilter(isWebUrl, { expected: "an http or https URL" }),
 );
 
-/** "Mood", " mood ", and "MOOD" are one tag: trimmed, inner spaces collapsed, and lowercased. */
+const normalTag = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * "Mood", " mood ", and "MOOD" are one tag: trimmed, inner spaces collapsed, and lowercased.
+ * Decoding puts a name in that form. Encoding takes only a name already in it, so the browser
+ * never sends a tag that the server would read as another one.
+ */
 export const TagName = Schema.String.pipe(
   Schema.decode(
-    SchemaTransformation.transform({
-      decode: (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase(),
-      encode: (name: string) => name,
-    }),
+    SchemaTransformation.transform({ decode: normalTag, encode: (name: string) => name }),
   ),
-).check(Schema.isNonEmpty(), Schema.isMaxLength(50));
+).check(
+  Schema.isNonEmpty(),
+  Schema.isMaxLength(50),
+  Schema.makeFilter((name: string) => name === normalTag(name), {
+    expected: "a tag that is trimmed, single-spaced, and lowercase",
+  }),
+);
 
 export const TagNames = Schema.Array(TagName).check(Schema.isMaxLength(20));
