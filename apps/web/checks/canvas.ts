@@ -262,23 +262,30 @@ try {
     `one call with two ops raises rev once, and changes returns both items: rev ${removedRev} to ${bothRev}, ${sinceRemoved.items.length} items`,
   );
 
+  // The call above turned two images where they stood, so those two may overlap each other.
+  // What must hold is that the image put back overlaps none.
   const putBack = await owner.mutation(api.canvas.open, { placeRemoved: true });
   const back = putBack.items.find((item) => item.key === removed!.key);
   const layoutBefore = boundsOf(putBack.items.filter((item) => item.key !== removed!.key))!;
   assert(
     putBack.rev === bothRev + 1 &&
       putBack.removed === 0 &&
+      putBack.placed === 1 &&
+      putBack.items.at(-1)?.key === removed!.key &&
       putBack.items.length === 4 &&
       back !== undefined &&
       back.deletedAt === undefined &&
       boxOf(back).left > layoutBefore.right &&
-      noneOverlap(putBack.items),
-    `open with placeRemoved places the removed image again to the right of the layout, at rev ${putBack.rev}, and counts ${putBack.removed} off the canvas`,
+      putBack.items.every(
+        (other) => other.key === back.key || !overlaps(boxOf(back), boxOf(other)),
+      ),
+    `open with placeRemoved places the removed image again to the right of the layout, at rev ${putBack.rev}, names it as the one item it placed, and counts ${putBack.removed} off the canvas`,
   );
   const putBackAgain = await owner.mutation(api.canvas.open, { placeRemoved: true });
   assert(
     putBackAgain.rev === putBack.rev &&
       putBackAgain.removed === 0 &&
+      putBackAgain.placed === 0 &&
       same(putBackAgain.items, putBack.items),
     `a second open with placeRemoved finds nothing to place and keeps rev ${putBack.rev}: ${putBackAgain.rev}`,
   );

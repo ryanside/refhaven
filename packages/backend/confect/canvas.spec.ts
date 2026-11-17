@@ -16,11 +16,13 @@ const Op = Schema.Union([
     fields: Schema.Struct(itemTransform).mapFields(Struct.map(Schema.optionalKey)),
   }),
   Schema.Struct({ op: Schema.Literal("remove"), key: ItemKey }),
+  // Without a `z` the item goes on top. Undoing a removal names the `z` the item had.
   Schema.Struct({
     op: Schema.Literal("add"),
     refId: Id("refs"),
     x: itemTransform.x,
     y: itemTransform.y,
+    z: Schema.optionalKey(itemTransform.z),
   }),
 ]);
 
@@ -44,6 +46,8 @@ export default GroupSpec.make()
           canvasId: Id("canvases"),
           rev: Schema.Int,
           items: Schema.Array(CanvasItem),
+          // The last `placed` items are the ones this call put on the canvas.
+          placed: Schema.Int,
           removed: Schema.Int,
         }),
       error: () => CollectionNotFound,

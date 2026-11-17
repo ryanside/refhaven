@@ -113,7 +113,7 @@ const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: bool
     const unplaced = live.filter((ref) => !placedRefs.has(ref._id));
     const removed = live.filter((ref) => !shownRefs.has(ref._id)).length - unplaced.length;
     if (unplaced.length === 0) {
-      return { canvasId, rev: openedRev, items: shown.map(toItem), removed };
+      return { canvasId, rev: openedRev, items: shown.map(toItem), placed: 0, removed };
     }
 
     const sizes = yield* Effect.forEach(unplaced, sizeOf);
@@ -137,7 +137,13 @@ const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: bool
       },
       { discard: true },
     );
-    return { canvasId, rev, items: [...shown.map(toItem), ...added], removed };
+    return {
+      canvasId,
+      rev,
+      items: [...shown.map(toItem), ...added],
+      placed: added.length,
+      removed,
+    };
   }).pipe(Effect.orDie);
 
 const open = FunctionImpl.make(
@@ -230,15 +236,17 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
     const writer = yield* DatabaseWriter;
     const rev = found.rev + 1;
     yield* writer.table("canvases").patch(canvasId, { rev }).pipe(Effect.orDie);
-    const adds = ops.flatMap((op, index) => (op.op === "add" ? [index] : []));
+    // An add with no z goes above every item, and above every z that this call writes.
+    const adds = ops.flatMap((op, index) => (op.op === "add" && op.z === undefined ? [index] : []));
     const below =
       adds.length === 0
         ? []
         : [
             ...(yield* itemsOf(canvasId)).map((item) => item.z),
-            ...ops.flatMap((op) =>
-              op.op === "patch" && op.fields.z !== undefined ? [op.fields.z] : [],
-            ),
+            ...ops.flatMap((op) => {
+              const z = op.op === "patch" ? op.fields.z : op.op === "add" ? op.z : undefined;
+              return z === undefined ? [] : [z];
+            }),
           ];
     const addedZ = new Map(Arr.zip(adds, zAbove(below, adds.length)));
     yield* Effect.forEach(
@@ -246,7 +254,7 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
       (op, index) =>
         Effect.gen(function* () {
           if (op.op === "add") {
-            return yield* place(found, rev, op, addedZ.get(index)!);
+            return yield* place(found, rev, op, op.z ?? addedZ.get(index)!);
           }
           const item = yield* reader
             .table("canvasItems")
