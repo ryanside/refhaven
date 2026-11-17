@@ -1,3 +1,4 @@
+import { maxOpsPerCall } from "@refhaven/scene";
 import { FunctionSpec, GroupSpec } from "@confect/core";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
@@ -16,11 +17,13 @@ const Op = Schema.Union([
     fields: Schema.Struct(itemTransform).mapFields(Struct.map(Schema.optionalKey)),
   }),
   Schema.Struct({ op: Schema.Literal("remove"), key: ItemKey }),
+  // Without a `z` the item goes on top. Undoing a removal names the `z` the item had.
   Schema.Struct({
     op: Schema.Literal("add"),
     refId: Id("refs"),
     x: itemTransform.x,
     y: itemTransform.y,
+    z: Schema.optionalKey(itemTransform.z),
   }),
 ]);
 
@@ -35,12 +38,18 @@ export default GroupSpec.make()
   .addFunction(
     FunctionSpec.publicMutation({
       name: "open",
-      args: () => ({ collectionId: Schema.optionalKey(Id("collections")) }),
+      args: () => ({
+        collectionId: Schema.optionalKey(Id("collections")),
+        placeRemoved: Schema.optionalKey(Schema.Boolean),
+      }),
       returns: () =>
         Schema.Struct({
           canvasId: Id("canvases"),
           rev: Schema.Int,
           items: Schema.Array(CanvasItem),
+          // The last `placed` items are the ones this call put on the canvas.
+          placed: Schema.Int,
+          removed: Schema.Int,
         }),
       error: () => CollectionNotFound,
     }),
@@ -58,7 +67,7 @@ export default GroupSpec.make()
       name: "apply",
       args: () => ({
         canvasId: Id("canvases"),
-        ops: Schema.Array(Op).check(Schema.isMinLength(1), Schema.isMaxLength(1000)),
+        ops: Schema.Array(Op).check(Schema.isMinLength(1), Schema.isMaxLength(maxOpsPerCall)),
       }),
       returns: () => Schema.Int,
       error: () => Schema.Union([CanvasNotFound, ItemNotFound, RefNotFound]),

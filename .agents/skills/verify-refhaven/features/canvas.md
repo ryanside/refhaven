@@ -1,6 +1,6 @@
 # Canvas
 
-The canvas view of the library shows every saved image on a free canvas. Each collection has its own canvas with only its images and a layout of its own. The user pans with the wheel, with space-drag, or with middle-drag, and zooms toward the cursor with Ctrl+wheel or a pinch, from 1% to 6400%. A click selects the topmost image under the cursor, shift-click adds or removes one, and a click on empty canvas clears the selection. Dragging a selected image moves the whole selection, and the move is saved when the drag ends. Another open page of the same user shows the move without a reload. Image files dropped on the canvas are saved and land where they were dropped, and a pasted or picked image lands at the center of the view. An image shows its 512 px thumbnail, and its 2048 px copy once it is large on screen.
+The canvas view of the library shows every saved image on a free canvas. Each collection has its own canvas with only its images and a layout of its own. The user pans with the wheel, with space-drag, or with middle-drag, and zooms toward the cursor with Ctrl+wheel or a pinch, from 1% to 6400%. A click selects the topmost image under the cursor, shift-click adds or removes one, and a click on empty canvas clears the selection. Dragging a selected image moves the whole selection, and the move is saved when the drag ends. Another open page of the same user shows the move without a reload. Image files dropped on the canvas are saved and land where they were dropped, and a pasted or picked image lands at the center of the view. An image shows its 512 px thumbnail, and its 2048 px copy once it is large on screen. Delete, Backspace, or the panel's remove button takes the selected images off the canvas, and on a collection's canvas out of the collection. Undo and redo take back a move, a removal, or an add for as long as the page is open. The library's canvas says how many of the library's images are not on it, and `Put them back` places them beside the layout.
 
 ## Sub-features
 
@@ -13,6 +13,10 @@ The canvas view of the library shows every saved image on a free canvas. Each co
 - `canvas-collection` shows a collection's images on its own canvas. A move there does not move the image on the library's canvas.
 - `canvas-drop` saves image files dropped on the canvas and places them with one `canvas.apply` add each: the first centered on the drop point, each next one 440 units to the right. On a collection's canvas the image joins the collection.
 - `canvas-paste` places a pasted image, or one picked with `Add images` in the panel, at the center of the view, in a row the same way.
+- `canvas-remove` removes the selected images with one `canvas.apply` call of `remove` ops, by Delete, Backspace, or `Remove from canvas`. On a collection's canvas the button is `Remove from collection`, and the image leaves the collection.
+- `canvas-undo` undoes and redoes the page's moves, removals, and adds with one `canvas.apply` call each, by Mod+Z, Mod+Shift+Z, Ctrl+Y, or the `Undo` and `Redo` buttons. An undo that the server state no longer allows shows "That change could not be undone." and changes nothing.
+- `canvas-keys` maps Delete and Backspace, Mod+Z, Mod+Shift+Z, Ctrl+Y, Mod+A to select every image, and Escape to clear the selection. No shortcut fires while a text field has focus.
+- `canvas-put-back` shows on the library's canvas how many of its images are not on it, and `Put them back` places them to the right of the layout. It is one edit, so undo takes them off again.
 - `canvas-display` swaps an image's thumbnail for its 2048 px copy once its longer edge passes 512 device pixels on screen, at the same size.
 
 ## How to get to it (user POV)
@@ -43,9 +47,13 @@ Preconditions:
 - **Drop.** Send a `drop` that carries files to `[data-testid="canvas"]` with `send` from `apps/web/checks/browser.ts`, with the drop point as its last argument. One `[role="status"] li` per file appears in the panel. Wait for `data-shown-thumbnails` to count the new images. `canvas.open` returns the first centered on `toWorld` of the drop point and each next one `placedEdge + placementGap` to the right.
 - **Paste or pick.** Send a `paste` that carries a file, or run `page.getByLabel("Add images").setInputFiles(...)` on the canvas page. The image lands centered on the world point at the center of `[data-testid="canvas"]`.
 - **Add through the API.** `canvas.apply` with `{ op: "add", refId, x, y }` places a Ref at a point, brings back a removed item, or moves a live one. On a collection's canvas it makes the Ref a member.
+- **Remove.** Select an image and run `page.keyboard.press("Delete")`. `data-items` drops by one, `canvas.open` no longer returns the image, and the canvas's `rev` rose by one. `page.getByRole("button", { name: "Remove from canvas" })` does the same, and is disabled with nothing selected.
+- **Undo and redo.** Run `page.keyboard.press("ControlOrMeta+z")`, `"ControlOrMeta+Shift+z"`, or `"Control+y"`, or click `Undo` or `Redo`. Each is one `canvas.apply` call. A removal comes back with the same `x`, `y`, `scale`, and `z`. `Redo` is disabled after a new edit.
+- **Select all.** Run `page.keyboard.press("ControlOrMeta+a")`. `data-selected` equals `data-items`. `Escape` sets it to 0.
+- **Put back.** Remove an image from the library's canvas, by another call or on the page, and reload. `page.getByTestId("off-canvas")` carries `data-count`. Click `Put them back`. The image is placed to the right of the layout and the line goes away.
 - **Proof.** Screenshot the canvas after each step that changes it. Read the saved positions with `canvas.open` or `canvas.changes` through the API, or with `verify.sh rows canvasItems`, filtered to the canvas's ID.
 
-`apps/web/checks/canvas-page.ts` runs this journey. `apps/web/checks/canvas-drop.ts` covers dropping, pasting, and picking images on the canvas. `apps/web/checks/canvas.ts` covers the canvas functions and the rules between two users, and `apps/web/checks/canvas-add.ts` covers the `add` op. `apps/web/checks/collection-canvas.ts` covers a collection's canvas through the API. `apps/web/checks/renderer.ts` draws a local bitmap with the renderer and needs neither sign-in nor R2.
+`apps/web/checks/canvas-page.ts` runs this journey. `apps/web/checks/canvas-undo.ts` covers removing, undo and redo, the keymap, and putting images back. `apps/web/checks/canvas-drop.ts` covers dropping, pasting, and picking images on the canvas. `apps/web/checks/canvas.ts` covers the canvas functions and the rules between two users, and `apps/web/checks/canvas-add.ts` covers the `add` op. `apps/web/checks/collection-canvas.ts` covers a collection's canvas through the API. `apps/web/checks/renderer.ts` draws a local bitmap with the renderer and needs neither sign-in nor R2.
 
 ## Gotchas
 
@@ -59,4 +67,7 @@ Preconditions:
 - The canvas fits the camera to every item once, when the page opens, at no more than 100%. Reload to reset the camera.
 - The panel now holds `Add images` and the outcome list, so it covers more of the top-left corner. Drop and click away from it.
 - `data-shown-thumbnails="0"` shows before the first snapshot loads. An image is placed when its save ends, so a drop that early is still placed once the snapshot has loaded by then.
+- A selected image's outline is 2 px wide and covers its edges. Allow 3 px when you compare its drawn rectangle.
+- The count of images off the library's canvas comes from the snapshot. A removal on the page shows in it after a reload.
+- The canvas page has no text field of its own. To prove that shortcuts leave a text field alone, add one with `page.evaluate` and focus it.
 - Give a second page the same viewport as the first, or its view is fitted differently and the panel can cover the point you read.

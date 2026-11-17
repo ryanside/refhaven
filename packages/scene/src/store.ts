@@ -1,4 +1,5 @@
 import { fitCamera, panBy, zoomAt } from "./camera";
+import { type Entry, type ItemOp, moveEntry, movesOf } from "./history";
 import { topmostAt } from "./hit";
 import { type Camera, type Point, screenToWorld } from "./index";
 import type { Size } from "./layout";
@@ -43,11 +44,8 @@ export type Gesture =
       readonly collapseTo: string | null;
     };
 
-/** The moves of one finished drag, to save as one call. */
-export type Drop = {
-  readonly save: number;
-  readonly moves: ReadonlyArray<Point & { readonly key: string }>;
-};
+/** One finished drag: the edit to record and save, and the save that holds its positions. */
+export type Drop = { readonly save: number; readonly entry: Entry };
 
 /** What React reads. A new object only when one of its values changes. */
 export type Summary = {
@@ -67,7 +65,8 @@ const fromServer = ({ scale, deletedAt, ...item }: ServerItem): CanvasItem => ({
 
 /**
  * The canvas's state outside React: items, camera, selection, and gesture. A moved item keeps its
- * local position from the start of the drag until the server state includes the save.
+ * local position from the start of the drag, or from `hold`, until the server state includes the
+ * save.
  */
 export function createSceneStore() {
   let rev = -1;
@@ -143,6 +142,16 @@ export function createSceneStore() {
           };
   };
 
+  /** Shows the positions the ops set at once, and keeps them until their save is settled. */
+  const hold = (ops: ReadonlyArray<ItemOp>) => {
+    const save = ++saves;
+    for (const { key, x, y } of movesOf(ops)) {
+      if (server.has(key)) pending.set(key, { x, y, save, rev: null });
+    }
+    changed();
+    return save;
+  };
+
   const setCamera = (next: Camera) => {
     camera = next;
     changed();
@@ -159,6 +168,8 @@ export function createSceneStore() {
     viewport: () => viewport,
     selection: () => selection,
     gesture: () => gesture,
+    /** The server revision the store has applied. */
+    rev: () => rev,
 
     /**
      * Replaces every item with a snapshot, and returns whether it did. A snapshot older than the
@@ -194,7 +205,15 @@ export function createSceneStore() {
       changed();
     },
 
-    /** The save of a drop wrote `savedRev`. Its items show the server state from that rev on. */
+    hold,
+
+    /** Whether every item the ops patch or remove is on the canvas, or added by the same ops. */
+    applies(ops: ReadonlyArray<ItemOp>) {
+      const added = new Set(ops.flatMap((op) => (op.op === "add" ? [op.refId] : [])));
+      return ops.every((op) => op.op === "add" || server.has(op.key) || added.has(op.key));
+    },
+
+    /** The save of a hold wrote `savedRev`. Its items show the server state from that rev on. */
     acknowledge(save: number, savedRev: number) {
       for (const local of pending.values()) {
         if (local.save === save) local.rev = savedRev;
@@ -203,7 +222,7 @@ export function createSceneStore() {
       changed();
     },
 
-    /** The save of a drop failed, so its items go back to the server state. */
+    /** The save of a hold failed, so its items go back to the server state. */
     reject(save: number) {
       for (const [key, local] of pending) {
         if (local.save === save) pending.delete(key);
@@ -222,6 +241,16 @@ export function createSceneStore() {
 
     zoom(screen: Point, factor: number) {
       setCamera(zoomAt(camera, screen, camera.zoom * factor));
+    },
+
+    selectAll() {
+      selection = new Set(server.keys());
+      changed();
+    },
+
+    clearSelection() {
+      selection = new Set();
+      changed();
     },
 
     startPan(screen: Point) {
@@ -279,18 +308,17 @@ export function createSceneStore() {
       }
     },
 
-    /** Ends the gesture. Returns the moves to save when it was a drag that moved. */
+    /** Ends the gesture. Returns the move to save when it was a drag that moved. */
     release(): Drop | null {
       const ended = gesture;
       if (ended.kind === "dragging" && ended.moved) {
-        const save = ++saves;
-        const moves = items()
+        const to = items()
           .filter((item) => ended.origins.has(item.key))
           .map(({ key, x, y }) => ({ key, x, y }));
-        for (const { key, x, y } of moves) pending.set(key, { x, y, save, rev: null });
+        const from = [...ended.origins].map(([key, { x, y }]) => ({ key, x, y }));
         gesture = { kind: "idle" };
-        changed();
-        return { save, moves };
+        const entry = moveEntry(from, to);
+        return { save: hold(entry.redo), entry };
       }
       if (ended.kind === "dragging" && ended.collapseTo !== null) {
         selection = new Set([ended.collapseTo]);

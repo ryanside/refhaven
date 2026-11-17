@@ -252,6 +252,24 @@ try {
   );
 
   await owner.mutation(api.library.remove, { refIds: [trashed!] });
+  // An add that names a z puts the item at that place in the stack, not on top. This is how undo
+  // restores a removed item with one op.
+  const lowest = [...(await owner.mutation(api.canvas.open, {})).items].sort((one, other) =>
+    one.z < other.z ? -1 : 1,
+  )[0]!;
+  await owner.mutation(api.canvas.apply, { canvasId, ops: [{ op: "remove", key: lowest.key }] });
+  await owner.mutation(api.canvas.apply, {
+    canvasId,
+    ops: [{ op: "add", refId: lowest.refId, x: lowest.x, y: lowest.y, z: lowest.z }],
+  });
+  const restored = (await owner.mutation(api.canvas.open, {})).items.find(
+    (item) => item.key === lowest.key,
+  );
+  assert(
+    restored?.z === lowest.z && restored.x === lowest.x && restored.scale === lowest.scale,
+    `an add that names a z brings a removed item back at that z, under the others: ${restored?.z}`,
+  );
+
   const libraryRev = (await changesSince(movedRev)).rev;
   await signInWithPasskey(second.page, `check-canvas-add-b-${stamp}`);
   await save(second.page, [

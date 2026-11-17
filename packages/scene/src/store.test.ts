@@ -1,5 +1,12 @@
 import { expect, test } from "vitest";
-import { type Point, type ServerItem, createSceneStore, worldToScreen } from "./index";
+import {
+  type ItemOp,
+  type Point,
+  type ServerItem,
+  createSceneStore,
+  movesOf,
+  worldToScreen,
+} from "./index";
 
 const serverItem = (key: string, x: number, z: string): ServerItem => ({
   key,
@@ -74,7 +81,7 @@ test("a press that moves less than the threshold is a click and saves nothing", 
   expect(at("a")).toEqual({ x: 0, y: 0 });
 });
 
-test("a drag moves the whole selection and returns one drop with a move per item", () => {
+test("a drag moves the whole selection and returns one entry that undoes and redoes the move", () => {
   const { store, screen, at, drag } = setUp();
   store.press(screen({ x: 0, y: 0 }), false);
   store.release();
@@ -83,9 +90,15 @@ test("a drag moves the whole selection and returns one drop with a move per item
 
   const drop = drag("a", { x: 40, y: -20 });
 
-  expect([...drop!.moves].sort((m, n) => (m.key < n.key ? -1 : 1))).toEqual([
+  const byKey = (ops: ReadonlyArray<ItemOp>) =>
+    movesOf(ops).sort((m, n) => (m.key < n.key ? -1 : 1));
+  expect(byKey(drop!.entry.redo)).toEqual([
     { key: "a", x: 40, y: -20 },
     { key: "b", x: 340, y: -20 },
+  ]);
+  expect(byKey(drop!.entry.undo)).toEqual([
+    { key: "a", x: 0, y: 0 },
+    { key: "b", x: 300, y: 0 },
   ]);
   expect([at("a"), at("b")]).toEqual([
     { x: 40, y: -20 },
@@ -117,7 +130,7 @@ test("dragging an unselected item selects it alone and moves only it", () => {
   const drop = drag("b", { x: 50, y: 0 });
 
   expect([...store.selection()]).toEqual(["b"]);
-  expect(drop?.moves).toEqual([{ key: "b", x: 350, y: 0 }]);
+  expect(movesOf(drop!.entry.redo)).toEqual([{ key: "b", x: 350, y: 0 }]);
 });
 
 test("the gesture is panning between a pan press and its release, and moves the camera", () => {
@@ -228,7 +241,7 @@ test("when one of two dragged items is deleted, the drop moves only the other", 
 
   store.applyChanges({ rev: 2, items: [{ ...a, deletedAt: 1 }] });
 
-  expect(store.release()?.moves).toEqual([{ key: "b", x: 340, y: 0 }]);
+  expect(movesOf(store.release()!.entry.redo)).toEqual([{ key: "b", x: 340, y: 0 }]);
 });
 
 test("an item deleted during a click on it is not selected by the release", () => {
@@ -283,4 +296,77 @@ test("React's summary keeps its identity while a drag moves items", () => {
   expect(store.summary()).toBe(during);
   store.zoom({ x: 0, y: 0 }, 2);
   expect(store.summary()).not.toBe(during);
+});
+
+const patch = (key: string, x: number, y: number): ItemOp => ({
+  op: "patch",
+  key,
+  fields: { x, y },
+});
+
+test("a hold shows its positions at once and keeps them through a server change until its save", () => {
+  const { store, at } = setUp();
+  const save = store.hold([patch("a", -100, 50)]);
+  expect(at("a")).toEqual({ x: -100, y: 50 });
+
+  store.applyChanges({ rev: 2, items: [{ ...a, x: 900 }] });
+  expect(at("a")).toEqual({ x: -100, y: 50 });
+
+  store.acknowledge(save, 3);
+  store.applyChanges({ rev: 3, items: [{ ...a, x: -100, y: 50 }] });
+  store.applyChanges({ rev: 4, items: [{ ...a, x: 7 }] });
+  expect(at("a")).toEqual({ x: 7, y: 0 });
+});
+
+test("an undo held right after its drag keeps its positions when the drag's save is settled", () => {
+  const { store, at, drag } = setUp();
+  const drop = drag("a", { x: 100, y: 0 })!;
+  const undo = store.hold(drop.entry.undo);
+
+  store.acknowledge(drop.save, 2);
+  store.applyChanges({ rev: 2, items: [{ ...a, x: 100 }] });
+  expect(at("a")).toEqual({ x: 0, y: 0 });
+
+  store.reject(drop.save);
+  expect(at("a")).toEqual({ x: 0, y: 0 });
+
+  store.reject(undo);
+  expect(at("a")).toEqual({ x: 100, y: 0 });
+});
+
+test("a hold leaves alone ops that set no position and items that are not on the canvas", () => {
+  const { store, at } = setUp();
+  store.hold([
+    { op: "remove", key: "a" },
+    { op: "add", refId: "ref-c", x: 5, y: 5 },
+    { op: "patch", key: "b", fields: { z: "a5" } },
+    patch("gone", 1, 1),
+  ]);
+
+  expect([at("a"), at("b"), at("gone")]).toEqual([{ x: 0, y: 0 }, { x: 300, y: 0 }, undefined]);
+});
+
+test("select all selects every item, and clear empties the selection", () => {
+  const { store } = setUp();
+
+  store.selectAll();
+  expect([...store.selection()].sort()).toEqual(["a", "b"]);
+  expect(store.summary().selected).toBe(2);
+
+  store.clearSelection();
+  expect(store.selection().size).toBe(0);
+});
+
+test("ops apply when every item they patch or remove is on the canvas or added by the same ops", () => {
+  const { store } = setUp();
+
+  expect(store.applies([patch("a", 1, 1), { op: "remove", key: "b" }])).toBe(true);
+  expect(store.applies([patch("a", 1, 1), patch("gone", 1, 1)])).toBe(false);
+  expect(store.applies([{ op: "remove", key: "gone" }])).toBe(false);
+  expect(
+    store.applies([
+      { op: "add", refId: "gone", x: 0, y: 0 },
+      { op: "patch", key: "gone", fields: { z: "a0" } },
+    ]),
+  ).toBe(true);
 });

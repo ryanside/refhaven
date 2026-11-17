@@ -1,5 +1,5 @@
 import { api } from "@refhaven/backend/api";
-import { type Camera, type Point, screenToWorld, worldToScreen } from "@refhaven/scene";
+import { type Camera, type Point, screenToWorld, topmostAt, worldToScreen } from "@refhaven/scene";
 import type { FunctionReturnType } from "convex/server";
 import { PNG } from "pngjs";
 import type { Page } from "playwright";
@@ -149,4 +149,20 @@ export const rectOnPage = (view: PageView, item: Item): Rect => {
     right: topLeft.x + width * view.camera.zoom,
     bottom: topLeft.y + height * view.camera.zoom,
   };
+};
+
+/** A point of the item that no other item covers. */
+export const exposedPoint = (item: Item, items: ReadonlyArray<Item>): Point => {
+  const { width, height } = worldSize(item);
+  for (const [fx, fy] of [
+    [0, 0],
+    [0.35, 0],
+    [-0.35, 0],
+    [0, 0.35],
+    [0, -0.35],
+  ] as const) {
+    const point = { x: item.x + fx * width, y: item.y + fy * height };
+    if (topmostAt(sized(items), point)?.key === item.key) return point;
+  }
+  throw new Error(`FAIL item ${item.key} has no exposed point to test`);
 };

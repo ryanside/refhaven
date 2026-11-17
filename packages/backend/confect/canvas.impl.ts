@@ -67,8 +67,12 @@ const imageItem = (placed: Size & Placement & { readonly refId: Id<"refs"> }, z:
   z,
 });
 
-/** Opens or makes the canvas of a set, and places each Ref of the set that has no item. */
-const openSet = (collectionId: Id<"collections"> | undefined) =>
+/**
+ * Opens or makes the canvas of a set, and places each Ref of the set that has no item. On the
+ * library's canvas a Ref whose item was removed stays off it, unless `placeRemoved` asks for it,
+ * and `removed` counts the Refs that stay off.
+ */
+const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: boolean) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
     const reader = yield* DatabaseReader;
@@ -103,11 +107,13 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
     // not placed again. On a collection's canvas removal means leaving the collection, so a member
     // with a removed item was added again, and its item comes back.
     const placedRefs = new Set(
-      (collectionId === undefined ? items : shown).map((item) => item.refId),
+      (collectionId === undefined && !placeRemoved ? items : shown).map((item) => item.refId),
     );
+    const shownRefs = new Set(shown.map((item) => item.refId));
     const unplaced = live.filter((ref) => !placedRefs.has(ref._id));
+    const removed = live.filter((ref) => !shownRefs.has(ref._id)).length - unplaced.length;
     if (unplaced.length === 0) {
-      return { canvasId, rev: openedRev, items: shown.map(toItem) };
+      return { canvasId, rev: openedRev, items: shown.map(toItem), placed: 0, removed };
     }
 
     const sizes = yield* Effect.forEach(unplaced, sizeOf);
@@ -131,16 +137,26 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
       },
       { discard: true },
     );
-    return { canvasId, rev, items: [...shown.map(toItem), ...added] };
+    return {
+      canvasId,
+      rev,
+      items: [...shown.map(toItem), ...added],
+      placed: added.length,
+      removed,
+    };
   }).pipe(Effect.orDie);
 
-const open = FunctionImpl.make(databaseSchema, canvas, "open", ({ collectionId }) =>
-  Effect.gen(function* () {
-    if (collectionId !== undefined) {
-      yield* ownedCollection(collectionId);
-    }
-    return yield* openSet(collectionId);
-  }),
+const open = FunctionImpl.make(
+  databaseSchema,
+  canvas,
+  "open",
+  ({ collectionId, placeRemoved = false }) =>
+    Effect.gen(function* () {
+      if (collectionId !== undefined) {
+        yield* ownedCollection(collectionId);
+      }
+      return yield* openSet(collectionId, placeRemoved);
+    }),
 );
 
 // An item of a Ref in the trash goes out as removed, at the time of the delete. Trashing and
@@ -220,15 +236,17 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
     const writer = yield* DatabaseWriter;
     const rev = found.rev + 1;
     yield* writer.table("canvases").patch(canvasId, { rev }).pipe(Effect.orDie);
-    const adds = ops.flatMap((op, index) => (op.op === "add" ? [index] : []));
+    // An add with no z goes above every item, and above every z that this call writes.
+    const adds = ops.flatMap((op, index) => (op.op === "add" && op.z === undefined ? [index] : []));
     const below =
       adds.length === 0
         ? []
         : [
             ...(yield* itemsOf(canvasId)).map((item) => item.z),
-            ...ops.flatMap((op) =>
-              op.op === "patch" && op.fields.z !== undefined ? [op.fields.z] : [],
-            ),
+            ...ops.flatMap((op) => {
+              const z = op.op === "patch" ? op.fields.z : op.op === "add" ? op.z : undefined;
+              return z === undefined ? [] : [z];
+            }),
           ];
     const addedZ = new Map(Arr.zip(adds, zAbove(below, adds.length)));
     yield* Effect.forEach(
@@ -236,7 +254,7 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
       (op, index) =>
         Effect.gen(function* () {
           if (op.op === "add") {
-            return yield* place(found, rev, op, addedZ.get(index)!);
+            return yield* place(found, rev, op, op.z ?? addedZ.get(index)!);
           }
           const item = yield* reader
             .table("canvasItems")
