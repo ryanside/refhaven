@@ -28,6 +28,7 @@ import {
   toPage,
   until,
   waitForCanvas,
+  openCanvas,
 } from "./canvas-screen";
 
 /** The colors the page draws the note color names in. */
@@ -155,7 +156,7 @@ try {
   const tealRef = await refIdOf("teal");
 
   const owner: ConvexHttpClient = await clientFor(page);
-  const snapshot = () => owner.mutation(api.canvas.open, {});
+  const snapshot = () => openCanvas(owner, {});
   const placed = await snapshot();
   const { canvasId } = placed;
   const imageKey = (refId: string) =>

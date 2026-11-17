@@ -1,7 +1,6 @@
 import { api } from "@refhaven/backend/api";
 import { type Point, topmostAt } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
-import type { FunctionReturnType } from "convex/server";
 import type { Page, Route } from "playwright";
 import {
   appUrl,
@@ -14,6 +13,7 @@ import {
 import {
   type Item,
   type Rgb,
+  clearOfPanel,
   exposedPoint,
   near,
   pageView,
@@ -33,9 +33,11 @@ import {
   waitForCanvas,
   worldSize,
   refOf,
+  openCanvas,
+  canvasChanges,
 } from "./canvas-screen";
 
-type Snapshot = FunctionReturnType<typeof api.canvas.open>;
+type Snapshot = Awaited<ReturnType<typeof openCanvas>>;
 
 const images = [
   { name: "red.png", color: [210, 40, 40], width: 600, height: 400 },
@@ -46,7 +48,7 @@ const images = [
 const canvasUrl = `${appUrl}/library?view=canvas`;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
-const openCanvas = async (page: Page, count: number) => {
+const showCanvas = async (page: Page, count: number) => {
   await page.goto(canvasUrl);
   await waitForCanvas(page, count);
 };
@@ -73,10 +75,10 @@ const ctrlWheel = async (page: Page, at: Point, deltaY: number) => {
   await page.keyboard.up("Control");
 };
 
-const snapshotOf = (owner: ConvexHttpClient) => owner.mutation(api.canvas.open, {});
+const snapshotOf = (owner: ConvexHttpClient) => openCanvas(owner, {});
 
 const changesSince = (owner: ConvexHttpClient, canvasId: Snapshot["canvasId"], rev: number) =>
-  owner.query(api.canvas.changes, { canvasId, rev });
+  canvasChanges(owner, { canvasId, rev });
 
 const { browser, page } = await openPageWithPasskeyDevice();
 watchConsole(page);
@@ -106,7 +108,7 @@ try {
 
   await page.getByRole("link", { name: "Canvas" }).click();
   await page.waitForURL(canvasUrl);
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   const owner = await clientFor(page);
   const opened = await snapshotOf(owner);
   const { canvasId } = opened;
@@ -198,7 +200,7 @@ try {
   await settle(page);
   assert((await readout(page)).camera.zoom === 0.01, "zoom stops at 1%");
 
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   view = await pageView(page);
   await click(page, toPage(view, red));
   await until(
@@ -339,12 +341,13 @@ try {
   );
 
   await page.reload();
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   view = await pageView(page);
   png = await screenshot(page, "05-reloaded.png");
   const saved = (await snapshotOf(owner)).items;
+  let clear = await clearOfPanel(page, view);
   for (const item of saved) {
-    const point = exposedPoint(item, saved);
+    const point = exposedPoint(item, saved, clear);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
       `after a reload the ${item.width}x${item.height} image is drawn at its saved position ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
@@ -354,7 +357,7 @@ try {
   const second = await page.context().newPage();
   watchConsole(second);
   await second.setViewportSize({ width: 1400, height: 900 });
-  await openCanvas(second, 3);
+  await showCanvas(second, 3);
   const greenSaved = saved.find((item) => item.key === green.key)!;
   await drag(page, toPage(view, greenSaved), { x: -100, y: -50 });
   const greenMoved = await until(
@@ -410,7 +413,7 @@ try {
     held.push(route);
   });
   await page.reload();
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   view = await pageView(page);
   const centerOfView = { x: view.box.x + view.box.width / 2, y: view.box.y + view.box.height / 2 };
   const greenNow = toPage(view, greenMoved);
@@ -452,11 +455,14 @@ try {
     `the 2048 px copy loaded from ${displayResponses.map(({ path, status }) => `${path} (${status})`).join(", ")}`,
   );
 
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   view = await pageView(page);
   const beforeBlur = await snapshotOf(owner);
   const dragged = beforeBlur.items.find((item) => item.key === red.key)!;
-  const grab = toPage(view, exposedPoint(dragged, beforeBlur.items));
+  const grab = toPage(
+    view,
+    exposedPoint(dragged, beforeBlur.items, await clearOfPanel(page, view)),
+  );
   await page.mouse.move(grab.x, grab.y);
   await page.mouse.down();
   await page.mouse.move(grab.x + 40, grab.y + 20, { steps: 4 });
@@ -468,7 +474,7 @@ try {
   );
   await page.mouse.move(grab.x + 300, grab.y + 200, { steps: 4 });
   await page.mouse.up();
-  await click(page, toPage(view, exposedPoint(dropped, [dropped])));
+  await click(page, toPage(view, exposedPoint(dropped, [dropped], await clearOfPanel(page, view))));
   await until(
     () => readout(page),
     (r) => r.selected === 1,
@@ -517,7 +523,7 @@ try {
   await page.getByRole("link", { name: "Canvas" }).click();
   await page.waitForURL(`${appUrl}/c/${board}?view=canvas`);
   await waitForCanvas(page, 3);
-  const collectionSnapshot = () => owner.mutation(api.canvas.open, { collectionId: board });
+  const collectionSnapshot = () => openCanvas(owner, { collectionId: board });
   const inCollection = await collectionSnapshot();
   view = await pageView(page);
   png = await screenshot(page, "09-collection-canvas.png");
@@ -573,8 +579,9 @@ try {
   view = await pageView(page);
   png = await screenshot(page, "10-library-after-collection.png");
   const libraryLayout = (await snapshotOf(owner)).items;
+  clear = await clearOfPanel(page, view);
   for (const item of libraryLayout) {
-    const point = exposedPoint(item, libraryLayout);
+    const point = exposedPoint(item, libraryLayout, clear);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
       `going from the collection's canvas to the library's shows the library's layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
@@ -588,8 +595,9 @@ try {
   view = await pageView(page);
   png = await screenshot(page, "11-collection-again.png");
   const collectionLayout = (await collectionSnapshot()).items;
+  clear = await clearOfPanel(page, view);
   for (const item of collectionLayout) {
-    const point = exposedPoint(item, collectionLayout);
+    const point = exposedPoint(item, collectionLayout, clear);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
       `going back to the collection's canvas shows its own layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,

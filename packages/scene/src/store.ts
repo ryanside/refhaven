@@ -1,4 +1,5 @@
 import { fitCamera, panBy, zoomAt } from "./camera";
+import { grouped } from "./group";
 import {
   type Entry,
   type ItemFields,
@@ -26,19 +27,46 @@ export type Content =
   | ({ readonly kind: "note" } & Omit<NoteFields, keyof Size>);
 
 /**
+ * An item's link to a group, as it is saved: the group's key. It stays when the group is removed,
+ * so it may name a group that is not on the canvas. A held patch that takes the item out of its
+ * group makes it null until the server state holds the save.
+ */
+type Linked = { readonly parent?: string | null };
+
+/**
  * An item as the server sends it. `width` and `height` are its size at scale 1: an image's pixel
  * size, or a note's box in world units.
  */
 export type ServerItem = Pose &
   Size &
-  Content & { readonly key: string; readonly z: string; readonly deletedAt?: number };
+  Content &
+  Linked & { readonly key: string; readonly z: string; readonly deletedAt?: number };
 
-/** An item on the canvas, sized in world units: its size at scale 1, kept as `base`, times its scale. */
+/** A group as the server sends it. It has no place, so the store keeps only its key. */
+export type ServerGroup = {
+  readonly kind: "group";
+  readonly key: string;
+  readonly deletedAt?: number;
+};
+
+/**
+ * An item on the canvas, sized in world units: its size at scale 1, kept as `base`, times its scale.
+ * `group` is the group it is in: its `parent`, while that group is on the canvas.
+ */
 export type CanvasItem = Pose &
   Size &
-  Content & { readonly key: string; readonly z: string; readonly base: Size };
+  Content &
+  Linked & {
+    readonly key: string;
+    readonly z: string;
+    readonly base: Size;
+    readonly group?: string;
+  };
 
-export type ServerState = { readonly rev: number; readonly items: ReadonlyArray<ServerItem> };
+export type ServerState = {
+  readonly rev: number;
+  readonly items: ReadonlyArray<ServerItem | ServerGroup>;
+};
 
 /**
  * What a gesture that edits the selection holds: the world point it was pressed at, the pointer in
@@ -123,7 +151,8 @@ const sized = ({ deletedAt, ...item }: ServerItem): CanvasItem => ({
 /**
  * The canvas's state outside React: items, camera, selection, and gesture. An edited item keeps its
  * local pose from the start of the gesture, or from `hold`, until the server state includes the
- * save. A note this client adds shows at once, because its key is made here.
+ * save. A note or a group this client adds is there at once, because its key is made here. The
+ * selection holds whole groups, by `grouped`, except while a gesture edits it.
  */
 export function createSceneStore() {
   let rev = -1;
@@ -135,14 +164,22 @@ export function createSceneStore() {
   let editing: string | null = null;
   let saves = 0;
   const server = new Map<string, ServerItem>();
+  const groups = new Set<string>();
   // Each held field remembers the save that set it, so a save that fails takes back only its own.
-  type Held = { readonly value: number | string; readonly save: number; rev: number | null };
+  type Held = {
+    readonly value: number | string | null;
+    readonly save: number;
+    rev: number | null;
+  };
   const pending = new Map<string, Map<keyof ItemFields, Held>>();
   const heldFields = (key: string): ItemFields =>
     Object.fromEntries([...(pending.get(key) ?? [])].map(([field, { value }]) => [field, value]));
   // A note added by a save that the server state does not hold yet.
   const added = new Map<string, { item: ServerItem; save: number; rev: number | null }>();
+  // A group added the same way.
+  const addedGroups = new Map<string, { save: number; rev: number | null }>();
   const exists = (key: string) => server.has(key) || added.has(key);
+  const isGroup = (key: string) => groups.has(key) || addedGroups.has(key);
   const all = () => [
     ...server.values(),
     ...[...added.values()].flatMap(({ item }) => (server.has(item.key) ? [] : [item])),
@@ -204,11 +241,22 @@ export function createSceneStore() {
   const items = (): ReadonlyArray<CanvasItem> => {
     if (shown) return shown;
     const now = live();
-    shown = all().map((item) => sized({ ...item, ...heldFields(item.key), ...now?.get(item.key) }));
+    shown = all().map((item) => {
+      const held = { ...item, ...heldFields(item.key), ...now?.get(item.key) };
+      return held.parent && isGroup(held.parent)
+        ? { ...sized(held), group: held.parent }
+        : sized(held);
+    });
     return shown;
   };
 
   const selected = () => items().filter((item) => selection.has(item.key));
+
+  /** Selects the items `keys` names, and every other item of a group that one of them is in. */
+  const select = (keys: Iterable<string>) => {
+    shown = null;
+    selection = grouped(items(), keys);
+  };
 
   const settle = () => {
     for (const [key, held] of pending) {
@@ -217,56 +265,76 @@ export function createSceneStore() {
       }
       if (held.size === 0 || !exists(key)) pending.delete(key);
     }
-    for (const [key, { rev: savedRev }] of added) {
-      if (savedRev !== null && savedRev <= rev) added.delete(key);
+    for (const adds of [added, addedGroups]) {
+      for (const [key, { rev: savedRev }] of adds) {
+        if (savedRev !== null && savedRev <= rev) adds.delete(key);
+      }
     }
   };
 
   /**
-   * Lets go of every item the server state no longer holds: in the selection, in the pending
-   * edits, and in the gesture. A gesture whose last item left has nothing to edit, so it ends.
+   * Keeps the selection to whole groups of the items on the canvas, after a change to the items or
+   * to what is held. A gesture that edits the selection moves the items it began with, so while one
+   * runs the selection only lets go of items that left. `release` takes in the rest of each group.
+   */
+  const reselect = () => {
+    if (gesture.kind === "dragging" || gesture.kind === "resizing" || gesture.kind === "rotating") {
+      selection = new Set([...selection].filter(exists));
+    } else {
+      select(selection);
+    }
+  };
+
+  /**
+   * Lets go of every item the server state no longer holds: in the pending edits, in the gesture,
+   * and in the selection. A gesture whose last item left has nothing to edit, so it ends.
    */
   const forgetMissing = () => {
-    selection = new Set([...selection].filter(exists));
     settle();
-    if (gesture.kind === "idle" || gesture.kind === "panning" || gesture.kind === "marquee") return;
-    const origins = new Map([...gesture.origins].filter(([key]) => exists(key)));
-    if (origins.size === 0) {
-      gesture = { kind: "idle" };
-    } else if (gesture.kind === "dragging") {
-      const { collapseTo } = gesture;
-      gesture = {
-        ...gesture,
-        origins,
-        collapseTo: collapseTo !== null && exists(collapseTo) ? collapseTo : null,
-      };
-    } else {
-      gesture = { ...gesture, origins };
+    if (gesture.kind === "dragging" || gesture.kind === "resizing" || gesture.kind === "rotating") {
+      const origins = new Map([...gesture.origins].filter(([key]) => exists(key)));
+      if (origins.size === 0) {
+        gesture = { kind: "idle" };
+      } else if (gesture.kind === "dragging") {
+        const { collapseTo } = gesture;
+        gesture = {
+          ...gesture,
+          origins,
+          collapseTo: collapseTo !== null && exists(collapseTo) ? collapseTo : null,
+        };
+      } else {
+        gesture = { ...gesture, origins };
+      }
     }
+    reselect();
   };
 
   /**
-   * Shows the notes the ops add and the fields their patches set at once, and keeps them until
-   * their save is settled. A field held by an earlier save that is not settled yet stays, so a
-   * resize right after a turn keeps both.
+   * Shows the notes and groups the ops add and the fields their patches set at once, and keeps
+   * them until their save is settled. A field held by an earlier save that is not settled yet
+   * stays, so a resize right after a turn keeps both.
    */
   const hold = (ops: ReadonlyArray<ItemOp>) => {
     const save = ++saves;
     for (const op of ops) {
-      if (op.op !== "addNote") continue;
-      const { op: _, ...note } = op;
-      added.set(note.key, { item: { kind: "note", ...note }, save, rev: null });
+      if (op.op === "addGroup") {
+        addedGroups.set(op.key, { save, rev: null });
+      } else if (op.op === "addNote") {
+        const { op: _, ...note } = op;
+        added.set(note.key, { item: { kind: "note", ...note }, save, rev: null });
+      }
     }
     for (const { key, ...fields } of patchedFields(ops)) {
       if (!exists(key)) continue;
       const held = pending.get(key) ?? new Map<keyof ItemFields, Held>();
       for (const [field, value] of Object.entries(fields) as Array<
-        [keyof ItemFields, number | string]
+        [keyof ItemFields, number | string | null]
       >) {
         held.set(field, { value, save, rev: null });
       }
       pending.set(key, held);
     }
+    reselect();
     changed();
     return save;
   };
@@ -291,6 +359,7 @@ export function createSceneStore() {
     gesture: () => gesture,
     /** The selection's frame: one item's own rectangle, or the upright box around several. */
     frame: () => frameOf(selected()),
+    selected,
     /** The server revision the store has applied. */
     rev: () => rev,
 
@@ -303,7 +372,11 @@ export function createSceneStore() {
       if (snapshot.rev < rev) return false;
       rev = snapshot.rev;
       server.clear();
-      for (const item of snapshot.items) server.set(item.key, item);
+      groups.clear();
+      for (const item of snapshot.items) {
+        if (item.kind === "group") groups.add(item.key);
+        else server.set(item.key, item);
+      }
       forgetMissing();
       if (!fitted) {
         fitted = true;
@@ -318,7 +391,10 @@ export function createSceneStore() {
       if (changes.rev < rev) return;
       rev = changes.rev;
       for (const item of changes.items) {
-        if (item.deletedAt === undefined) {
+        if (item.kind === "group") {
+          if (item.deletedAt === undefined) groups.add(item.key);
+          else groups.delete(item.key);
+        } else if (item.deletedAt === undefined) {
           server.set(item.key, item);
         } else {
           server.delete(item.key);
@@ -330,13 +406,22 @@ export function createSceneStore() {
 
     hold,
 
-    /** Whether every item the ops patch or remove is on the canvas, or added by the same ops. */
+    /**
+     * Whether every item and group the ops patch or remove is on the canvas or added by the same
+     * ops. A `parent` is not looked at, because it may name a removed group.
+     */
     applies(ops: ReadonlyArray<ItemOp>) {
       const adding = new Set(
-        ops.flatMap((op) => (op.op === "add" ? [op.refId] : op.op === "addNote" ? [op.key] : [])),
+        ops.flatMap((op) =>
+          op.op === "add" ? [op.refId] : op.op === "patch" || op.op === "remove" ? [] : [op.key],
+        ),
       );
       return ops.every(
-        (op) => op.op === "add" || op.op === "addNote" || exists(op.key) || adding.has(op.key),
+        (op) =>
+          (op.op !== "patch" && op.op !== "remove") ||
+          exists(op.key) ||
+          isGroup(op.key) ||
+          adding.has(op.key),
       );
     },
 
@@ -347,10 +432,12 @@ export function createSceneStore() {
           if (local.save === save) local.rev = savedRev;
         }
       }
-      for (const note of added.values()) {
-        if (note.save === save) note.rev = savedRev;
+      for (const add of [...added.values(), ...addedGroups.values()]) {
+        if (add.save === save) add.rev = savedRev;
       }
+      // A held field that the server state already wrote over shows the server's value from here.
       settle();
+      reselect();
       changed();
     },
 
@@ -361,8 +448,10 @@ export function createSceneStore() {
           if (local.save === save) held.delete(field);
         }
       }
-      for (const [key, note] of added) {
-        if (note.save === save) added.delete(key);
+      for (const adds of [added, addedGroups]) {
+        for (const [key, add] of adds) {
+          if (add.save === save) adds.delete(key);
+        }
       }
       // A note that was only held is gone now, so the selection and the gesture let go of it too.
       forgetMissing();
@@ -383,7 +472,7 @@ export function createSceneStore() {
     },
 
     selectAll() {
-      selection = new Set(all().map(({ key }) => key));
+      select(all().map(({ key }) => key));
       changed();
     },
 
@@ -421,13 +510,13 @@ export function createSceneStore() {
         return;
       }
       const wasSelected = selection.has(hit.key);
-      if (shift) {
-        const next = new Set(selection);
-        if (wasSelected) next.delete(hit.key);
-        else next.add(hit.key);
-        selection = next;
+      if (shift && wasSelected) {
+        const group = grouped(items(), [hit.key]);
+        selection = new Set([...selection].filter((key) => !group.has(key)));
+      } else if (shift) {
+        select([...selection, hit.key]);
       } else if (!wasSelected) {
-        selection = new Set([hit.key]);
+        select([hit.key]);
       }
       if (selection.has(hit.key)) {
         const origins = new Map(selected().map((item) => [item.key, poseOf(item)]));
@@ -513,7 +602,7 @@ export function createSceneStore() {
               ({ key }) => key,
             )
           : [];
-        selection = new Set([...(ended.add && ended.moved ? selection : []), ...keys]);
+        select([...(ended.add && ended.moved ? selection : []), ...keys]);
         changed();
         return null;
       }
@@ -531,9 +620,12 @@ export function createSceneStore() {
           return { save: hold(entry.redo), entry };
         }
       }
-      if (ended.kind === "dragging" && !ended.moved && ended.collapseTo !== null) {
-        selection = new Set([ended.collapseTo]);
-      }
+      // An item that joined a group of the selection during the gesture joins the selection now.
+      select(
+        ended.kind === "dragging" && !ended.moved && ended.collapseTo !== null
+          ? [ended.collapseTo]
+          : selection,
+      );
       changed();
       return null;
     },

@@ -1,10 +1,35 @@
 import { api } from "@refhaven/backend/api";
 import { type Camera, type Point, screenToWorld, topmostAt, worldToScreen } from "@refhaven/scene";
-import type { FunctionReturnType } from "convex/server";
+import type { ConvexHttpClient } from "convex/browser";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { PNG } from "pngjs";
 import type { Page } from "playwright";
 
-export type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
+type Listed = FunctionReturnType<typeof api.canvas.open>["items"][number];
+
+/** An item with a place: an image or a note. */
+export type Item = Exclude<Listed, { kind: "group" }>;
+
+const placedOf = (items: ReadonlyArray<Listed>) =>
+  items.filter((item): item is Item => item.kind !== "group");
+
+/** `canvas.open` with the items that have a place. A group has none. */
+export const openCanvas = (
+  client: ConvexHttpClient,
+  args: FunctionArgs<typeof api.canvas.open> = {},
+) =>
+  client
+    .mutation(api.canvas.open, args)
+    .then((opened) => ({ ...opened, items: placedOf(opened.items) }));
+
+/** `canvas.changes` with the items that have a place. */
+export const canvasChanges = (
+  client: ConvexHttpClient,
+  args: FunctionArgs<typeof api.canvas.changes>,
+) =>
+  client
+    .query(api.canvas.changes, args)
+    .then((changes) => ({ ...changes, items: placedOf(changes.items) }));
 
 /** The Ref of an image item. A check that reads it puts only images where it reads. */
 export const refOf = (item: Item) => {
@@ -157,8 +182,21 @@ export const rectOnPage = (view: PageView, item: Item): Rect => {
   };
 };
 
-/** A point of the item that no other item covers. */
-export const exposedPoint = (item: Item, items: ReadonlyArray<Item>): Point => {
+/** A test of world points: whether the page shows each clear of the panel over the canvas's corner. */
+export const clearOfPanel = async (page: Page, view: PageView) => {
+  const panel = (await page.getByTestId("canvas-panel").boundingBox())!;
+  return (world: Point) => {
+    const point = toPage(view, world);
+    return point.x > panel.x + panel.width + 4 || point.y > panel.y + panel.height + 4;
+  };
+};
+
+/** A point of the item that no other item covers, and that `usable` takes. */
+export const exposedPoint = (
+  item: Item,
+  items: ReadonlyArray<Item>,
+  usable: (world: Point) => boolean = () => true,
+): Point => {
   const { width, height } = worldSize(item);
   for (const [fx, fy] of [
     [0, 0],
@@ -168,7 +206,7 @@ export const exposedPoint = (item: Item, items: ReadonlyArray<Item>): Point => {
     [0, -0.35],
   ] as const) {
     const point = { x: item.x + fx * width, y: item.y + fy * height };
-    if (topmostAt(sized(items), point)?.key === item.key) return point;
+    if (usable(point) && topmostAt(sized(items), point)?.key === item.key) return point;
   }
   throw new Error(`FAIL item ${item.key} has no exposed point to test`);
 };

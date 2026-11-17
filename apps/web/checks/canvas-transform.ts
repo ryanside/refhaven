@@ -38,6 +38,7 @@ import {
   until,
   waitForCanvas,
   refOf,
+  openCanvas,
 } from "./canvas-screen";
 
 const red = { name: "red.png", color: [210, 40, 40] as Rgb, width: 600, height: 400 };
@@ -48,7 +49,7 @@ const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 type Op = { op: string; key?: string; fields?: Record<string, unknown> };
 
-const snapshotOf = (owner: ConvexHttpClient) => owner.mutation(api.canvas.open, {});
+const snapshotOf = (owner: ConvexHttpClient) => openCanvas(owner, {});
 
 const rectFor = (item: Item): Rect => ({
   x: item.x,

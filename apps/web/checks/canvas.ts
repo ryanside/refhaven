@@ -1,7 +1,6 @@
 import { api } from "@refhaven/backend/api";
 import { type Box, boundsOf } from "@refhaven/scene";
 import { ConvexHttpClient } from "convex/browser";
-import type { FunctionReturnType } from "convex/server";
 import type { Page } from "playwright";
 import {
   assert,
@@ -13,9 +12,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
-import { refOf } from "./canvas-screen";
-
-type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
+import { refOf, openCanvas, canvasChanges, type Item } from "./canvas-screen";
 
 const boxOf = (item: Item) => boundsOf([item])!;
 const overlaps = (a: Box, b: Box) =>
@@ -63,7 +60,7 @@ const stamp = Date.now().toString(36);
 
 const anonymous = new ConvexHttpClient(convexUrl());
 assert(
-  (await outcome(anonymous.mutation(api.canvas.open, {}))) === "NotSignedIn",
+  (await outcome(openCanvas(anonymous, {}))) === "NotSignedIn",
   "opening a canvas without a session fails with NotSignedIn",
 );
 
@@ -90,7 +87,7 @@ try {
   );
 
   const owner = await clientFor(page);
-  const opened = await owner.mutation(api.canvas.open, {});
+  const opened = await openCanvas(owner, {});
   assert(
     opened.items.length === 3 &&
       opened.items
@@ -105,7 +102,7 @@ try {
     `the placed items do not overlap: ${opened.items.map((item) => JSON.stringify(boxOf(item)))}`,
   );
 
-  const reopened = await owner.mutation(api.canvas.open, {});
+  const reopened = await openCanvas(owner, {});
   assert(
     reopened.rev === opened.rev &&
       reopened.canvasId === opened.canvasId &&
@@ -116,7 +113,7 @@ try {
   await save(page, [
     { name: "later.png", buffer: await pngOf(page, "rgb(200, 200, 30)", 640, 480) },
   ]);
-  const grown = await owner.mutation(api.canvas.open, {});
+  const grown = await openCanvas(owner, {});
   const earlier = byKey(opened.items);
   const added = grown.items.filter((item) => !earlier.has(item.key));
   const layout = boundsOf(opened.items)!;
@@ -139,7 +136,7 @@ try {
     canvasId,
     ops: [{ op: "patch", key: moved!.key, fields: { x: 5000, y: -250 } }],
   });
-  const sinceGrown = await owner.query(api.canvas.changes, { canvasId, rev: grown.rev });
+  const sinceGrown = await canvasChanges(owner, { canvasId, rev: grown.rev });
   assert(
     movedRev === grown.rev + 1 &&
       sinceGrown.rev === movedRev &&
@@ -154,7 +151,7 @@ try {
     canvasId,
     ops: [{ op: "patch", key: xOnly!.key, fields: { x: xOnly!.x + 10 } }],
   });
-  const [patched] = (await owner.query(api.canvas.changes, { canvasId, rev: movedRev })).items;
+  const [patched] = (await canvasChanges(owner, { canvasId, rev: movedRev })).items;
   assert(
     same([patched], [{ ...xOnly!, x: xOnly!.x + 10 }]),
     `a patch that names only x leaves every other field as it was: ${JSON.stringify(patched)}`,
@@ -164,12 +161,12 @@ try {
     canvasId,
     ops: [{ op: "remove", key: removed!.key }],
   });
-  const [gone] = (await owner.query(api.canvas.changes, { canvasId, rev: xOnlyRev })).items;
+  const [gone] = (await canvasChanges(owner, { canvasId, rev: xOnlyRev })).items;
   assert(
     gone?.key === removed!.key && typeof gone.deletedAt === "number",
     `a removed item shows in changes with its deletedAt: ${gone?.deletedAt}`,
   );
-  const afterRemove = await owner.mutation(api.canvas.open, {});
+  const afterRemove = await openCanvas(owner, {});
   assert(
     afterRemove.rev === removedRev &&
       afterRemove.items.length === 3 &&
@@ -187,7 +184,7 @@ try {
       ],
     }),
   );
-  const afterMixed = await owner.query(api.canvas.changes, { canvasId, rev: removedRev });
+  const afterMixed = await canvasChanges(owner, { canvasId, rev: removedRev });
   assert(
     mixed === "ItemNotFound" && afterMixed.rev === removedRev && afterMixed.items.length === 0,
     `a call with a valid op and an unknown key fails with ${mixed}, and writes nothing: rev ${afterMixed.rev}, ${afterMixed.items.length} changes`,
@@ -216,7 +213,7 @@ try {
     );
     assert(refused.startsWith("refused"), `${label} is ${refused}`);
   }
-  const final = await owner.query(api.canvas.changes, { canvasId, rev: removedRev });
+  const final = await canvasChanges(owner, { canvasId, rev: removedRev });
   assert(final.rev === removedRev, "none of the refused calls raised rev");
 
   const workspaceId = (await rows("refs")).find((ref) => ref._id === savedRefIds[0])!.workspaceId;
@@ -252,7 +249,7 @@ try {
       { op: "patch", key: xOnly!.key, fields: { rotation: 2 } },
     ],
   });
-  const sinceRemoved = await owner.query(api.canvas.changes, { canvasId, rev: removedRev });
+  const sinceRemoved = await canvasChanges(owner, { canvasId, rev: removedRev });
   assert(
     bothRev === removedRev + 1 &&
       sinceRemoved.rev === bothRev &&
@@ -265,7 +262,7 @@ try {
 
   // The call above turned two images where they stood, so those two may overlap each other.
   // What must hold is that the image put back overlaps none.
-  const putBack = await owner.mutation(api.canvas.open, { placeRemoved: true });
+  const putBack = await openCanvas(owner, { placeRemoved: true });
   const back = putBack.items.find((item) => item.key === removed!.key);
   const layoutBefore = boundsOf(putBack.items.filter((item) => item.key !== removed!.key))!;
   assert(
@@ -282,7 +279,7 @@ try {
       ),
     `open with placeRemoved places the removed image again to the right of the layout, at rev ${putBack.rev}, names it as the one item it placed, and counts ${putBack.removed} off the canvas`,
   );
-  const putBackAgain = await owner.mutation(api.canvas.open, { placeRemoved: true });
+  const putBackAgain = await openCanvas(owner, { placeRemoved: true });
   assert(
     putBackAgain.rev === putBack.rev &&
       putBackAgain.removed === 0 &&
@@ -294,7 +291,7 @@ try {
   await signInWithPasskey(second.page, `check-canvas-b-${stamp}`);
   const other = await clientFor(second.page);
   assert(
-    (await outcome(other.query(api.canvas.changes, { canvasId, rev: 0 }))) === "CanvasNotFound",
+    (await outcome(canvasChanges(other, { canvasId, rev: 0 }))) === "CanvasNotFound",
     "a second user gets CanvasNotFound from changes on the first user's canvas",
   );
   assert(
@@ -306,10 +303,7 @@ try {
     )) === "CanvasNotFound",
     "a second user gets CanvasNotFound from apply on the first user's canvas",
   );
-  const [own, ownAgain] = await Promise.all([
-    other.mutation(api.canvas.open, {}),
-    other.mutation(api.canvas.open, {}),
-  ]);
+  const [own, ownAgain] = await Promise.all([openCanvas(other, {}), openCanvas(other, {})]);
   assert(
     own.canvasId !== canvasId && own.rev === 0 && own.items.length === 0,
     `the second user's open returns their own empty canvas: ${own.items.length} items at rev ${own.rev}`,
@@ -327,8 +321,8 @@ try {
     { name: "one.png", buffer: await pngOf(second.page, "rgb(10, 90, 160)", 500, 300) },
     { name: "two.png", buffer: await pngOf(second.page, "rgb(160, 90, 10)", 300, 500) },
   ]);
-  await Promise.all([other.mutation(api.canvas.open, {}), other.mutation(api.canvas.open, {})]);
-  const settled = await other.mutation(api.canvas.open, {});
+  await Promise.all([openCanvas(other, {}), openCanvas(other, {})]);
+  const settled = await openCanvas(other, {});
   assert(
     settled.items.length === 2 &&
       new Set(settled.items.map((item) => refOf(item))).size === 2 &&

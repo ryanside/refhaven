@@ -13,9 +13,12 @@ export const Op = Schema.Union([
     op: Schema.Literal("patch"),
     key: ItemKey,
     // A note's own fields too. Which of these an item takes depends on its kind, so apply checks it.
-    fields: Schema.Struct({ ...itemTransform, ...noteFields }).mapFields(
-      Struct.map(Schema.optionalKey),
-    ),
+    // A `parent` of null takes the item out of its group.
+    fields: Schema.Struct({
+      ...itemTransform,
+      ...noteFields,
+      parent: Schema.NullOr(ItemKey),
+    }).mapFields(Struct.map(Schema.optionalKey)),
   }),
   Schema.Struct({ op: Schema.Literal("remove"), key: ItemKey }),
   // Without a `z` the item goes on top. Undoing a removal names the `z` the item had.
@@ -37,6 +40,8 @@ export const Op = Schema.Union([
     z: Schema.optionalKey(itemTransform.z),
     ...noteFields,
   }),
+  // A group under a key the client made. Under the key of a removed group it brings that row back.
+  Schema.Struct({ op: Schema.Literal("addGroup"), key: ItemKey }),
 ]);
 
 export class CanvasNotFound extends Schema.TaggedError<CanvasNotFound>()("CanvasNotFound", {}) {}
@@ -45,7 +50,7 @@ export class ItemNotFound extends Schema.TaggedError<ItemNotFound>()("ItemNotFou
   key: Schema.String,
 }) {}
 
-/** A note's key that a live item, or a removed image, already has. */
+/** A note's or a group's key that a live item, or a removed item of another kind, already has. */
 export class KeyTaken extends Schema.TaggedError<KeyTaken>()("KeyTaken", {
   key: Schema.String,
 }) {}
@@ -54,6 +59,11 @@ export class KeyTaken extends Schema.TaggedError<KeyTaken>()("KeyTaken", {
 export class FieldNotOnItem extends Schema.TaggedError<FieldNotOnItem>()("FieldNotOnItem", {
   key: Schema.String,
   field: Schema.String,
+}) {}
+
+/** A `parent` that names no group of the canvas, live or removed. */
+export class GroupNotFound extends Schema.TaggedError<GroupNotFound>()("GroupNotFound", {
+  key: Schema.String,
 }) {}
 
 export default GroupSpec.make()
@@ -94,6 +104,13 @@ export default GroupSpec.make()
       }),
       returns: () => Schema.Int,
       error: () =>
-        Schema.Union([CanvasNotFound, ItemNotFound, RefNotFound, KeyTaken, FieldNotOnItem]),
+        Schema.Union([
+          CanvasNotFound,
+          ItemNotFound,
+          RefNotFound,
+          KeyTaken,
+          FieldNotOnItem,
+          GroupNotFound,
+        ]),
     }),
   );

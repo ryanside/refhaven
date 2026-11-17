@@ -2,7 +2,6 @@ import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
 import { boundsOf } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
-import type { FunctionReturnType } from "convex/server";
 import type { Page } from "playwright";
 import {
   assert,
@@ -13,9 +12,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
-import { refOf } from "./canvas-screen";
-
-type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
+import { refOf, openCanvas, canvasChanges, type Item } from "./canvas-screen";
 
 const stamp = Date.now().toString(36);
 const sorted = (values: ReadonlyArray<string>) => [...values].sort().join();
@@ -90,8 +87,8 @@ try {
   const board = await owner.mutation(api.collections.create, { name: "Board" });
   await owner.mutation(api.collections.addRefs, { collectionId: board, refIds: members });
 
-  const library = await owner.mutation(api.canvas.open, {});
-  const collection = await owner.mutation(api.canvas.open, { collectionId: board });
+  const library = await openCanvas(owner, {});
+  const collection = await openCanvas(owner, { collectionId: board });
   assert(
     refIdsOf(collection.items) === sorted(members) &&
       collection.items.every((item) => item.key === refOf(item)),
@@ -103,9 +100,8 @@ try {
   );
   assert(
     collection.canvasId !== library.canvasId &&
-      (await owner.mutation(api.canvas.open, { collectionId: board })).canvasId ===
-        collection.canvasId &&
-      (await owner.mutation(api.canvas.open, {})).canvasId === library.canvasId,
+      (await openCanvas(owner, { collectionId: board })).canvasId === collection.canvasId &&
+      (await openCanvas(owner, {})).canvasId === library.canvasId,
     "the two canvases have different IDs, and each open finds its own again",
   );
 
@@ -113,11 +109,8 @@ try {
     canvasId: collection.canvasId,
     ops: [{ op: "patch", key: kept, fields: { x: 7777, y: -333 } }],
   });
-  const libraryAfterMove = await owner.mutation(api.canvas.open, {});
-  const movedThere = find(
-    (await owner.mutation(api.canvas.open, { collectionId: board })).items,
-    kept,
-  )!;
+  const libraryAfterMove = await openCanvas(owner, {});
+  const movedThere = find((await openCanvas(owner, { collectionId: board })).items, kept)!;
   assert(
     movedThere.x === 7777 &&
       libraryAfterMove.rev === library.rev &&
@@ -129,35 +122,35 @@ try {
     canvasId: library.canvasId,
     ops: [{ op: "patch", key: leftA, fields: { x: -4444 } }],
   });
-  const collectionAfterLibraryMove = await owner.query(api.canvas.changes, {
+  const collectionAfterLibraryMove = await canvasChanges(owner, {
     canvasId: collection.canvasId,
     rev: movedRev,
   });
   assert(
     libraryMovedRev === library.rev + 1 &&
-      find((await owner.mutation(api.canvas.open, {})).items, leftA)!.x === -4444 &&
+      find((await openCanvas(owner, {})).items, leftA)!.x === -4444 &&
       collectionAfterLibraryMove.rev === movedRev &&
       collectionAfterLibraryMove.items.length === 0,
     "a move on the library's canvas is saved there at one new rev, and writes nothing to the collection's canvas",
   );
 
-  const libraryBeforeRemove = await owner.mutation(api.canvas.open, {});
+  const libraryBeforeRemove = await openCanvas(owner, {});
   const removedRev = await owner.mutation(api.canvas.apply, {
     canvasId: collection.canvasId,
     ops: [{ op: "remove", key: applied }],
   });
   const [removedItem] = (
-    await owner.query(api.canvas.changes, { canvasId: collection.canvasId, rev: movedRev })
+    await canvasChanges(owner, { canvasId: collection.canvasId, rev: movedRev })
   ).items;
   assert(
     removedRev === movedRev + 1 &&
       removedItem?.key === applied &&
       typeof removedItem.deletedAt === "number" &&
       !(await galleryOf(owner, board)).includes(applied) &&
-      (await owner.mutation(api.canvas.open, { collectionId: board })).removed === 0,
+      (await openCanvas(owner, { collectionId: board })).removed === 0,
     "removing an item from the collection's canvas removes the image from the collection: its gallery no longer lists it, and the canvas counts no image off it",
   );
-  const libraryAfterRemove = await owner.mutation(api.canvas.open, {});
+  const libraryAfterRemove = await openCanvas(owner, {});
   assert(
     (await libraryOf(owner)).includes(applied) &&
       libraryAfterRemove.rev === libraryBeforeRemove.rev &&
@@ -166,14 +159,13 @@ try {
     "the image stays in the library, and its item on the library's canvas is left as it was",
   );
 
-  const removedRefsRev = (
-    await owner.query(api.canvas.changes, { canvasId: collection.canvasId, rev: 0 })
-  ).rev;
+  const removedRefsRev = (await canvasChanges(owner, { canvasId: collection.canvasId, rev: 0 }))
+    .rev;
   await owner.mutation(api.collections.removeRefs, {
     collectionId: board,
     refIds: [leftA, leftB],
   });
-  const leftCanvas = await owner.query(api.canvas.changes, {
+  const leftCanvas = await canvasChanges(owner, {
     canvasId: collection.canvasId,
     rev: removedRefsRev,
   });
@@ -185,17 +177,17 @@ try {
   );
   assert(
     sorted(await galleryOf(owner, board)) === kept &&
-      (await owner.mutation(api.canvas.open, { collectionId: board })).items.length === 1,
+      (await openCanvas(owner, { collectionId: board })).items.length === 1,
     "the collection and its canvas now hold only the image that stayed",
   );
 
-  const beforeReturn = await owner.mutation(api.canvas.open, { collectionId: board });
+  const beforeReturn = await openCanvas(owner, { collectionId: board });
   const layout = boundsOf(beforeReturn.items)!;
   await owner.mutation(api.collections.addRefs, {
     collectionId: board,
     refIds: [applied, leftA],
   });
-  const returned = await owner.mutation(api.canvas.open, { collectionId: board });
+  const returned = await openCanvas(owner, { collectionId: board });
   const back = [applied, leftA].map((refId) => find(returned.items, refId));
   assert(
     returned.rev === beforeReturn.rev + 1 &&
@@ -208,7 +200,7 @@ try {
       ),
     `adding two removed Refs again and opening places them again under the same keys, with no deletedAt, to the right of the layout at rev ${returned.rev}`,
   );
-  const sinceReturn = await owner.query(api.canvas.changes, {
+  const sinceReturn = await canvasChanges(owner, {
     canvasId: collection.canvasId,
     rev: beforeReturn.rev,
   });
@@ -227,31 +219,30 @@ try {
     `canvas.changes reports the returned items, and the canvas still holds one row per Ref: ${itemRows.length} rows, one of them removed`,
   );
 
-  const libraryBeforeOwnRemove = await owner.mutation(api.canvas.open, {});
+  const libraryBeforeOwnRemove = await openCanvas(owner, {});
   await owner.mutation(api.canvas.apply, {
     canvasId: library.canvasId,
     ops: [{ op: "remove", key: kept }],
   });
-  const libraryAfterOwnRemove = await owner.mutation(api.canvas.open, {});
+  const libraryAfterOwnRemove = await openCanvas(owner, {});
   assert(
     libraryAfterOwnRemove.rev === libraryBeforeOwnRemove.rev + 1 &&
       !find(libraryAfterOwnRemove.items, kept) &&
-      (await owner.mutation(api.canvas.open, {})).rev === libraryAfterOwnRemove.rev &&
+      (await openCanvas(owner, {})).rev === libraryAfterOwnRemove.rev &&
       libraryAfterOwnRemove.removed === libraryBeforeOwnRemove.removed + 1,
     "on the library's canvas a removed item is still not placed again by open, and it counts as one more image off the canvas",
   );
   assert(
     (await galleryOf(owner, board)).includes(kept) &&
-      find((await owner.mutation(api.canvas.open, { collectionId: board })).items, kept)?.x ===
-        7777,
+      find((await openCanvas(owner, { collectionId: board })).items, kept)?.x === 7777,
     "a removal on the library's canvas leaves the image in the collection and on the collection's canvas",
   );
 
   const race = await owner.mutation(api.collections.create, { name: "Race" });
   await owner.mutation(api.collections.addRefs, { collectionId: race, refIds: [kept, outside] });
   const [raceA, raceB] = await Promise.all([
-    owner.mutation(api.canvas.open, { collectionId: race }),
-    owner.mutation(api.canvas.open, { collectionId: race }),
+    openCanvas(owner, { collectionId: race }),
+    openCanvas(owner, { collectionId: race }),
   ]);
   const raceCanvases = (await rows("canvases")).filter((row) => row.collectionId === race);
   const raceRows = (await rows("canvasItems")).filter((row) => row.canvasId === raceA.canvasId);
@@ -275,13 +266,12 @@ try {
   await signInWithPasskey(second.page, `check-collection-canvas-b-${stamp}`);
   const other = await clientFor(second.page);
   assert(
-    (await outcome(other.mutation(api.canvas.open, { collectionId: board }))) ===
-      "CollectionNotFound" &&
+    (await outcome(openCanvas(other, { collectionId: board }))) === "CollectionNotFound" &&
       (await rows("canvases")).filter((row) => row.collectionId === board).length === 1,
     "a second user gets CollectionNotFound from open on the first user's collection, and it makes nothing",
   );
   assert(
-    (await outcome(other.query(api.canvas.changes, { canvasId: collection.canvasId, rev: 0 }))) ===
+    (await outcome(canvasChanges(other, { canvasId: collection.canvasId, rev: 0 }))) ===
       "CanvasNotFound" &&
       (await outcome(
         other.mutation(api.canvas.apply, {
@@ -294,10 +284,10 @@ try {
   );
 
   const own = await other.mutation(api.collections.create, { name: "Mine" });
-  const ownCollection = await other.mutation(api.canvas.open, { collectionId: own });
+  const ownCollection = await openCanvas(other, { collectionId: own });
   const [ownLibrary, ownLibraryAgain] = await Promise.all([
-    other.mutation(api.canvas.open, {}),
-    other.mutation(api.canvas.open, {}),
+    openCanvas(other, {}),
+    openCanvas(other, {}),
   ]);
   const otherWorkspace = (await rows("collections")).find((row) => row._id === own)!.workspaceId;
   const otherCanvases = (await rows("canvases")).filter(

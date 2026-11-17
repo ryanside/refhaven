@@ -7,8 +7,13 @@ import type { Pose } from "./transform";
 /** A note's own fields: its text, its color, and its box at scale 1. */
 export type NoteFields = Size & { readonly text: string; readonly color: NoteColor };
 
-/** The fields of an item that an op of this client sets. A note's own fields go to notes only. */
-export type ItemFields = Partial<Pose & { readonly z: string } & NoteFields>;
+/**
+ * The fields of an item that an op of this client sets. A note's own fields go to notes only. A
+ * `parent` of null takes the item out of its group.
+ */
+export type ItemFields = Partial<
+  Pose & { readonly z: string; readonly parent: string | null } & NoteFields
+>;
 
 /** A note as an op adds it, under a key this client made. */
 export type NoteAdd = Pose &
@@ -25,7 +30,8 @@ export type ItemOp =
       readonly y: number;
       readonly z?: string;
     }
-  | NoteAdd;
+  | NoteAdd
+  | { readonly op: "addGroup"; readonly key: string };
 
 /** One edit: the ops that undo it and the ops that redo it. */
 export type Entry = { readonly undo: ReadonlyArray<ItemOp>; readonly redo: ReadonlyArray<ItemOp> };
@@ -94,6 +100,45 @@ export const addEntry = (
     z === undefined ? { op: "add", refId, x, y } : { op: "add", refId, x, y, z },
   ),
 });
+
+/**
+ * Putting items in a new group under `key`, which takes each out of the group it was in. Undone by
+ * removing the group and giving each item the `parent` it had, which may name a removed group. Null
+ * for fewer than two items, or for items that are already one group.
+ */
+export const groupEntry = (chosen: ReadonlyArray<CanvasItem>, key: string): Entry | null => {
+  const groups = new Set(chosen.map((item) => item.group ?? null));
+  if (chosen.length < 2 || (groups.size === 1 && !groups.has(null))) return null;
+  return {
+    undo: [
+      { op: "remove", key },
+      ...chosen.map((item): ItemOp => ({
+        op: "patch",
+        key: item.key,
+        fields: { parent: item.parent ?? null },
+      })),
+    ],
+    redo: [
+      { op: "addGroup", key },
+      ...chosen.map((item): ItemOp => ({ op: "patch", key: item.key, fields: { parent: key } })),
+    ],
+  };
+};
+
+/**
+ * Removing every group that one of the chosen items is in. Each member keeps its `parent`, which
+ * counts for nothing while its group is removed. So bringing each group back under its key undoes
+ * it, also for a member that is out of view, such as one whose image is in the trash. Null when no
+ * chosen item is in a group.
+ */
+export const ungroupEntry = (chosen: ReadonlyArray<CanvasItem>): Entry | null => {
+  const groups = [...new Set(chosen.flatMap((item) => (item.group ? [item.group] : [])))];
+  if (groups.length === 0) return null;
+  return {
+    undo: groups.map((key): ItemOp => ({ op: "addGroup", key })),
+    redo: groups.map((key): ItemOp => ({ op: "remove", key })),
+  };
+};
 
 /** The fields that the ops' patches set, for each patch that sets one. */
 export const patchedFields = (ops: ReadonlyArray<ItemOp>): Array<ItemFields & { key: string }> =>

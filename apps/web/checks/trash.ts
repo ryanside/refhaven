@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
 import type { ConvexHttpClient } from "convex/browser";
-import type { FunctionReturnType } from "convex/server";
 import type { Page } from "playwright";
 import {
   appUrl,
@@ -15,9 +14,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
-import { refOf } from "./canvas-screen";
-
-type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
+import { refOf, openCanvas, canvasChanges, type Item } from "./canvas-screen";
 
 const stamp = Date.now().toString(36);
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -28,7 +25,7 @@ const placeOf = (item: Item | undefined) =>
 
 /** The changes since `rev` are one item, under `key`, with `deletedAt`, at a rev raised by one. */
 const oneChange = (
-  changes: FunctionReturnType<typeof api.canvas.changes>,
+  changes: Awaited<ReturnType<typeof canvasChanges>>,
   rev: number,
   key: string,
   deletedAt: number | undefined,
@@ -79,7 +76,7 @@ const galleryOf = async (client: ConvexHttpClient, collectionId: Id<"collections
   );
 const refRow = async (refId: string) => (await rows("refs")).find((row) => row._id === refId);
 const revOf = async (client: ConvexHttpClient, canvasId: Id<"canvases">) =>
-  (await client.query(api.canvas.changes, { canvasId, rev: 0 })).rev;
+  (await canvasChanges(client, { canvasId, rev: 0 })).rev;
 
 const evidence = process.env.EVIDENCE;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
@@ -123,8 +120,8 @@ try {
 
   const board = await owner.mutation(api.collections.create, { name: "Board" });
   await owner.mutation(api.collections.addRefs, { collectionId: board, refIds: [a, c] });
-  const library = await owner.mutation(api.canvas.open, {});
-  const collection = await owner.mutation(api.canvas.open, { collectionId: board });
+  const library = await openCanvas(owner, {});
+  const collection = await openCanvas(owner, { collectionId: board });
   assert(
     !find(library.items, d) && library.items.length === 3 && collection.items.length === 2,
     `canvas.open places only live Refs: ${library.items.length} on the library's canvas, ${collection.items.length} on the collection's`,
@@ -136,8 +133,8 @@ try {
       { op: "remove", key: c },
     ],
   });
-  const libraryBefore = await owner.mutation(api.canvas.open, {});
-  const collectionBefore = await owner.mutation(api.canvas.open, { collectionId: board });
+  const libraryBefore = await openCanvas(owner, {});
+  const collectionBefore = await openCanvas(owner, { collectionId: board });
   const aOnLibrary = find(libraryBefore.items, a)!;
   const aOnCollection = find(collectionBefore.items, a)!;
   assert(
@@ -197,11 +194,11 @@ try {
     "the image leaves the collection's gallery, and its membership row is still there",
   );
 
-  const libraryGone = await owner.query(api.canvas.changes, {
+  const libraryGone = await canvasChanges(owner, {
     canvasId: library.canvasId,
     rev: libraryBefore.rev,
   });
-  const collectionGone = await owner.query(api.canvas.changes, {
+  const collectionGone = await canvasChanges(owner, {
     canvasId: collection.canvasId,
     rev: collectionBefore.rev,
   });
@@ -210,8 +207,8 @@ try {
       oneChange(collectionGone, collectionBefore.rev, a, deletedRow.deletedAt),
     `canvas.changes on both canvases reports the image's item with the delete's deletedAt, at a rev raised by one: ${libraryBefore.rev} to ${libraryGone.rev}, ${collectionBefore.rev} to ${collectionGone.rev}`,
   );
-  const libraryOpened = await owner.mutation(api.canvas.open, {});
-  const collectionOpened = await owner.mutation(api.canvas.open, { collectionId: board });
+  const libraryOpened = await openCanvas(owner, {});
+  const collectionOpened = await openCanvas(owner, { collectionId: board });
   assert(
     !find(libraryOpened.items, a) &&
       !find(collectionOpened.items, a) &&
@@ -299,11 +296,11 @@ try {
       !(await trashOf(owner)).includes(a),
     "restore takes the Ref out of the trash, back into the library and the collection",
   );
-  const libraryBack = await owner.query(api.canvas.changes, {
+  const libraryBack = await canvasChanges(owner, {
     canvasId: library.canvasId,
     rev: libraryGone.rev,
   });
-  const collectionBack = await owner.query(api.canvas.changes, {
+  const collectionBack = await canvasChanges(owner, {
     canvasId: collection.canvasId,
     rev: collectionGone.rev,
   });
@@ -315,7 +312,7 @@ try {
     `canvas.changes on both canvases reports the item back, with no deletedAt and the key, position, scale, and z it had: ${placeOf(libraryBack.items[0])}`,
   );
   assert(
-    find((await owner.mutation(api.canvas.open, {})).items, a)?.x === 5555,
+    find((await openCanvas(owner, {})).items, a)?.x === 5555,
     "the item moved on the library's canvas before the delete is at its moved position",
   );
 
@@ -327,24 +324,24 @@ try {
     "restoring again changes nothing and raises no canvas's rev",
   );
 
-  const beforeC = await owner.mutation(api.canvas.open, {});
+  const beforeC = await openCanvas(owner, {});
   await owner.mutation(api.library.remove, { refIds: [c] });
   const cInTrash =
     typeof (await refRow(c))?.deletedAt === "number" &&
-    !find((await owner.mutation(api.canvas.open, { collectionId: board })).items, c);
+    !find((await openCanvas(owner, { collectionId: board })).items, c);
   await owner.mutation(api.library.restore, { refIds: [c] });
-  const afterC = await owner.mutation(api.canvas.open, {});
+  const afterC = await openCanvas(owner, {});
   assert(
     cInTrash &&
       (await refRow(c))?.deletedAt === undefined &&
       !find(afterC.items, c) &&
       afterC.rev === beforeC.rev &&
-      find((await owner.mutation(api.canvas.open, { collectionId: board })).items, c) !== undefined,
+      find((await openCanvas(owner, { collectionId: board })).items, c) !== undefined,
     "an item removed from the library's canvas before the delete stays removed after the restore, and the image is back on the collection's canvas",
   );
 
   await owner.mutation(api.library.restore, { refIds: [d] });
-  const placed = await owner.mutation(api.canvas.open, {});
+  const placed = await openCanvas(owner, {});
   const dItem = find(placed.items, d);
   assert(
     placed.rev === afterC.rev + 1 && dItem?.key === d && dItem.deletedAt === undefined,
