@@ -75,6 +75,15 @@ export function zAbove(existing: Iterable<string>, count: number): Array<string>
   return generateNKeysBetween(top, null, count);
 }
 
+/** Returns `count` z keys, in order, that sort below every key in `existing`. */
+export function zBelow(existing: Iterable<string>, count: number): Array<string> {
+  let bottom: string | null = null;
+  for (const z of existing) {
+    if (bottom === null || z < bottom) bottom = z;
+  }
+  return generateNKeysBetween(null, bottom, count);
+}
+
 const zAlphabet = /^[0-9A-Za-z]+$/;
 
 /** Whether `z` is a key that `zAbove` can sort above. A character outside base 62 would sort above every key it makes. */

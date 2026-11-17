@@ -1,8 +1,8 @@
 import { fitCamera, panBy, zoomAt } from "./camera";
-import { type Entry, type ItemOp, patchEntry, posesOf } from "./history";
-import { topmostAt } from "./hit";
+import { type Entry, type ItemFields, type ItemOp, patchEntry, patchedFields } from "./history";
+import { stackOrder, topmostAt, touching } from "./hit";
 import { type Camera, type Point, screenToWorld } from "./index";
-import type { Size } from "./layout";
+import { type Size, zAbove, zBelow } from "./layout";
 import {
   type Handle,
   type Pose,
@@ -49,13 +49,23 @@ type Editing = {
 /**
  * The pointer's one gesture. A press on an item starts a drag, and a press on a handle of the
  * selection's frame starts a resize about the opposite point or a rotate about the frame's center.
- * None has `moved` until the pointer travels past `dragThreshold`, and one released before that
- * changes nothing. `collapseTo` is the item a click selects alone, when the press kept a larger
- * selection so that the drag could move all of it.
+ * A press on empty canvas starts a marquee, which selects what its rectangle touches, or with
+ * `add` adds it to the selection. None has `moved` until the pointer travels past
+ * `dragThreshold`, and one released before that changes nothing, except that a marquee released
+ * there clears the selection. `collapseTo` is the item a click selects alone, when the press kept a
+ * larger selection so that the drag could move all of it.
  */
 export type Gesture =
   | { readonly kind: "idle" }
   | { readonly kind: "panning"; readonly last: Point }
+  | {
+      readonly kind: "marquee";
+      readonly from: Point;
+      readonly fromWorld: Point;
+      readonly pointer: Point;
+      readonly moved: boolean;
+      readonly add: boolean;
+    }
   | (Editing & { readonly kind: "dragging"; readonly collapseTo: string | null })
   | (Editing & { readonly kind: "resizing"; readonly handle: Handle; readonly frame: Rect })
   | (Editing & { readonly kind: "rotating"; readonly center: Point; readonly snap: boolean });
@@ -118,9 +128,9 @@ export function createSceneStore() {
   let saves = 0;
   const server = new Map<string, ServerItem>();
   // Each held field remembers the save that set it, so a save that fails takes back only its own.
-  type Held = { readonly value: number; readonly save: number; rev: number | null };
-  const pending = new Map<string, Map<keyof Pose, Held>>();
-  const heldPose = (key: string): Partial<Pose> =>
+  type Held = { readonly value: number | string; readonly save: number; rev: number | null };
+  const pending = new Map<string, Map<keyof ItemFields, Held>>();
+  const heldFields = (key: string): ItemFields =>
     Object.fromEntries([...(pending.get(key) ?? [])].map(([field, { value }]) => [field, value]));
   const listeners = new Set<() => void>();
 
@@ -142,7 +152,14 @@ export function createSceneStore() {
 
   /** The poses the gesture gives its items now, or null when it changes none. */
   const live = (): ReadonlyMap<string, Pose> | null => {
-    if (gesture.kind === "idle" || gesture.kind === "panning" || !gesture.moved) return null;
+    if (
+      gesture.kind === "idle" ||
+      gesture.kind === "panning" ||
+      gesture.kind === "marquee" ||
+      !gesture.moved
+    ) {
+      return null;
+    }
     const to = screenToWorld(camera, gesture.pointer);
     switch (gesture.kind) {
       case "dragging": {
@@ -173,7 +190,7 @@ export function createSceneStore() {
     if (shown) return shown;
     const now = live();
     shown = [...server.values()].map((item) =>
-      sized({ ...item, ...heldPose(item.key), ...now?.get(item.key) }),
+      sized({ ...item, ...heldFields(item.key), ...now?.get(item.key) }),
     );
     return shown;
   };
@@ -196,7 +213,7 @@ export function createSceneStore() {
   const forgetMissing = () => {
     selection = new Set([...selection].filter((key) => server.has(key)));
     settle();
-    if (gesture.kind === "idle" || gesture.kind === "panning") return;
+    if (gesture.kind === "idle" || gesture.kind === "panning" || gesture.kind === "marquee") return;
     const origins = new Map([...gesture.origins].filter(([key]) => server.has(key)));
     if (origins.size === 0) {
       gesture = { kind: "idle" };
@@ -213,15 +230,18 @@ export function createSceneStore() {
   };
 
   /**
-   * Shows the pose fields the ops set at once, and keeps them until their save is settled. A field
-   * held by an earlier save that is not settled yet stays, so a resize right after a turn keeps both.
+   * Shows the fields the ops' patches set at once, and keeps them until their save is settled. A
+   * field held by an earlier save that is not settled yet stays, so a resize right after a turn
+   * keeps both.
    */
   const hold = (ops: ReadonlyArray<ItemOp>) => {
     const save = ++saves;
-    for (const { key, ...fields } of posesOf(ops)) {
+    for (const { key, ...fields } of patchedFields(ops)) {
       if (!server.has(key)) continue;
-      const held = pending.get(key) ?? new Map<keyof Pose, Held>();
-      for (const [field, value] of Object.entries(fields) as Array<[keyof Pose, number]>) {
+      const held = pending.get(key) ?? new Map<keyof ItemFields, Held>();
+      for (const [field, value] of Object.entries(fields) as Array<
+        [keyof ItemFields, number | string]
+      >) {
         held.set(field, { value, save, rev: null });
       }
       pending.set(key, held);
@@ -343,11 +363,21 @@ export function createSceneStore() {
       changed();
     },
 
-    /** A primary press: selects per the click rules, and starts a drag when it lands on a selected item. */
+    /**
+     * A primary press: selects per the click rules, and starts a drag when it lands on a selected
+     * item. On empty canvas it starts a marquee.
+     */
     press(screen: Point, shift: boolean) {
       const hit = topmostAt(items(), screenToWorld(camera, screen));
       if (!hit) {
-        selection = new Set();
+        gesture = {
+          kind: "marquee",
+          from: screen,
+          fromWorld: screenToWorld(camera, screen),
+          pointer: screen,
+          moved: false,
+          add: shift,
+        };
         changed();
         return;
       }
@@ -373,6 +403,24 @@ export function createSceneStore() {
         };
       }
       changed();
+    },
+
+    /**
+     * Moves the selection above or below every other item, in the order it had. Returns the edit,
+     * one patch of `z` per item, or null when nothing is selected or the selection is already there.
+     */
+    restack(to: "front" | "back"): Entry | null {
+      const stack = [...items()].sort(stackOrder);
+      const chosen = stack.filter((item) => selection.has(item.key));
+      const end =
+        to === "front" ? stack.slice(stack.length - chosen.length) : stack.slice(0, chosen.length);
+      if (chosen.every((item, index) => end[index] === item)) return null;
+      const zs = stack.map((item) => item.z);
+      const placed = to === "front" ? zAbove(zs, chosen.length) : zBelow(zs, chosen.length);
+      return patchEntry(
+        chosen.map(({ key, z }) => ({ key, z })),
+        chosen.map(({ key }, index) => ({ key, z: placed[index]! })),
+      );
     },
 
     /** A press on a handle of the selection's frame: a resize handle, or `rotate`. */
@@ -414,12 +462,22 @@ export function createSceneStore() {
 
     /**
      * Ends the gesture. Returns the edit to save when it changed items: one patch per changed item,
-     * with only the fields its kind of gesture changes.
+     * with only the fields its kind of gesture changes. A marquee changes only the selection.
      */
     release(): Drop | null {
       const ended = gesture;
       const now = live();
       gesture = { kind: "idle" };
+      if (ended.kind === "marquee") {
+        const keys = ended.moved
+          ? touching(items(), ended.fromWorld, screenToWorld(camera, ended.pointer)).map(
+              ({ key }) => key,
+            )
+          : [];
+        selection = new Set([...(ended.add && ended.moved ? selection : []), ...keys]);
+        changed();
+        return null;
+      }
       if (now && ended.kind !== "idle" && ended.kind !== "panning") {
         const pick = savedFields[ended.kind];
         const edited = [...now].flatMap(([key, pose]) => {

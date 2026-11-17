@@ -5,8 +5,10 @@ import {
   type ServerItem,
   createSceneStore,
   handleAt,
-  posesOf,
+  isZ,
+  patchedFields,
   snapStep,
+  stackOrder,
   worldToScreen,
 } from "./index";
 
@@ -93,7 +95,7 @@ test("a drag moves the whole selection and returns one entry that undoes and red
   const drop = drag("a", { x: 40, y: -20 });
 
   const byKey = (ops: ReadonlyArray<ItemOp>) =>
-    posesOf(ops).sort((m, n) => (m.key < n.key ? -1 : 1));
+    patchedFields(ops).sort((m, n) => (m.key < n.key ? -1 : 1));
   expect(byKey(drop!.entry.redo)).toEqual([
     { key: "a", x: 40, y: -20 },
     { key: "b", x: 340, y: -20 },
@@ -132,7 +134,7 @@ test("dragging an unselected item selects it alone and moves only it", () => {
   const drop = drag("b", { x: 50, y: 0 });
 
   expect([...store.selection()]).toEqual(["b"]);
-  expect(posesOf(drop!.entry.redo)).toEqual([{ key: "b", x: 350, y: 0 }]);
+  expect(patchedFields(drop!.entry.redo)).toEqual([{ key: "b", x: 350, y: 0 }]);
 });
 
 test("the gesture is panning between a pan press and its release, and moves the camera", () => {
@@ -243,7 +245,7 @@ test("when one of two dragged items is deleted, the drop moves only the other", 
 
   store.applyChanges({ rev: 2, items: [{ ...a, deletedAt: 1 }] });
 
-  expect(posesOf(store.release()!.entry.redo)).toEqual([{ key: "b", x: 340, y: 0 }]);
+  expect(patchedFields(store.release()!.entry.redo)).toEqual([{ key: "b", x: 340, y: 0 }]);
 });
 
 test("an item deleted during a click on it is not selected by the release", () => {
@@ -522,4 +524,136 @@ test("a later save of the same field takes it over, so the earlier save's failur
   store.reject(first);
 
   expect(item(store, "a")).toMatchObject({ x: 20, y: 20 });
+});
+
+test("a marquee selects every item its rectangle touches, saves nothing, and never moves an item", () => {
+  const { store, screen, at } = setUp();
+  store.loadSnapshot({ rev: 2, items: [a, b, serverItem("c", 600, "a2")] });
+
+  store.press(screen({ x: -150, y: 100 }), false);
+  store.move(screen({ x: 0, y: 80 }));
+  expect(store.gesture()).toMatchObject({ kind: "marquee", moved: true });
+  expect(store.selection().size).toBe(0);
+  store.move(screen({ x: 350, y: -10 }));
+  expect(store.release()).toBeNull();
+
+  expect([...store.selection()].sort()).toEqual(["a", "b"]);
+  expect(store.gesture().kind).toBe("idle");
+  expect([at("a"), at("b"), at("c")]).toEqual([
+    { x: 0, y: 0 },
+    { x: 300, y: 0 },
+    { x: 600, y: 0 },
+  ]);
+});
+
+test("a marquee with Shift adds to the selection, and one without replaces it", () => {
+  const { store, screen } = setUp();
+  store.loadSnapshot({ rev: 2, items: [a, b, serverItem("c", 600, "a2")] });
+  const marquee = (from: Point, to: Point, shift: boolean) => {
+    store.press(screen(from), shift);
+    store.move(screen(to));
+    store.release();
+  };
+
+  marquee({ x: -150, y: 100 }, { x: 0, y: 0 }, false);
+  expect([...store.selection()]).toEqual(["a"]);
+  marquee({ x: 700, y: 100 }, { x: 600, y: 0 }, true);
+  expect([...store.selection()].sort()).toEqual(["a", "c"]);
+  marquee({ x: 400, y: 100 }, { x: 300, y: 0 }, false);
+  expect([...store.selection()]).toEqual(["b"]);
+});
+
+test("a press on empty canvas that does not move clears the selection, with Shift too", () => {
+  const { store, screen } = setUp();
+  store.selectAll();
+
+  store.press(screen({ x: 150, y: 400 }), true);
+  store.move({ ...screen({ x: 150, y: 400 }), x: screen({ x: 150, y: 400 }).x + 2 });
+  expect(store.release()).toBeNull();
+
+  expect(store.selection().size).toBe(0);
+});
+
+test("a marquee keeps React's summary while it moves", () => {
+  const { store, screen } = setUp();
+  const before = store.summary();
+
+  store.press(screen({ x: -150, y: 100 }), false);
+  store.move(screen({ x: 0, y: 80 }));
+  store.move(screen({ x: 350, y: -10 }));
+
+  expect(store.summary()).toBe(before);
+});
+
+const stacked = () => {
+  const setup = setUp();
+  const { store, screen } = setup;
+  store.loadSnapshot({
+    rev: 2,
+    items: [serverItem("a", 0, "a0"), serverItem("b", 300, "a1"), serverItem("c", 600, "a2")],
+  });
+  const select = (...keys: Array<string>) => {
+    store.clearSelection();
+    for (const key of keys) {
+      store.press(screen({ x: { a: 0, b: 300, c: 600 }[key]!, y: 0 }), true);
+      store.release();
+    }
+  };
+  const order = () => [...store.items()].sort(stackOrder).map(({ key }) => key);
+  return { ...setup, select, order };
+};
+
+test("bring to front puts the selection above every item in its own order, with one z patch each", () => {
+  const { store, select, order } = stacked();
+  select("b", "a");
+
+  const entry = store.restack("front")!;
+  expect(entry.redo).toHaveLength(2);
+  expect(entry.redo.every((op) => op.op === "patch" && Object.keys(op.fields).join() === "z")).toBe(
+    true,
+  );
+  expect(entry.undo).toEqual([
+    { op: "patch", key: "a", fields: { z: "a0" } },
+    { op: "patch", key: "b", fields: { z: "a1" } },
+  ]);
+  store.hold(entry.redo);
+
+  expect(order()).toEqual(["c", "a", "b"]);
+  expect(entry.redo.every((op) => op.op === "patch" && isZ(op.fields.z!))).toBe(true);
+});
+
+test("send to back puts the selection below every item in its own order", () => {
+  const { store, select, order } = stacked();
+  select("c", "b");
+
+  store.hold(store.restack("back")!.redo);
+
+  expect(order()).toEqual(["b", "c", "a"]);
+});
+
+test("a held restack changes what a click on the overlap hits at once", () => {
+  const { store, screen } = setUp();
+  store.loadSnapshot({ rev: 2, items: [serverItem("low", 0, "a0"), serverItem("high", 50, "a1")] });
+  const clickOverlap = () => {
+    store.press(screen({ x: 30, y: 0 }), false);
+    store.release();
+    return [...store.selection()];
+  };
+
+  expect(clickOverlap()).toEqual(["high"]);
+  store.hold(store.restack("back")!.redo);
+  expect(clickOverlap()).toEqual(["low"]);
+});
+
+test("a selection already at the front, or at the back, in its order, or no selection, is no edit", () => {
+  const { store, select } = stacked();
+
+  expect(store.restack("front")).toBeNull();
+  expect(store.restack("back")).toBeNull();
+  select("b", "c");
+  expect(store.restack("front")).toBeNull();
+  select("a");
+  expect(store.restack("back")).toBeNull();
+  select("a", "c");
+  expect(store.restack("front")).not.toBeNull();
 });

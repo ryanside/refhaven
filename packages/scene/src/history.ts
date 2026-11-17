@@ -65,13 +65,11 @@ export const addEntry = (
   ),
 });
 
-/** The pose fields that the ops' patches set, for each patch that sets one. */
-export const posesOf = (ops: ReadonlyArray<ItemOp>): Array<Partial<Pose> & { key: string }> =>
-  ops.flatMap((op) => {
-    if (op.op !== "patch") return [];
-    const { z, ...pose } = op.fields;
-    return Object.keys(pose).length > 0 ? [{ key: op.key, ...pose }] : [];
-  });
+/** The fields that the ops' patches set, for each patch that sets one. */
+export const patchedFields = (ops: ReadonlyArray<ItemOp>): Array<ItemFields & { key: string }> =>
+  ops.flatMap((op) =>
+    op.op === "patch" && Object.keys(op.fields).length > 0 ? [{ key: op.key, ...op.fields }] : [],
+  );
 
 export type HistorySummary = { readonly canUndo: boolean; readonly canRedo: boolean };
 

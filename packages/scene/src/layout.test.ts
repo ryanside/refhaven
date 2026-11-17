@@ -9,6 +9,7 @@ import {
   placedEdge,
   placementGap,
   zAbove,
+  zBelow,
 } from "./index";
 
 const boxOf = (placed: Size & Placement) => boundsOf([{ ...placed, rotation: 0 }])!;
@@ -80,4 +81,25 @@ test("new z keys sort above the old top, in order", () => {
 
 test("a z that no key can sort above is not a z", () => {
   expect(["", "a", "hello", "a10", "a0V0", "a~", "a-", "a 1"].filter(isZ)).toEqual([]);
+});
+
+test("new z keys sort below the old bottom, in order", () => {
+  const existing = ["a0", "a5", "Zz", "a1V"];
+  const [one] = zBelow(existing, 1);
+  const several = zBelow(existing, 3);
+
+  expect(one! < "Zz").toBe(true);
+  expect(several).toHaveLength(3);
+  expect([...existing, ...several].sort().slice(0, 3)).toEqual(several);
+  expect([one!, ...several].every(isZ)).toBe(true);
+});
+
+test("keys below the lowest integer part go into its fraction", () => {
+  // The smallest integer part has no integer below it, so the new keys extend its fraction.
+  const lowest = `A${"0".repeat(26)}1`;
+  const added = zBelow([lowest, "a0"], 3);
+
+  expect([...added, lowest].sort()).toEqual([...added, lowest]);
+  expect(new Set(added).size).toBe(3);
+  expect(added.every(isZ)).toBe(true);
 });
