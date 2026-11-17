@@ -46,7 +46,7 @@ Preconditions:
 - The `workspaceId` of the run is the second segment of the upload path, `/w/{workspaceId}/o/{sha256}`. Read it from the `PUT` request.
 - The uploads of one image run at the same time, so their order varies. Match the paths as a set.
 - `library.urls` takes a `role` of `original`, `thumbnail`, or `display`. A role the Blob has no variant for serves the original.
-- An image saved before variants existed has no variants and no ThumbHash. It shows its original with no placeholder.
+- An image saved before variants existed, or from a browser that cannot encode WebP, has no variants. It shows its original. Saving the same bytes again from a browser that can encode WebP uploads the missing variants, so that one duplicate does send `PUT` requests.
 - A reload clears the outcome list.
 - The outcome list reports one line per picked file, in order. Wait for the line you expect, not for a fixed count of cards.
 - Image URLs are signed and expire after an hour. Read `src` from the card when you need it. Never store one for a later run.

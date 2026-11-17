@@ -106,7 +106,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | L1 | The server records the file type that the bytes show and ignores the client's claim. | Built |
 | D18 | The formats are PNG, JPEG, WebP, GIF, and AVIF. SVG is rasterized at upload. The server refuses SVG until the rasterizing step exists. Variants are WebP, and the server refuses a variant whose bytes are not WebP. | Built |
 | H7 | An image is at most 50 MB. The server checks the size when the image is saved, after the upload. | Built |
-| E5 | Saving bytes the library already holds reuses the Blob, uploads nothing, and tells you. It adds a second Ref. | Built |
+| E5 | Saving bytes the library already holds reuses the Blob, uploads the original no second time, and tells you. It adds a second Ref. It also adds any variant or ThumbHash the Blob still lacks. | Built |
 | H10 | Images are served through signed R2 URLs. A mutation signs each URL for one hour, for the role the page asks for, and the page asks for a new one after 50 minutes. The gallery asks for the thumbnail. | Built |
 | L2 | The server checks the workspace before it signs a URL. | Built |
 | H8 | An image gets a 512 px WebP thumbnail when its longer edge is over 512 px, and a 2048 px WebP display copy when it is over 2048 px. A variant keeps the aspect ratio, and its longer edge is the role's edge. Every image gets a ThumbHash, which the gallery shows until the thumbnail loads. An image saved before variants existed has none and is served from its original. | Built |

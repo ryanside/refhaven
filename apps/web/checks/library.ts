@@ -302,7 +302,10 @@ try {
       variants: { thumbnail: { width: 513, height: 300 } },
     }),
   );
-  assert(oversized !== "accepted", `a thumbnail claimed at 513 px is ${oversized}`);
+  assert(
+    oversized.includes("between 1 and 512"),
+    `a thumbnail claimed at 513 px is refused for its size: ${oversized}`,
+  );
 
   const uppercase = await outcome(
     owner.action(api.library.save, { ...image, sha256: sha256(large).toUpperCase() }),
