@@ -9,6 +9,9 @@ export const keymap = [
   { hotkey: "Escape", action: "clearSelection" },
   { hotkey: "]", action: "bringToFront" },
   { hotkey: "[", action: "sendToBack" },
+  // Some macOS layouts, German and French among them, type a bracket with Option held.
+  { hotkey: "Alt+]", action: "bringToFront" },
+  { hotkey: "Alt+[", action: "sendToBack" },
 ] as const;
 
 export type Action = (typeof keymap)[number]["action"];
