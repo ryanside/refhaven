@@ -165,3 +165,48 @@ test("a turn across the pointer's starting angle's far side is measured the shor
 
   expect(after.get("a")!.rotation).toBeCloseTo((20 * Math.PI) / 180, 9);
 });
+
+test("the floor never enlarges a frame that is already smaller than it", () => {
+  const tiny = { x: 0, y: 0, width: 2, height: 1, rotation: 0 };
+  const poses = new Map([["a", { x: 0, y: 0, scale: 0.01, rotation: 0 }]]);
+  const grip = handleAt(tiny, "se");
+
+  expect(resized(poses, tiny, "se", grip, grip, 8).get("a")).toEqual({
+    x: 0,
+    y: 0,
+    scale: 0.01,
+    rotation: 0,
+  });
+});
+
+test("with snap, one item ends at a whole step, so it can come back to upright", () => {
+  const poses = new Map([["a", { x: 0, y: 0, scale: 1, rotation: 0.1 }]]);
+  const turnedBy = (angle: number) =>
+    rotated(
+      poses,
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: Math.cos(angle), y: Math.sin(angle) },
+      true,
+    ).get("a")!.rotation;
+
+  expect(turnedBy(0.5)).toBeCloseTo(2 * snapStep, 12);
+  expect(turnedBy(-0.12)).toBeCloseTo(0, 12);
+});
+
+test("with snap, several items turn by one whole step and keep their own offsets", () => {
+  const poses = new Map([
+    ["a", { x: 10, y: 0, scale: 1, rotation: 0.1 }],
+    ["b", { x: -10, y: 0, scale: 1, rotation: 0.3 }],
+  ]);
+  const turned = rotated(
+    poses,
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: Math.cos(0.5), y: Math.sin(0.5) },
+    true,
+  );
+
+  expect(turned.get("a")!.rotation).toBeCloseTo(0.1 + 2 * snapStep, 12);
+  expect(turned.get("b")!.rotation).toBeCloseTo(0.3 + 2 * snapStep, 12);
+});

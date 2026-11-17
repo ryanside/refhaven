@@ -75,9 +75,11 @@ export function resized(
   const about = pointAt(frame, { x: -grip.x, y: -grip.y });
   const start = pointAt(frame, grip);
   const reach = { x: start.x - about.x, y: start.y - about.y };
+  // The floor stops a frame from shrinking past `minEdge`. It never enlarges one that is
+  // already smaller, so the factor's floor is at most 1.
   const factor = Math.max(
     1 + ((to.x - from.x) * reach.x + (to.y - from.y) * reach.y) / (reach.x ** 2 + reach.y ** 2),
-    minEdge / Math.max(frame.width, frame.height),
+    Math.min(1, minEdge / Math.max(frame.width, frame.height)),
   );
   return new Map(
     [...items].map(([key, pose]) => [
@@ -94,7 +96,7 @@ export function resized(
 
 /**
  * Turns the items about `center` by the angle the pointer sweeps around it from `from` to `to`.
- * With `snap`, the angle is a whole number of `snapStep`s.
+ * With `snap`, one item ends at a whole number of `snapStep`s, and several items turn by one.
  */
 export function rotated(
   items: ReadonlyMap<string, Pose>,
@@ -106,7 +108,11 @@ export function rotated(
   const swept =
     Math.atan2(to.y - center.y, to.x - center.x) - Math.atan2(from.y - center.y, from.x - center.x);
   const angle = Math.atan2(Math.sin(swept), Math.cos(swept));
-  const by = snap ? Math.round(angle / snapStep) * snapStep : angle;
+  const toStep = (value: number) => Math.round(value / snapStep) * snapStep;
+  // One item snaps to where it ends up, so Shift can bring it back to upright after a free
+  // turn. Several items share one swept angle, so that is what snaps for them.
+  const [only] = items.size === 1 ? items.values() : [];
+  const by = !snap ? angle : only ? toStep(only.rotation + angle) - only.rotation : toStep(angle);
   return new Map(
     [...items].map(([key, pose]) => {
       const offset = turn({ x: pose.x - center.x, y: pose.y - center.y }, by);
