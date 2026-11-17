@@ -124,7 +124,7 @@ try {
       find(libraryAfterMove.items, kept)!.y === find(library.items, kept)!.y,
     `a move on the collection's canvas leaves the item's position on the library's canvas unchanged: ${find(libraryAfterMove.items, kept)!.x} there, 7777 here`,
   );
-  await owner.mutation(api.canvas.apply, {
+  const libraryMovedRev = await owner.mutation(api.canvas.apply, {
     canvasId: library.canvasId,
     ops: [{ op: "patch", key: leftA, fields: { x: -4444 } }],
   });
@@ -133,8 +133,11 @@ try {
     rev: movedRev,
   });
   assert(
-    collectionAfterLibraryMove.rev === movedRev && collectionAfterLibraryMove.items.length === 0,
-    "a move on the library's canvas writes nothing to the collection's canvas",
+    libraryMovedRev === library.rev + 1 &&
+      find((await owner.mutation(api.canvas.open, {})).items, leftA)!.x === -4444 &&
+      collectionAfterLibraryMove.rev === movedRev &&
+      collectionAfterLibraryMove.items.length === 0,
+    "a move on the library's canvas is saved there at one new rev, and writes nothing to the collection's canvas",
   );
 
   const libraryBeforeRemove = await owner.mutation(api.canvas.open, {});
