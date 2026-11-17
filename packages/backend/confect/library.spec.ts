@@ -12,7 +12,7 @@ import {
 } from "./blob";
 import { CollectionNotFound } from "./collection";
 import RequireWorkspace from "./middleware/RequireWorkspace.spec";
-import { FileName } from "./refFields";
+import { FileName, SearchQuery, TagName } from "./refFields";
 
 const Dimension = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_535 }));
 
@@ -43,6 +43,9 @@ export const GalleryItem = Schema.Struct({
 
 /** An image in the trash, with the time it was deleted. */
 export const TrashedItem = Schema.Struct({ ...GalleryItem.fields, deletedAt: Schema.Number });
+
+/** The most images a filtered gallery shows. */
+export const filterLimit = 200;
 
 export const RefIds = Schema.Array(Id("refs")).check(Schema.isMaxLength(100));
 
@@ -109,6 +112,18 @@ export default GroupSpec.make()
     FunctionSpec.publicPaginatedQuery({
       name: "list",
       item: () => GalleryItem,
+    }),
+  )
+  .addFunction(
+    FunctionSpec.publicQuery({
+      name: "filter",
+      args: () => ({
+        q: Schema.optionalKey(SearchQuery),
+        tag: Schema.optionalKey(TagName),
+        collectionId: Schema.optionalKey(Id("collections")),
+      }),
+      returns: () => Schema.Struct({ items: Schema.Array(GalleryItem), more: Schema.Boolean }),
+      error: () => CollectionNotFound,
     }),
   )
   .addFunction(

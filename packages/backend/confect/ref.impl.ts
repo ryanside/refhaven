@@ -7,7 +7,7 @@ import databaseSchema from "./_generated/schema";
 import { DatabaseReader, DatabaseWriter } from "./_generated/services";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
-import { ownedLiveRef, ownedRef } from "./ref";
+import { ownedLiveRef, ownedRef, writeSearchText } from "./ref";
 import ref from "./ref.spec";
 
 const tagsOf = (refId: Id<"refs">) =>
@@ -72,6 +72,7 @@ const update = FunctionImpl.make(
           ...(sourceUrl === undefined ? {} : { sourceUrl: sourceUrl ?? undefined }),
         })
         .pipe(Effect.orDie);
+      yield* writeSearchText(refId);
       return null;
     }),
 );
@@ -89,6 +90,7 @@ const addTags = FunctionImpl.make(databaseSchema, ref, "addTags", ({ refId, name
       (name) => writer.table("tags").insert({ workspaceId, refId, name }).pipe(Effect.orDie),
       { discard: true },
     );
+    yield* writeSearchText(refId);
     return null;
   }),
 );
@@ -102,6 +104,7 @@ const removeTags = FunctionImpl.make(databaseSchema, ref, "removeTags", ({ refId
       (tag) => writer.table("tags").delete(tag._id),
       { discard: true },
     );
+    yield* writeSearchText(refId);
     return null;
   }),
 );

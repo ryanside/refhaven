@@ -15,6 +15,7 @@
     "check:paste-drop": "bun --env-file=../../packages/backend/.env.local checks/paste-drop.ts",
     "check:ref-page": "bun --env-file=../../packages/backend/.env.local checks/ref-page.ts",
     "check:renderer": "bun checks/renderer.ts",
+    "check:search": "bun --env-file=../../packages/backend/.env.local checks/search.ts",
     "check:trash": "bun --env-file=../../packages/backend/.env.local checks/trash.ts",
     "dev": "vite dev --port 3000 --strictPort",
     "preview": "vite preview",
