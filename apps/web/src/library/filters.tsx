@@ -4,9 +4,9 @@ import refs from "@refhaven/backend/refs";
 import { Input } from "@refhaven/ui/components/input";
 import { Label } from "@refhaven/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@refhaven/ui/components/native-select";
-import { useDebouncedCallback } from "@tanstack/react-pacer";
+import { useDebouncer } from "@tanstack/react-pacer";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type CardAction, Cards } from "@/library/gallery";
 import type { Filters } from "@/view";
 
@@ -18,12 +18,6 @@ export function GalleryFilters(filters: Filters) {
   const navigate = useNavigate();
   const known = useQuery(refs.public.ref.tags, {});
   const [text, setText] = useState(q ?? "");
-  const [shownQ, setShownQ] = useState(q);
-  // The back button and the "Clear filters" link change `q` from outside the field.
-  if (q !== shownQ) {
-    setShownQ(q);
-    if (text.trim() !== (q ?? "")) setText(q ?? "");
-  }
   // The first filter on a full gallery adds a history entry and every later change replaces it,
   // so the back button leaves the filtered view in one step.
   const setFilter = (key: keyof Filters, value: string) =>
@@ -32,9 +26,23 @@ export function GalleryFilters(filters: Filters) {
       search: ({ [key]: _, ...rest }) => (value === "" ? rest : { ...rest, [key]: value }),
       replace: isFiltered(filters),
     });
-  const searchFor = useDebouncedCallback((value: string) => setFilter("q", value.trim()), {
-    wait: 300,
-  });
+  // The search text this field last wrote to the URL. Any other `q` came from outside the field:
+  // the back button, the "Clear filters" link, or a link to the page.
+  const written = useRef(q);
+  const search = useDebouncer(
+    (value: string) => {
+      written.current = value === "" ? undefined : value;
+      setFilter("q", value);
+    },
+    { wait: 300 },
+  );
+  useEffect(() => {
+    if (q === written.current) return;
+    written.current = q;
+    // Typing that has not reached the URL yet would otherwise put the old filter back.
+    search.cancel();
+    setText(q ?? "");
+  }, [q, search]);
   const tags = QueryResult.isSuccess(known) ? known.value : [];
 
   return (
@@ -48,7 +56,7 @@ export function GalleryFilters(filters: Filters) {
           value={text}
           onChange={(event) => {
             setText(event.currentTarget.value);
-            searchFor(event.currentTarget.value);
+            search.maybeExecute(event.currentTarget.value.trim());
           }}
         />
       </div>
