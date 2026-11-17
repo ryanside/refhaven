@@ -6,7 +6,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as Result from "effect/Result";
 import { CanvasView } from "@/canvas/canvas-view";
 import { NameForm } from "@/collections/name-form";
-import { Gallery, galleryPage } from "@/library/gallery";
+import { Gallery, SaveImages, galleryPage } from "@/library/gallery";
 import { ViewLinks, validateView } from "@/view";
 
 export const Route = createFileRoute("/_app/c/$collectionId")({
@@ -64,9 +64,9 @@ function CollectionGallery({
           return Result.isFailure(renamed) ? renamed.failure._tag : null;
         }}
       />
+      <SaveImages collectionId={collectionId} />
       <Gallery
         items={items}
-        collectionId={collectionId}
         action={(refId) => (
           <Button
             variant="outline"

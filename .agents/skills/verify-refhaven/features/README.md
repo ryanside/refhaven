@@ -41,4 +41,5 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Sign in](./sign-in.md) covers passkey sign-up, the session, sign-out, sign-in, and the redirect for a signed-out visitor.
 - [Library](./library.md) covers saving images, a duplicate, the grid, and what a second user can see.
 - [Collections](./collections.md) covers making, opening, renaming, and filling a collection, and what a second user can see.
+- [Trash](./trash.md) covers deleting an image, the trash page, restoring an image to every place it was, and what a second user can do.
 - [Canvas](./canvas.md) covers the canvas view of the library and of a collection: pan, zoom, selection, saved moves, a second page, and the 2048 px copy.

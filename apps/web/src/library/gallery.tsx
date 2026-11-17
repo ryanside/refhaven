@@ -26,25 +26,12 @@ const outcomeText = (outcome: SaveOutcome) =>
       ? "saved. Your library already had this image, so its bytes were reused."
       : "saved.";
 
-/**
- * A set of Refs as a grid, with a file input that saves into the library, and into the
- * collection when one is given. `action` renders a control on each card.
- */
-export function Gallery<E extends { readonly _tag: string }>({
-  items,
-  collectionId,
-  action,
-}: {
-  items: PaginatedQueryResult.PaginatedQueryResult<Item, E>;
-  collectionId?: Id<"collections">;
-  action: (refId: Id<"refs">) => ReactNode;
-}) {
+/** A file input that saves into the library, and into the collection when one is given. */
+export function SaveImages({ collectionId }: { collectionId?: Id<"collections"> }) {
   const saveImage = useSaveImage(collectionId);
   const [outcomes, setOutcomes] = useState<
     ReadonlyArray<{ fileName: string; outcome: SaveOutcome }>
   >([]);
-  const refIds = useMemo(() => items.results.map((item) => item.refId), [items.results]);
-  const urls = useRefUrls(refIds, "thumbnail");
 
   return (
     <>
@@ -72,7 +59,25 @@ export function Gallery<E extends { readonly _tag: string }>({
           </li>
         ))}
       </ul>
+    </>
+  );
+}
 
+/** A set of Refs as a grid. `action` renders a control on each card. */
+export function Gallery<E extends { readonly _tag: string }>({
+  items,
+  action,
+  empty = "Nothing saved yet.",
+}: {
+  items: PaginatedQueryResult.PaginatedQueryResult<Item, E>;
+  action: (refId: Id<"refs">) => ReactNode;
+  empty?: string;
+}) {
+  const refIds = useMemo(() => items.results.map((item) => item.refId), [items.results]);
+  const urls = useRefUrls(refIds, "thumbnail");
+
+  return (
+    <>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
         {items.results.map((item) => (
           <li key={item.refId} data-ref-id={item.refId} className="flex flex-col gap-1">
@@ -85,7 +90,7 @@ export function Gallery<E extends { readonly _tag: string }>({
       {PaginatedQueryResult.isLoading(items) ? <p>Loading…</p> : null}
       {PaginatedQueryResult.isFailure(items) ? <p role="alert">{items.error._tag}</p> : null}
       {PaginatedQueryResult.isExhausted(items) && items.results.length === 0 ? (
-        <p>Nothing saved yet.</p>
+        <p>{empty}</p>
       ) : null}
       {PaginatedQueryResult.isCanLoadMore(items) ? (
         <Button variant="outline" className="self-start" onClick={() => items.loadMore(pageSize)}>

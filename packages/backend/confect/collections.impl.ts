@@ -10,6 +10,7 @@ import { RefNotFound } from "./library.spec";
 import { addMember, canvasOf, leaveCollection, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
+import { isLive, ownedRef } from "./ref";
 
 const create = FunctionImpl.make(databaseSchema, collections, "create", ({ name }) =>
   Effect.gen(function* () {
@@ -48,17 +49,11 @@ const addRefs = FunctionImpl.make(
   ({ collectionId, refIds }) =>
     Effect.gen(function* () {
       yield* ownedCollection(collectionId);
-      const { workspaceId } = yield* CurrentWorkspace;
-      const reader = yield* DatabaseReader;
       yield* Effect.forEach(
         refIds,
         (refId) =>
           Effect.gen(function* () {
-            const ref = yield* reader
-              .table("refs")
-              .get(refId)
-              .pipe(Effect.mapError(() => new RefNotFound()));
-            if (ref.workspaceId !== workspaceId) {
+            if (!isLive(yield* ownedRef(refId))) {
               return yield* new RefNotFound();
             }
             yield* addMember(collectionId, refId);
@@ -103,9 +98,12 @@ const refs = FunctionImpl.make(
         .index("by_collection", (q) => q.eq("collectionId", collectionId), "desc")
         .paginate(paginationOpts)
         .pipe(Effect.orDie);
-      const page = yield* Effect.forEach(result.page, ({ refId }) =>
-        reader.table("refs").get(refId).pipe(Effect.orDie, Effect.flatMap(galleryItem)),
+      // A Ref in the trash keeps its membership, so it comes back on restore. It is left out here,
+      // which makes a page shorter than asked when it holds one.
+      const members = yield* Effect.forEach(result.page, ({ refId }) =>
+        reader.table("refs").get(refId).pipe(Effect.orDie),
       );
+      const page = yield* Effect.forEach(members.filter(isLive), galleryItem);
       return { ...result, page };
     }),
 );

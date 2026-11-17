@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppLibraryRouteImport } from './routes/_app/library'
+import { Route as AppTrashRouteImport } from './routes/_app/trash'
 import { Route as AppCCollectionIdRouteImport } from './routes/_app/c.$collectionId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -34,6 +35,11 @@ const AppLibraryRoute = AppLibraryRouteImport.update({
   path: '/library',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTrashRoute = AppTrashRouteImport.update({
+  id: '/trash',
+  path: '/trash',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCCollectionIdRoute = AppCCollectionIdRouteImport.update({
   id: '/c/$collectionId',
   path: '/c/$collectionId',
@@ -44,12 +50,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/library': typeof AppLibraryRoute
+  '/trash': typeof AppTrashRoute
   '/c/$collectionId': typeof AppCCollectionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/library': typeof AppLibraryRoute
+  '/trash': typeof AppTrashRoute
   '/c/$collectionId': typeof AppCCollectionIdRoute
 }
 export interface FileRoutesById {
@@ -58,19 +66,21 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/_app/library': typeof AppLibraryRoute
+  '/_app/trash': typeof AppTrashRoute
   '/_app/c/$collectionId': typeof AppCCollectionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sign-in' | '/library' | '/c/$collectionId'
+  fullPaths: '/' | '/sign-in' | '/library' | '/trash' | '/c/$collectionId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sign-in' | '/library' | '/c/$collectionId'
+  to: '/' | '/sign-in' | '/library' | '/trash' | '/c/$collectionId'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/sign-in'
     | '/_app/library'
+    | '/_app/trash'
     | '/_app/c/$collectionId'
   fileRoutesById: FileRoutesById
 }
@@ -110,6 +120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLibraryRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/trash': {
+      id: '/_app/trash'
+      path: '/trash'
+      fullPath: '/trash'
+      preLoaderRoute: typeof AppTrashRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/c/$collectionId': {
       id: '/_app/c/$collectionId'
       path: '/c/$collectionId'
@@ -122,11 +139,13 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppLibraryRoute: typeof AppLibraryRoute
+  AppTrashRoute: typeof AppTrashRoute
   AppCCollectionIdRoute: typeof AppCCollectionIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppLibraryRoute: AppLibraryRoute,
+  AppTrashRoute: AppTrashRoute,
   AppCCollectionIdRoute: AppCCollectionIdRoute,
 }
 

@@ -201,6 +201,59 @@ test("an item that arrives with deletedAt leaves the scene and the selection", (
   expect(store.summary().items).toBe(1);
 });
 
+const selectBoth = ({ store, screen }: ReturnType<typeof setUp>) => {
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.release();
+  store.press(screen({ x: 300, y: 0 }), true);
+  store.release();
+};
+
+test("an item deleted while it is dragged ends the drag, and the release saves nothing", () => {
+  const { store, screen } = setUp();
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.move(screen({ x: 30, y: 0 }));
+
+  store.applyChanges({ rev: 2, items: [{ ...a, deletedAt: 1 }] });
+
+  expect(store.gesture().kind).toBe("idle");
+  expect(store.release()).toBeNull();
+});
+
+test("when one of two dragged items is deleted, the drop moves only the other", () => {
+  const scene = setUp();
+  const { store, screen } = scene;
+  selectBoth(scene);
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.move(screen({ x: 40, y: 0 }));
+
+  store.applyChanges({ rev: 2, items: [{ ...a, deletedAt: 1 }] });
+
+  expect(store.release()?.moves).toEqual([{ key: "b", x: 340, y: 0 }]);
+});
+
+test("an item deleted during a click on it is not selected by the release", () => {
+  const scene = setUp();
+  const { store, screen } = scene;
+  selectBoth(scene);
+  store.press(screen({ x: 0, y: 0 }), false);
+
+  store.applyChanges({ rev: 2, items: [{ ...a, deletedAt: 1 }] });
+  store.release();
+
+  expect([...store.selection()]).toEqual(["b"]);
+});
+
+test("a snapshot without the dragged item ends the drag", () => {
+  const { store, screen } = setUp();
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.move(screen({ x: 30, y: 0 }));
+
+  store.loadSnapshot({ rev: 2, items: [b] });
+
+  expect(store.gesture().kind).toBe("idle");
+  expect(store.release()).toBeNull();
+});
+
 test("a snapshot older than the store's state is left out", () => {
   const { store, at } = setUp();
   store.applyChanges({ rev: 5, items: [{ ...a, x: 50 }] });

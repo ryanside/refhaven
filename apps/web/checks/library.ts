@@ -61,7 +61,7 @@ try {
     await page.screenshot({ path: `${process.env.EVIDENCE}/01-saved.png`, fullPage: true });
   }
   assert(
-    (await cards(page).allTextContents()).join() === "small.png,large.png",
+    (await cards(page).locator("p").allTextContents()).join() === "small.png,large.png",
     `two saved images show in the library, newest first, and both load: ${await outcomes(page).allTextContents()}`,
   );
 

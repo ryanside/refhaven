@@ -1,4 +1,5 @@
 import { FunctionImpl, GroupImpl } from "@confect/server";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -18,16 +19,12 @@ import {
   variantKey,
   variantRoles,
 } from "./blob";
-import library, {
-  ImageTooLarge,
-  RefNotFound,
-  UnsupportedImage,
-  UploadNotFound,
-} from "./library.spec";
+import library, { ImageTooLarge, UnsupportedImage, UploadNotFound } from "./library.spec";
 import { addMember, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 import { hashBoundUpload, r2 } from "./r2";
+import { isLive, liveRefs, ownedRef } from "./ref";
 
 const storedBlob = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
   Effect.gen(function* () {
@@ -203,31 +200,39 @@ export const galleryItem = (ref: RefsDoc) =>
 
 const list = FunctionImpl.make(databaseSchema, library, "list", ({ paginationOpts }) =>
   Effect.gen(function* () {
-    const { workspaceId } = yield* CurrentWorkspace;
-    const reader = yield* DatabaseReader;
-    const result = yield* reader
-      .table("refs")
-      .index("by_workspace", (q) => q.eq("workspaceId", workspaceId), "desc")
-      .paginate(paginationOpts);
+    const result = yield* (yield* liveRefs).paginate(paginationOpts);
     return { ...result, page: yield* Effect.forEach(result.page, galleryItem) };
   }).pipe(Effect.orDie),
 );
 
+const trash = FunctionImpl.make(databaseSchema, library, "trash", ({ paginationOpts }) =>
+  Effect.gen(function* () {
+    const { workspaceId } = yield* CurrentWorkspace;
+    const reader = yield* DatabaseReader;
+    const result = yield* reader
+      .table("refs")
+      .index(
+        "by_workspace_and_deletedAt",
+        (q) => q.eq("workspaceId", workspaceId).gt("deletedAt", undefined),
+        "desc",
+      )
+      .paginate(paginationOpts);
+    const page = yield* Effect.forEach(result.page, (ref) =>
+      galleryItem(ref).pipe(Effect.map((item) => ({ ...item, deletedAt: ref.deletedAt! }))),
+    );
+    return { ...result, page };
+  }).pipe(Effect.orDie),
+);
+
 // A mutation, not a query. Convex caches a query's result, so a query would keep handing out
-// the same signed URL after it expired.
+// the same signed URL after it expired. A Ref in the trash is signed too, for the trash page.
 const urls = FunctionImpl.make(databaseSchema, library, "urls", ({ refIds, role }) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
     const reader = yield* DatabaseReader;
     return yield* Effect.forEach(refIds, (refId) =>
       Effect.gen(function* () {
-        const ref = yield* reader
-          .table("refs")
-          .get(refId)
-          .pipe(Effect.mapError(() => new RefNotFound()));
-        if (ref.workspaceId !== workspaceId) {
-          return yield* new RefNotFound();
-        }
+        const ref = yield* ownedRef(refId);
         const blob = yield* reader.table("blobs").get(ref.blobs.original).pipe(Effect.orDie);
         const url = yield* Effect.promise(() =>
           r2.getUrl(servedKey(workspaceId, blob, role), { expiresIn: signedUrlSeconds }),
@@ -238,12 +243,70 @@ const urls = FunctionImpl.make(databaseSchema, library, "urls", ({ refIds, role 
   }),
 );
 
+/**
+ * Moves Refs into the trash, or out of it when `deletedAt` is undefined. A Ref already there is
+ * left alone. Canvases learn of it from `canvas.changes`, so each shown item of a moved Ref is
+ * stamped with a new rev of its canvas, raised once per canvas.
+ */
+const setTrashed = (refIds: ReadonlyArray<Id<"refs">>, deletedAt: number | undefined) =>
+  Effect.gen(function* () {
+    const reader = yield* DatabaseReader;
+    const writer = yield* DatabaseWriter;
+    const moving = (yield* Effect.forEach(Arr.dedupe(refIds), ownedRef)).filter(
+      (ref) => isLive(ref) === (deletedAt !== undefined),
+    );
+    yield* Effect.forEach(
+      moving,
+      (ref) => writer.table("refs").patch(ref._id, { deletedAt }).pipe(Effect.orDie),
+      { discard: true },
+    );
+    const items = yield* Effect.forEach(moving, (ref) =>
+      reader
+        .table("canvasItems")
+        .index("by_ref", (q) => q.eq("refId", ref._id))
+        .collect()
+        .pipe(Effect.orDie),
+    );
+    const byCanvas = Arr.groupBy(
+      items.flat().filter((item) => item.deletedAt === undefined),
+      (item) => item.canvasId,
+    );
+    yield* Effect.forEach(
+      Object.values(byCanvas),
+      (canvasItems) =>
+        Effect.gen(function* () {
+          const canvasId = canvasItems[0].canvasId;
+          const { rev } = yield* reader.table("canvases").get(canvasId);
+          yield* writer.table("canvases").patch(canvasId, { rev: rev + 1 });
+          yield* Effect.forEach(
+            canvasItems,
+            (item) => writer.table("canvasItems").patch(item._id, { rev: rev + 1 }),
+            { discard: true },
+          );
+        }).pipe(Effect.orDie),
+      { discard: true },
+    );
+    return null;
+  });
+
+// A typed error is thrown as a ConvexError, so Convex rolls back every write of a failed call.
+const remove = FunctionImpl.make(databaseSchema, library, "remove", ({ refIds }) =>
+  setTrashed(refIds, Date.now()),
+);
+
+const restore = FunctionImpl.make(databaseSchema, library, "restore", ({ refIds }) =>
+  setTrashed(refIds, undefined),
+);
+
 export default GroupImpl.make(databaseSchema, library).pipe(
   Layer.provide(prepareUpload),
   Layer.provide(save),
   Layer.provide(record),
   Layer.provide(list),
+  Layer.provide(trash),
   Layer.provide(urls),
+  Layer.provide(remove),
+  Layer.provide(restore),
   Layer.provide(RequireWorkspace),
   GroupImpl.finalize,
 );

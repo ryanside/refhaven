@@ -1,12 +1,13 @@
 import { QueryResult, useMutation, usePaginatedQuery, useQuery } from "@confect/react";
 import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
+import { Button } from "@refhaven/ui/components/button";
 import { NativeSelect, NativeSelectOption } from "@refhaven/ui/components/native-select";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import * as Result from "effect/Result";
 import { CanvasView } from "@/canvas/canvas-view";
 import { NameForm } from "@/collections/name-form";
-import { Gallery, galleryPage } from "@/library/gallery";
+import { Gallery, SaveImages, galleryPage } from "@/library/gallery";
 import { ViewLinks, validateView } from "@/view";
 
 export const Route = createFileRoute("/_app/library")({
@@ -30,12 +31,16 @@ function LibraryGallery() {
   const collections = useQuery(refs.public.collections.list, {});
   const create = useMutation(refs.public.collections.create);
   const addRefs = useMutation(refs.public.collections.addRefs);
+  const remove = useMutation(refs.public.library.remove);
   const owned = QueryResult.isSuccess(collections) ? collections.value : [];
 
   return (
     <main className="flex flex-col gap-4 p-6">
       <h1 className="font-medium">Library</h1>
       <ViewLinks />
+      <Link to="/trash" className="underline">
+        Trash
+      </Link>
 
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">Collections</h2>
@@ -63,31 +68,42 @@ function LibraryGallery() {
         />
       </section>
 
+      <SaveImages />
       <Gallery
         items={items}
-        action={(refId) =>
-          owned.length === 0 ? null : (
-            <NativeSelect
-              aria-label="Add to collection"
-              value=""
-              onChange={(event) =>
-                void addRefs({
-                  collectionId: event.currentTarget.value as Id<"collections">,
-                  refIds: [refId],
-                })
-              }
-            >
-              <NativeSelectOption value="" disabled>
-                Add to collection
-              </NativeSelectOption>
-              {owned.map(({ collectionId, name }) => (
-                <NativeSelectOption key={collectionId} value={collectionId}>
-                  {name}
+        action={(refId) => (
+          <>
+            {owned.length === 0 ? null : (
+              <NativeSelect
+                aria-label="Add to collection"
+                value=""
+                onChange={(event) =>
+                  void addRefs({
+                    collectionId: event.currentTarget.value as Id<"collections">,
+                    refIds: [refId],
+                  })
+                }
+              >
+                <NativeSelectOption value="" disabled>
+                  Add to collection
                 </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          )
-        }
+                {owned.map(({ collectionId, name }) => (
+                  <NativeSelectOption key={collectionId} value={collectionId}>
+                    {name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => void remove({ refIds: [refId] })}
+            >
+              Delete
+            </Button>
+          </>
+        )}
       />
 
       <Account />
