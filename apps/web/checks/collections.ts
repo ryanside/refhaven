@@ -202,6 +202,33 @@ try {
     "the removed image stays in the other collection and in the library",
   );
 
+  // The image is not in Mood now, so each of these calls tries to insert it.
+  const inMood = (refIds: ReadonlyArray<string>) => ({
+    collectionId: moodId as Id<"collections">,
+    refIds: refIds as Array<Id<"refs">>,
+  });
+  await Promise.all([
+    owner.mutation(api.collections.addRefs, inMood([libraryRefId])),
+    owner.mutation(api.collections.addRefs, inMood([libraryRefId, libraryRefId])),
+  ]);
+  assert(
+    (await members(moodId)).join() === [libraryRefId, uploadedRefId].sort().join(),
+    `adding an absent image in two calls at once, and twice in one call, makes one membership: ${await members(moodId)}`,
+  );
+  const pageOf = (cursor: string | null) =>
+    owner.query(api.collections.refs, {
+      collectionId: moodId as Id<"collections">,
+      paginationOpts: { numItems: 1, cursor },
+    });
+  const newest = await pageOf(null);
+  const older = await pageOf(newest.continueCursor);
+  assert(
+    newest.page.map((item) => item.refId).join() === libraryRefId &&
+      older.page.map((item) => item.refId).join() === uploadedRefId,
+    "a collection lists its images newest added first, one page after the other",
+  );
+  await owner.mutation(api.collections.removeRefs, inMood([libraryRefId]));
+
   await page.goto(`${appUrl}/c/${moodId}`);
   await page.getByLabel("Collection name").fill("  Mood board ");
   await page.getByRole("button", { name: "Rename" }).click();
@@ -244,12 +271,12 @@ try {
       `${label} is refused by create and by rename: ${created}`,
     );
   }
-  const longest = await owner.mutation(api.collections.create, { name: ` ${"x".repeat(100)} ` });
+  const longest = await createOnPage(page, ` ${"x".repeat(100)} `);
   const listed = await owner.query(api.collections.list, {});
   assert(
     listed.map(({ name }) => name).join() === `Mood board,Sketches,${"x".repeat(100)}` &&
-      listed[2]!.collectionId === longest,
-    "a name of 100 characters after trimming is accepted, and the refused names made nothing",
+      listed[2]!.collectionId === (await longest.getAttribute("data-collection-id")),
+    "a name of 100 characters between spaces is accepted on the page, and the refused names made nothing",
   );
 
   await signInWithPasskey(second.page, `check-collections-b-${stamp}`);
@@ -338,6 +365,16 @@ try {
   assert(
     (await members(own)).join() === saved.refId,
     "the same save into the second user's own collection records the Ref and its membership",
+  );
+  const spare = await other.mutation(api.collections.create, { name: "Spare" });
+  assert(
+    (await outcome(
+      other.mutation(api.collections.addRefs, {
+        collectionId: spare,
+        refIds: [saved.refId, uploadedRefId as Id<"refs">],
+      }),
+    )) === "RefNotFound" && (await members(spare)).length === 0,
+    "a call that adds one's own image and then another user's fails with RefNotFound and adds neither",
   );
 
   await second.page.goto(`${appUrl}/c/${moodId}`);
