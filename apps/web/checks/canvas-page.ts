@@ -363,10 +363,11 @@ try {
     "the move in the first page to save",
   );
   // The image's center stays inside its old rectangle, so it cannot show the move. These two
-  // points can: one the move newly covers, and one it leaves.
-  const greenWidth = worldSize(greenMoved).width;
+  // points can: one the move newly covers, and one it leaves. The first sits below the image's
+  // middle, because the panel over the top-left corner covers the middle's height there.
+  const { width: greenWidth, height: greenHeight } = worldSize(greenMoved);
   const middle = (greenMoved.x + greenSaved.x) / 2;
-  const newlyCovered = { x: middle - greenWidth / 2, y: greenMoved.y };
+  const newlyCovered = { x: middle - greenWidth / 2, y: greenMoved.y + greenHeight / 4 };
   const leftBehind = { x: middle + greenWidth / 2, y: greenSaved.y };
   const afterMove = saved.map((item) => (item.key === green.key ? greenMoved : item));
   if (topmostAt(sized(afterMove), newlyCovered)?.key !== green.key) {
