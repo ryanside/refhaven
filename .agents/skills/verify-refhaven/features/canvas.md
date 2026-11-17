@@ -16,7 +16,7 @@ The canvas view of the library shows every saved image on a free canvas. Each co
 - `canvas-remove` removes the selected images with one `canvas.apply` call of `remove` ops, by Delete, Backspace, or `Remove from canvas`. On a collection's canvas the button is `Remove from collection`, and the image leaves the collection.
 - `canvas-undo` undoes and redoes the page's moves, removals, and adds with one `canvas.apply` call each, by Mod+Z, Mod+Shift+Z, Ctrl+Y, or the `Undo` and `Redo` buttons. An undo that the server state no longer allows shows "That change could not be undone." and changes nothing.
 - `canvas-keys` maps Delete and Backspace, Mod+Z, Mod+Shift+Z, Ctrl+Y, Mod+A to select every image, and Escape to clear the selection. No shortcut fires while a text field has focus.
-- `canvas-put-back` shows on the library's canvas how many of its images are not on it, and `Put them back` places them to the right of the layout.
+- `canvas-put-back` shows on the library's canvas how many of its images are not on it, and `Put them back` places them to the right of the layout. It is one edit, so undo takes them off again.
 - `canvas-display` swaps an image's thumbnail for its 2048 px copy once its longer edge passes 512 device pixels on screen, at the same size.
 
 ## How to get to it (user POV)
