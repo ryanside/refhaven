@@ -104,3 +104,4 @@ Test users, their images, and their R2 objects stay in the dev deployment. Nothi
 - Each username is a new account. Reuse one username inside a script to sign in again with the same passkey. The passkey lives in that browser instance only.
 - A fresh git worktree has no `packages/backend/.env.local`. `up` prints the copy command.
 - `convex dev` type-checks before it pushes. A type error leaves the old functions deployed, and `doctor` then reports the functions that differ.
+- `convex dev` can miss a save that changes only files under `confect/`. `doctor` compares function names, not code, so it stays healthy. After a backend change, wait for a new `Convex functions ready!` line in the run's `dev.log`. If none comes, touch the group's file under `packages/backend/convex/`.
