@@ -79,6 +79,10 @@ const settle = (page: Page) =>
 
 const openCanvas = async (page: Page, count: number) => {
   await page.goto(canvasUrl);
+  await waitForCanvas(page, count);
+};
+
+const waitForCanvas = async (page: Page, count: number) => {
   await page
     .locator(`[data-testid="canvas"][data-shown-thumbnails="${count}"]`)
     .waitFor({ timeout: 15_000 });
@@ -611,6 +615,117 @@ try {
       afterBlur.rev === beforeBlur.rev + 1,
     `a drag that the window losing focus interrupts is saved once where it was, and later pointer moves do not move the image: rev ${beforeBlur.rev} to ${afterBlur.rev}`,
   );
+
+  const yellow = { name: "yellow.png", color: [220, 200, 40] as Rgb, width: 500, height: 300 };
+  const board = await owner.mutation(api.collections.create, { name: "Board" });
+  await owner.mutation(api.collections.addRefs, {
+    collectionId: board,
+    refIds: [red.refId, blue.refId],
+  });
+  await page.goto(`${appUrl}/library`);
+  await page.locator(`[data-collection-id="${board}"]`).click();
+  await page.waitForURL(`${appUrl}/c/${board}`);
+  await page.getByRole("heading", { name: "Board" }).waitFor();
+  await page.getByLabel("Add images").setInputFiles([
+    {
+      name: yellow.name,
+      mimeType: "image/png",
+      buffer: await solidPng(page, yellow.color, yellow.width, yellow.height),
+    },
+  ]);
+  const savedLine = page.locator('[role="status"] li').first();
+  await savedLine.waitFor({ timeout: 60_000 });
+  if ((await savedLine.getAttribute("data-outcome")) !== "saved") {
+    throw new Error(
+      `FAIL the collection's page saves ${yellow.name}: ${await savedLine.textContent()}`,
+    );
+  }
+  const yellowRefId = (await page
+    .locator("[data-ref-id]")
+    .filter({ hasText: yellow.name })
+    .getAttribute("data-ref-id"))!;
+  refColors.set(yellowRefId, yellow.color);
+  await page.getByRole("link", { name: "Canvas" }).click();
+  await page.waitForURL(`${appUrl}/c/${board}?view=canvas`);
+  await waitForCanvas(page, 3);
+  const collectionSnapshot = () => owner.mutation(api.canvas.open, { collectionId: board });
+  const inCollection = await collectionSnapshot();
+  view = await pageView(page);
+  png = await screenshot(page, "09-collection-canvas.png");
+  assert(
+    (await readout(page)).items === 3 &&
+      inCollection.canvasId !== canvasId &&
+      inCollection.items
+        .map((item) => item.refId)
+        .sort()
+        .join() === [red.refId, blue.refId, yellowRefId].sort().join(),
+    "the collection's canvas page shows its 3 members in the readout, from its own canvas",
+  );
+  for (const item of inCollection.items) {
+    const expected = rectOnPage(view, item);
+    const found = rectOf(png, colorOf(item, refColors));
+    assert(
+      sameRect(found, expected, 2),
+      `on the collection's canvas the ${item.width}x${item.height} image is drawn at ${showRect(found)}, where its canvas puts it: ${showRect(expected)}`,
+    );
+  }
+  assert(
+    rectOf(png, colorOf(green, refColors)) === null,
+    "the image that is not in the collection is not drawn on its canvas",
+  );
+
+  const libraryBeforeDrag = await snapshotOf(owner);
+  const redThere = inCollection.items.find((item) => item.key === red.key)!;
+  await drag(page, toPage(view, redThere), { x: 100, y: 40 });
+  await until(
+    collectionSnapshot,
+    (s) => s.rev === inCollection.rev + 1,
+    "the drag on the collection's canvas to save",
+  );
+  const collectionMove = await changesSince(owner, inCollection.canvasId, inCollection.rev);
+  const libraryAfterDrag = await snapshotOf(owner);
+  const redInLibrary = libraryBeforeDrag.items.find((item) => item.key === red.key)!;
+  assert(
+    collectionMove.items.length === 1 &&
+      collectionMove.items[0]!.key === red.key &&
+      Math.abs(collectionMove.items[0]!.x - (redThere.x + 100 / view.camera.zoom)) < 1e-6 &&
+      Math.abs(collectionMove.items[0]!.y - (redThere.y + 40 / view.camera.zoom)) < 1e-6 &&
+      libraryAfterDrag.rev === libraryBeforeDrag.rev &&
+      libraryAfterDrag.items.find((item) => item.key === red.key)!.x === redInLibrary.x &&
+      libraryAfterDrag.items.find((item) => item.key === red.key)!.y === redInLibrary.y,
+    "a drag on the collection's canvas is saved to that canvas and not to the library's",
+  );
+
+  await page.getByRole("link", { name: "refhaven" }).click();
+  await page.waitForURL(`${appUrl}/library`);
+  await page.getByRole("link", { name: "Canvas" }).click();
+  await page.waitForURL(canvasUrl);
+  await waitForCanvas(page, 4);
+  view = await pageView(page);
+  png = await screenshot(page, "10-library-after-collection.png");
+  const libraryLayout = (await snapshotOf(owner)).items;
+  for (const item of libraryLayout) {
+    const point = exposedPoint(item, libraryLayout);
+    assert(
+      near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
+      `going from the collection's canvas to the library's shows the library's layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
+    );
+  }
+
+  await page.goBack();
+  await page.goBack();
+  await page.waitForURL(`${appUrl}/c/${board}?view=canvas`);
+  await waitForCanvas(page, 3);
+  view = await pageView(page);
+  png = await screenshot(page, "11-collection-again.png");
+  const collectionLayout = (await collectionSnapshot()).items;
+  for (const item of collectionLayout) {
+    const point = exposedPoint(item, collectionLayout);
+    assert(
+      near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
+      `going back to the collection's canvas shows its own layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
+    );
+  }
 
   assert(
     consoleErrors.length === 0,

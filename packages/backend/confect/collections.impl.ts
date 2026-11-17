@@ -7,7 +7,7 @@ import { DatabaseReader, DatabaseWriter } from "./_generated/services";
 import collections from "./collections.spec";
 import { galleryItem } from "./library.impl";
 import { RefNotFound } from "./library.spec";
-import { addMember, ownedCollection } from "./membership";
+import { addMember, canvasOf, leaveCollection, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 
@@ -76,25 +76,16 @@ const removeRefs = FunctionImpl.make(
   ({ collectionId, refIds }) =>
     Effect.gen(function* () {
       yield* ownedCollection(collectionId);
-      const reader = yield* DatabaseReader;
       const writer = yield* DatabaseWriter;
-      yield* Effect.forEach(
-        refIds,
-        (refId) =>
-          Effect.gen(function* () {
-            const membership = yield* reader
-              .table("collectionRefs")
-              .index("by_collection_and_ref", (q) =>
-                q.eq("collectionId", collectionId).eq("refId", refId),
-              )
-              .first()
-              .pipe(Effect.orDie);
-            if (Option.isSome(membership)) {
-              yield* writer.table("collectionRefs").delete(membership.value._id);
-            }
-          }),
-        { discard: true },
-      );
+      const canvas = Option.getOrUndefined(yield* canvasOf(collectionId));
+      const stamp = canvas && { canvasId: canvas._id, rev: canvas.rev + 1 };
+      if (stamp) {
+        yield* writer
+          .table("canvases")
+          .patch(stamp.canvasId, { rev: stamp.rev })
+          .pipe(Effect.orDie);
+      }
+      yield* leaveCollection(collectionId, refIds, stamp);
       return null;
     }),
 );

@@ -2,7 +2,7 @@
 
 A reference library for images. You save images into a library, group them into collections, and view any set as a gallery or as a canvas. The rules for working in this repo are in [docs/decisions.md](docs/decisions.md).
 
-This repository is early. You can sign in with a passkey, save images into your library, and view the library as a gallery or as a canvas. On the canvas you can pan, zoom, select, and move images. You can group images into collections, rename a collection, and view it as a gallery at `/c/{collectionId}`. A collection has no canvas yet, and it cannot be deleted.
+This repository is early. You can sign in with a passkey, save images into your library, and view the library as a gallery or as a canvas. On the canvas you can pan, zoom, select, and move images. You can group images into collections, rename a collection, and view it as a gallery or as its own canvas at `/c/{collectionId}`. A collection cannot be deleted yet.
 
 ## Run it locally
 
@@ -42,11 +42,12 @@ The browser checks need `bun dev` running. Run them from `apps/web`. Most of the
 | Command | What it checks |
 |---|---|
 | `bun run check:auth` | Passkey sign-up, sign-out, and sign-in. |
+| `bun run check:collection-canvas` | A collection's own canvas: only its members, a layout apart from the library's, removals that take an image out of the collection, an image that comes back, two opens at once, and the rules between two users. It needs R2. |
 | `bun run check:collections` | Making, renaming, and filling collections on the page, saving into a collection, adding an image twice, refused names, and the rules between two users. It needs R2. |
 | `bun run check:confect` | A Confect function returns the signed-in user and refuses bad arguments. |
 | `bun run check:library` | Saving images with their thumbnail and display copy, a duplicate, byte-exact serving, uploads held to their hash, and the rules between two users. It needs R2. |
 | `bun run check:canvas` | The canvas functions: placing saved images, a patch, a removal, refused edits, and the rules between two users. It needs R2. |
-| `bun run check:canvas-page` | The canvas page with the real mouse and wheel: drawing, pan, zoom, selection, saved moves, a second page, and the 2048 px copy. It needs R2. |
+| `bun run check:canvas-page` | The canvas page with the real mouse and wheel: drawing, pan, zoom, selection, saved moves, a second page, the 2048 px copy, and a collection's canvas. It needs R2. |
 | `bun run check:renderer` | A local bitmap drawn as a WebGL texture by the PixiJS renderer. |
 
 Agents verify a change in the running app with the `verify-refhaven` skill in `.agents/skills/verify-refhaven`. Its helper script starts the app, checks it, runs a drive script, and keeps the evidence.

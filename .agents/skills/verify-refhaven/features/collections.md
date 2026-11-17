@@ -1,6 +1,6 @@
 # Collections
 
-A collection is a named set of images in the library. On `/library` the user makes a collection, sees each one as a link, and adds an image to one from the image's card. `/c/{collectionId}` shows the collection's images in the same grid as the library, with a rename form and the same file picker. An image saved there goes into the library and into the collection. An image removed from a collection stays in the library and in its other collections. Each user sees only their own collections.
+A collection is a named set of images in the library. On `/library` the user makes a collection, sees each one as a link, and adds an image to one from the image's card. `/c/{collectionId}` shows the collection's images in the same grid as the library, with a rename form and the same file picker. An image saved there goes into the library and into the collection. An image removed from a collection stays in the library and in its other collections. A collection also has its own canvas, and removing an image from that canvas takes it out of the collection. Each user sees only their own collections.
 
 ## Sub-features
 
@@ -11,12 +11,14 @@ A collection is a named set of images in the library. On `/library` the user mak
 - `collections-remove` takes an image out of a collection with the card's `Remove from collection` button.
 - `collections-rename` renames a collection from its page.
 - `collections-names` refuses an empty name, a name of spaces, and a name over 100 characters, and trims the rest.
+- `collections-canvas` opens the collection's own canvas from the `Canvas` link on its page. The Canvas recipe drives it.
 - `collections-private` shows another user's collection as `Collection not found.`
 
 ## How to get to it (user POV)
 
 - Open `/library` and use the `Collections` section. Sign-in lands here.
 - Choose a collection's link on `/library` to open `/c/{collectionId}`.
+- Choose `Gallery` or `Canvas` on a collection's page to switch its view.
 - Choose a card's `Add to collection` list on `/library`. It shows only when the user has a collection.
 
 ## Driving it with Playwright
@@ -39,6 +41,7 @@ Preconditions:
 
 ## Gotchas
 
+- After a link click, `page.waitForURL` resolves before the collection's page renders. Wait for its heading before you use `Add images`, or the file goes to the library page's input.
 - The collection list loads after the page. Wait for a link by its name, never by its position in a count taken before the list loaded.
 - `Add to collection` saves with no message on the page. Poll for the membership before you leave the page, or the navigation can cut the call off.
 - The `Add to collection` list is absent when the user has no collection, so a card's text is only the file name then.
