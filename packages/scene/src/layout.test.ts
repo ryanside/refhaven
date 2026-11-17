@@ -79,5 +79,5 @@ test("new z keys sort above the old top, in order", () => {
 });
 
 test("a z that no key can sort above is not a z", () => {
-  expect(["", "a", "hello", "a10", "a0V0"].filter(isZ)).toEqual([]);
+  expect(["", "a", "hello", "a10", "a0V0", "a~", "a-", "a 1"].filter(isZ)).toEqual([]);
 });

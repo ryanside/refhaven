@@ -72,8 +72,11 @@ export function zAbove(existing: Iterable<string>, count: number): Array<string>
   return generateNKeysBetween(top, null, count);
 }
 
-/** Whether `z` is a key that `zAbove` can sort above. */
+const zAlphabet = /^[0-9A-Za-z]+$/;
+
+/** Whether `z` is a key that `zAbove` can sort above. A character outside base 62 would sort above every key it makes. */
 export function isZ(z: string): boolean {
+  if (!zAlphabet.test(z)) return false;
   try {
     generateKeyBetween(z, null);
     return true;
