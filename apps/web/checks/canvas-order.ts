@@ -25,6 +25,7 @@ import {
   until,
   waitForCanvas,
   refOf,
+  openCanvas,
 } from "./canvas-screen";
 
 const images = {
@@ -39,7 +40,7 @@ const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 type Op = { op: string; key?: string; fields?: Record<string, unknown> };
 
-const snapshotOf = (owner: ConvexHttpClient) => owner.mutation(api.canvas.open, {});
+const snapshotOf = (owner: ConvexHttpClient) => openCanvas(owner, {});
 
 const round = ({ x, y }: Point): Point => ({ x: Math.round(x), y: Math.round(y) });
 

@@ -1,7 +1,6 @@
 import { api } from "@refhaven/backend/api";
 import { type Point, topmostAt } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
-import type { FunctionReturnType } from "convex/server";
 import type { Page, Route } from "playwright";
 import {
   appUrl,
@@ -33,9 +32,11 @@ import {
   waitForCanvas,
   worldSize,
   refOf,
+  openCanvas,
+  canvasChanges,
 } from "./canvas-screen";
 
-type Snapshot = FunctionReturnType<typeof api.canvas.open>;
+type Snapshot = Awaited<ReturnType<typeof openCanvas>>;
 
 const images = [
   { name: "red.png", color: [210, 40, 40], width: 600, height: 400 },
@@ -46,7 +47,7 @@ const images = [
 const canvasUrl = `${appUrl}/library?view=canvas`;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
-const openCanvas = async (page: Page, count: number) => {
+const showCanvas = async (page: Page, count: number) => {
   await page.goto(canvasUrl);
   await waitForCanvas(page, count);
 };
@@ -73,10 +74,10 @@ const ctrlWheel = async (page: Page, at: Point, deltaY: number) => {
   await page.keyboard.up("Control");
 };
 
-const snapshotOf = (owner: ConvexHttpClient) => owner.mutation(api.canvas.open, {});
+const snapshotOf = (owner: ConvexHttpClient) => openCanvas(owner, {});
 
 const changesSince = (owner: ConvexHttpClient, canvasId: Snapshot["canvasId"], rev: number) =>
-  owner.query(api.canvas.changes, { canvasId, rev });
+  canvasChanges(owner, { canvasId, rev });
 
 const { browser, page } = await openPageWithPasskeyDevice();
 watchConsole(page);
@@ -106,7 +107,7 @@ try {
 
   await page.getByRole("link", { name: "Canvas" }).click();
   await page.waitForURL(canvasUrl);
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   const owner = await clientFor(page);
   const opened = await snapshotOf(owner);
   const { canvasId } = opened;
@@ -198,7 +199,7 @@ try {
   await settle(page);
   assert((await readout(page)).camera.zoom === 0.01, "zoom stops at 1%");
 
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   view = await pageView(page);
   await click(page, toPage(view, red));
   await until(
@@ -339,7 +340,7 @@ try {
   );
 
   await page.reload();
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   view = await pageView(page);
   png = await screenshot(page, "05-reloaded.png");
   const saved = (await snapshotOf(owner)).items;
@@ -354,7 +355,7 @@ try {
   const second = await page.context().newPage();
   watchConsole(second);
   await second.setViewportSize({ width: 1400, height: 900 });
-  await openCanvas(second, 3);
+  await showCanvas(second, 3);
   const greenSaved = saved.find((item) => item.key === green.key)!;
   await drag(page, toPage(view, greenSaved), { x: -100, y: -50 });
   const greenMoved = await until(
@@ -410,7 +411,7 @@ try {
     held.push(route);
   });
   await page.reload();
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   view = await pageView(page);
   const centerOfView = { x: view.box.x + view.box.width / 2, y: view.box.y + view.box.height / 2 };
   const greenNow = toPage(view, greenMoved);
@@ -452,7 +453,7 @@ try {
     `the 2048 px copy loaded from ${displayResponses.map(({ path, status }) => `${path} (${status})`).join(", ")}`,
   );
 
-  await openCanvas(page, 3);
+  await showCanvas(page, 3);
   view = await pageView(page);
   const beforeBlur = await snapshotOf(owner);
   const dragged = beforeBlur.items.find((item) => item.key === red.key)!;
@@ -517,7 +518,7 @@ try {
   await page.getByRole("link", { name: "Canvas" }).click();
   await page.waitForURL(`${appUrl}/c/${board}?view=canvas`);
   await waitForCanvas(page, 3);
-  const collectionSnapshot = () => owner.mutation(api.canvas.open, { collectionId: board });
+  const collectionSnapshot = () => openCanvas(owner, { collectionId: board });
   const inCollection = await collectionSnapshot();
   view = await pageView(page);
   png = await screenshot(page, "09-collection-canvas.png");

@@ -12,7 +12,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
-import { type Item, refOf } from "./canvas-screen";
+import { type Item, refOf, openCanvas, canvasChanges } from "./canvas-screen";
 
 const stamp = Date.now().toString(36);
 const cards = (page: Page) => page.locator("[data-ref-id]");
@@ -81,16 +81,16 @@ try {
     { name: "trashed.png", buffer: await pngOf(page, "rgb(30, 30, 200)", 300, 300) },
   ])) as [Id<"refs">, Id<"refs">];
   const owner = await clientFor(page);
-  const opened = await owner.mutation(api.canvas.open, {});
+  const opened = await openCanvas(owner, {});
   const { canvasId } = opened;
-  const changesSince = (rev: number) => owner.query(api.canvas.changes, { canvasId, rev });
-  const revNow = async () => (await owner.mutation(api.canvas.open, {})).rev;
+  const changesSince = (rev: number) => canvasChanges(owner, { canvasId, rev });
+  const revNow = async () => (await openCanvas(owner, {})).rev;
 
   const added = await owner.mutation(api.canvas.apply, {
     canvasId,
     ops: [note("note-a"), note("note-b", { x: 400, color: "red", text: "second" })],
   });
-  const reopened = await owner.mutation(api.canvas.open, {});
+  const reopened = await openCanvas(owner, {});
   const sinceOpen = await changesSince(opened.rev);
   const noteA = reopened.items.find((item) => item.key === "note-a");
   const expected = { ...note("note-a"), kind: "note" };
@@ -230,7 +230,7 @@ try {
 
   const board = await owner.mutation(api.collections.create, { name: "Board" });
   await owner.mutation(api.collections.addRefs, { collectionId: board, refIds: [kept] });
-  const boardCanvas = await owner.mutation(api.canvas.open, { collectionId: board });
+  const boardCanvas = await openCanvas(owner, { collectionId: board });
   await owner.mutation(api.canvas.apply, {
     canvasId: boardCanvas.canvasId,
     ops: [note("board-note", { text: "on the board" })],
@@ -243,7 +243,7 @@ try {
     canvasId: boardCanvas.canvasId,
     ops: [{ op: "remove", key: "board-note" }],
   });
-  const boardAfter = await owner.mutation(api.canvas.open, { collectionId: board });
+  const boardAfter = await openCanvas(owner, { collectionId: board });
   assert(
     JSON.stringify(await memberships()) === JSON.stringify(membersBefore) &&
       membersBefore.length === 1 &&
@@ -253,9 +253,7 @@ try {
     "removing a note on a collection's canvas removes no membership and changes no collection",
   );
 
-  const notesBefore = (await owner.mutation(api.canvas.open, {})).items.filter(
-    (item) => item.kind === "note",
-  );
+  const notesBefore = (await openCanvas(owner, {})).items.filter((item) => item.kind === "note");
   const noteRows = async () =>
     JSON.stringify(
       (await rows("canvasItems"))
@@ -264,9 +262,9 @@ try {
     );
   const noteRowsBefore = await noteRows();
   await owner.mutation(api.library.remove, { refIds: [trashed] });
-  const whileTrashed = await owner.mutation(api.canvas.open, {});
+  const whileTrashed = await openCanvas(owner, {});
   await owner.mutation(api.library.restore, { refIds: [trashed] });
-  const restored = await owner.mutation(api.canvas.open, {});
+  const restored = await openCanvas(owner, {});
   const notesOf = (items: ReadonlyArray<Item>) =>
     items
       .filter((item) => item.kind === "note")
@@ -286,7 +284,7 @@ try {
   const [later] = (await save(page, [
     { name: "later.png", buffer: await pngOf(page, "rgb(30, 160, 30)", 500, 250) },
   ])) as [Id<"refs">];
-  const grown = await owner.mutation(api.canvas.open, {});
+  const grown = await openCanvas(owner, {});
   const placed = grown.items.find((item) => item.kind === "image" && item.refId === later);
   const layout = boundsOf(grown.items.filter((item) => item !== placed))!;
   assert(

@@ -9,6 +9,7 @@
     "check:canvas": "bun --env-file=../../packages/backend/.env.local checks/canvas.ts",
     "check:canvas-add": "bun --env-file=../../packages/backend/.env.local checks/canvas-add.ts",
     "check:canvas-drop": "bun --env-file=../../packages/backend/.env.local checks/canvas-drop.ts",
+    "check:canvas-groups": "bun --env-file=../../packages/backend/.env.local checks/canvas-groups.ts",
     "check:canvas-notes": "bun --env-file=../../packages/backend/.env.local checks/canvas-notes.ts",
     "check:canvas-notes-page": "bun --env-file=../../packages/backend/.env.local checks/canvas-notes-page.ts",
     "check:canvas-order": "bun --env-file=../../packages/backend/.env.local checks/canvas-order.ts",

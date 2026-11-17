@@ -30,11 +30,12 @@ export const noteFields = {
   height: Schema.Finite.check(Schema.isGreaterThan(0)),
 };
 
-const sharedFields = {
-  key: ItemKey,
-  ...itemTransform,
-  deletedAt: Schema.optionalKey(Schema.Number),
-};
+/** An image's or a note's group: the key of a live group item on the same canvas. */
+const parent = Schema.optionalKey(ItemKey);
+
+const deletedAt = Schema.optionalKey(Schema.Number);
+
+const placedFields = { key: ItemKey, ...itemTransform, parent, deletedAt };
 
 /** An image's `width` and `height` are its Ref's pixel size, so a client can hit-test with no join. */
 export const ImageItem = Schema.Struct({
@@ -42,20 +43,31 @@ export const ImageItem = Schema.Struct({
   refId: Id("refs"),
   width: Schema.Int,
   height: Schema.Int,
-  ...sharedFields,
+  ...placedFields,
 });
 
 export const NoteItem = Schema.Struct({
   kind: Schema.Literal("note"),
   ...noteFields,
-  ...sharedFields,
+  ...placedFields,
+});
+
+/**
+ * A group has no place, size, or `z` of its own, and no parent. Its members are the images and
+ * notes whose `parent` is its key.
+ */
+export const GroupItem = Schema.Struct({
+  kind: Schema.Literal("group"),
+  key: ItemKey,
+  deletedAt,
 });
 
 /** An item as a client sees it. */
-export const CanvasItem = Schema.Union([ImageItem, NoteItem]);
+export const CanvasItem = Schema.Union([ImageItem, NoteItem, GroupItem]);
 
 /** The fields a patch may set on an item of each kind. */
 export const patchable = {
-  image: new Set(Object.keys(itemTransform)),
-  note: new Set([...Object.keys(itemTransform), ...Object.keys(noteFields)]),
+  image: new Set([...Object.keys(itemTransform), "parent"]),
+  note: new Set([...Object.keys(itemTransform), ...Object.keys(noteFields), "parent"]),
+  group: new Set<string>(),
 };

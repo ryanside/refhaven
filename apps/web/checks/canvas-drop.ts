@@ -31,6 +31,7 @@ import {
   until,
   waitForCanvas,
   refOf,
+  openCanvas,
 } from "./canvas-screen";
 
 const canvas = '[data-testid="canvas"]';
@@ -87,7 +88,7 @@ try {
   await waitForCanvas(page, 2);
   const redId = await refIdOf(owner, "red.png");
   const blueId = await refIdOf(owner, "blue.png");
-  const afterDrop = await owner.mutation(api.canvas.open, {});
+  const afterDrop = await openCanvas(owner, {});
   const redItem = itemOf(afterDrop.items, redId);
   const blueItem = itemOf(afterDrop.items, blueId);
   assert(
@@ -128,7 +129,7 @@ try {
       paginationOpts: { numItems: 100, cursor: null },
     })
   ).page.map((item) => item.refId);
-  const onBoard = await owner.mutation(api.canvas.open, { collectionId: board });
+  const onBoard = await openCanvas(owner, { collectionId: board });
   png = await screenshot(page, "02-collection-drop.png");
   assert(
     boardMembers.join() === yellowId &&
@@ -147,10 +148,7 @@ try {
   const pasted = await send(page, "paste", [green.carried], "body");
   await saved(page, 1);
   await waitForCanvas(page, 4);
-  const greenItem = itemOf(
-    (await owner.mutation(api.canvas.open, {})).items,
-    await refIdOf(owner, "green.png"),
-  );
+  const greenItem = itemOf((await openCanvas(owner, {})).items, await refIdOf(owner, "green.png"));
   png = await screenshot(page, "03-pasted.png");
   assert(
     pasted === "taken" && at(greenItem, middleWorld) && near(pixelAt(png, middle), green.color),
@@ -162,7 +160,7 @@ try {
   await saved(page, 2);
   await waitForCanvas(page, 5);
   const orangeItem = itemOf(
-    (await owner.mutation(api.canvas.open, {})).items,
+    (await openCanvas(owner, {})).items,
     await refIdOf(owner, "orange.png"),
   );
   png = await screenshot(page, "04-picked.png");
@@ -184,7 +182,7 @@ try {
   await send(page, "drop", [purple.carried], canvas, purpleAt);
   await waitForCanvas(second, 6);
   const purpleItem = itemOf(
-    (await owner.mutation(api.canvas.open, {})).items,
+    (await openCanvas(owner, {})).items,
     await refIdOf(owner, "purple.png"),
   );
   const secondView = await pageView(second);
@@ -221,10 +219,7 @@ try {
   const lateAt = { x: Math.round(lateBox.x + 900), y: Math.round(lateBox.y + 300) };
   await send(late, "drop", [pink.carried], canvas, lateAt);
   await waitForCanvas(late, 7);
-  const pinkItem = itemOf(
-    (await owner.mutation(api.canvas.open, {})).items,
-    await refIdOf(owner, "pink.png"),
-  );
+  const pinkItem = itemOf((await openCanvas(owner, {})).items, await refIdOf(owner, "pink.png"));
   const lateView = await pageView(late);
   const landed = toPage(lateView, pinkItem!);
   assert(
@@ -238,7 +233,7 @@ try {
 
   const outcomes = page.locator('[role="status"] li');
   const unsaved = async () => {
-    const items = (await owner.mutation(api.canvas.open, {})).items.length;
+    const items = (await openCanvas(owner, {})).items.length;
     return `${await outcomes.count()} outcomes, ${items} items`;
   };
   const before = await unsaved();

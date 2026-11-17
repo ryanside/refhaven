@@ -2,7 +2,6 @@ import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
 import { placedEdge, zAbove } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
-import type { FunctionReturnType } from "convex/server";
 import type { Page } from "playwright";
 import {
   assert,
@@ -13,9 +12,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
-import { refOf } from "./canvas-screen";
-
-type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
+import { refOf, openCanvas, canvasChanges, type Item } from "./canvas-screen";
 
 const stamp = Date.now().toString(36);
 
@@ -106,7 +103,7 @@ try {
     { name: "c.png", buffer: await pngOf(page, "rgb(30, 160, 30)", 200, 500) },
     { name: "trashed.png", buffer: await pngOf(page, "rgb(90, 90, 90)", 100) },
   ]);
-  const opened = await owner.mutation(api.canvas.open, {});
+  const opened = await openCanvas(owner, {});
   const { canvasId } = opened;
   await save(page, [
     { name: "fresh.png", buffer: await pngOf(page, "rgb(200, 200, 30)", 800, 200) },
@@ -128,7 +125,7 @@ try {
     `the library's canvas holds the 4 images saved before it opened, and 3 more are saved after: ${opened.items.length} items`,
   );
 
-  const changesSince = (rev: number) => owner.query(api.canvas.changes, { canvasId, rev });
+  const changesSince = (rev: number) => canvasChanges(owner, { canvasId, rev });
   const libraryRows = async () =>
     (await rows("canvasItems")).filter((row) => row.canvasId === canvasId);
 
@@ -190,7 +187,7 @@ try {
     canvasId,
     ops: [{ op: "remove", key: b! }],
   });
-  const afterRemove = await owner.mutation(api.canvas.open, {});
+  const afterRemove = await openCanvas(owner, {});
   assert(
     afterRemove.rev === removedRev && afterRemove.items.every((item) => refOf(item) !== b),
     `on the library's canvas open does not place a removed item's Ref again: ${afterRemove.items.length} items at rev ${afterRemove.rev}`,
@@ -200,7 +197,7 @@ try {
     ops: [{ op: "add", refId: b!, x: -500, y: -250 }],
   });
   const [back] = (await changesSince(removedRev)).items;
-  const reopened = await owner.mutation(api.canvas.open, {});
+  const reopened = await openCanvas(owner, {});
   const bRows = (await libraryRows()).filter((row) => row.refId === b);
   assert(
     backRev === removedRev + 1 &&
@@ -235,12 +232,12 @@ try {
 
   const board = await owner.mutation(api.collections.create, { name: "Board" });
   await owner.mutation(api.collections.addRefs, { collectionId: board, refIds: [a!] });
-  const boardCanvas = await owner.mutation(api.canvas.open, { collectionId: board });
+  const boardCanvas = await openCanvas(owner, { collectionId: board });
   const boardAddRev = await owner.mutation(api.canvas.apply, {
     canvasId: boardCanvas.canvasId,
     ops: [{ op: "add", refId: fresh!, x: 10, y: 20 }],
   });
-  const boardAfter = await owner.mutation(api.canvas.open, { collectionId: board });
+  const boardAfter = await openCanvas(owner, { collectionId: board });
   const freshOnBoard = boardAfter.items.find((item) => item.key === fresh);
   assert(
     boardAddRev === boardCanvas.rev + 1 &&
@@ -255,7 +252,7 @@ try {
   await owner.mutation(api.library.remove, { refIds: [trashed!] });
   // An add that names a z puts the item at that place in the stack, not on top. This is how undo
   // restores a removed item with one op.
-  const lowest = [...(await owner.mutation(api.canvas.open, {})).items].sort((one, other) =>
+  const lowest = [...(await openCanvas(owner, {})).items].sort((one, other) =>
     one.z < other.z ? -1 : 1,
   )[0]!;
   await owner.mutation(api.canvas.apply, { canvasId, ops: [{ op: "remove", key: lowest.key }] });
@@ -263,9 +260,7 @@ try {
     canvasId,
     ops: [{ op: "add", refId: refOf(lowest), x: lowest.x, y: lowest.y, z: lowest.z }],
   });
-  const restored = (await owner.mutation(api.canvas.open, {})).items.find(
-    (item) => item.key === lowest.key,
-  );
+  const restored = (await openCanvas(owner, {})).items.find((item) => item.key === lowest.key);
   assert(
     restored?.z === lowest.z && restored.x === lowest.x && restored.scale === lowest.scale,
     `an add that names a z brings a removed item back at that z, under the others: ${restored?.z}`,
@@ -312,7 +307,7 @@ try {
       ],
     }),
   );
-  const boardSince = await owner.query(api.canvas.changes, {
+  const boardSince = await canvasChanges(owner, {
     canvasId: boardCanvas.canvasId,
     rev: boardAddRev,
   });

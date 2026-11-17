@@ -18,6 +18,7 @@ import { DatabaseReader, DatabaseWriter } from "./_generated/services";
 import canvas, {
   CanvasNotFound,
   FieldNotOnItem,
+  GroupNotFound,
   ItemNotFound,
   KeyTaken,
   type Op,
@@ -54,12 +55,16 @@ const itemsOf = (canvasId: Id<"canvases">) =>
       .collect();
   }).pipe(Effect.orDie);
 
+/** The items that have a place, which every kind but a group has. */
+const placedOf = (items: ReadonlyArray<CanvasItemsDoc>) =>
+  items.flatMap((item) => (item.kind === "group" ? [] : [item]));
+
 /**
- * When the item went out of view with its Ref: the time its Ref went to the trash. A note has no
- * Ref, so only its own `deletedAt` removes it.
+ * When the item went out of view with its Ref: the time its Ref went to the trash. A note and a
+ * group have no Ref, so only their own `deletedAt` removes them.
  */
 const trashedAt = (item: CanvasItemsDoc) =>
-  item.kind === "note"
+  item.kind !== "image"
     ? Effect.succeed(undefined)
     : Effect.gen(function* () {
         const reader = yield* DatabaseReader;
@@ -121,7 +126,7 @@ const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: bool
     ).filter(isLive);
     const liveIds = new Set(live.map((ref) => ref._id));
     const shown = items.filter(
-      (item) => item.deletedAt === undefined && (item.kind === "note" || liveIds.has(item.refId)),
+      (item) => item.deletedAt === undefined && (item.kind !== "image" || liveIds.has(item.refId)),
     );
     const refsOf = (list: ReadonlyArray<CanvasItemsDoc>) =>
       new Set(list.flatMap((item) => (item.kind === "image" ? [item.refId] : [])));
@@ -140,9 +145,9 @@ const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: bool
     const sizes = yield* Effect.forEach(unplaced, sizeOf);
     const rev = openedRev + 1;
     const added = Arr.zip(
-      placeBeside(boundsOf(shown), sizes),
+      placeBeside(boundsOf(placedOf(shown)), sizes),
       zAbove(
-        items.map((item) => item.z),
+        placedOf(items).map((item) => item.z),
         sizes.length,
       ),
     ).map(([placed, z]) => imageItem(placed, z));
@@ -244,8 +249,29 @@ const place = (
   });
 
 /**
+ * The removed row of `kind` under a key the client made, to bring back, or none when the key is
+ * free. Any other row under the key fails the call.
+ */
+const removedUnder = (found: CanvasesDoc, key: string, kind: "note" | "group") =>
+  Effect.gen(function* () {
+    const reader = yield* DatabaseReader;
+    const existing = yield* reader
+      .table("canvasItems")
+      .index("by_canvas_and_key", (q) => q.eq("canvasId", found._id).eq("key", key))
+      .first()
+      .pipe(Effect.orDie);
+    if (
+      Option.isSome(existing) &&
+      (existing.value.kind !== kind || existing.value.deletedAt === undefined)
+    ) {
+      return yield* new KeyTaken({ key });
+    }
+    return Option.map(existing, (row) => row._id);
+  });
+
+/**
  * Puts a note on a canvas under the key the client made: inserts it, or brings back the removed
- * note under that key with the values the op names. Any other row under the key fails the call.
+ * note under that key with the values the op names.
  */
 const putNote = (
   found: CanvasesDoc,
@@ -255,20 +281,12 @@ const putNote = (
 ) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
-    const reader = yield* DatabaseReader;
     const writer = yield* DatabaseWriter;
-    const existing = yield* reader
-      .table("canvasItems")
-      .index("by_canvas_and_key", (q) => q.eq("canvasId", found._id).eq("key", key))
-      .first()
-      .pipe(Effect.orDie);
-    if (Option.isSome(existing)) {
-      if (existing.value.kind !== "note" || existing.value.deletedAt === undefined) {
-        return yield* new KeyTaken({ key });
-      }
+    const removed = yield* removedUnder(found, key, "note");
+    if (Option.isSome(removed)) {
       return yield* writer
         .table("canvasItems")
-        .patch(existing.value._id, { ...note, z, rev, deletedAt: undefined })
+        .patch(removed.value, { ...note, z, rev, deletedAt: undefined })
         .pipe(Effect.orDie);
     }
     yield* writer
@@ -289,6 +307,66 @@ const putNote = (
       .pipe(Effect.orDie);
   });
 
+/** Puts a group on a canvas under the key the client made, or brings back the removed one. */
+const putGroup = (found: CanvasesDoc, rev: number, key: string) =>
+  Effect.gen(function* () {
+    const { workspaceId } = yield* CurrentWorkspace;
+    const writer = yield* DatabaseWriter;
+    const removed = yield* removedUnder(found, key, "group");
+    yield* (
+      Option.isSome(removed)
+        ? writer.table("canvasItems").patch(removed.value, { rev, deletedAt: undefined })
+        : writer
+            .table("canvasItems")
+            .insert({ workspaceId, canvasId: found._id, rev, key, kind: "group" })
+    ).pipe(Effect.orDie);
+  });
+
+/**
+ * Removes a group and takes every item out of it, removed items too, so none comes back into a
+ * group that is gone. Its members stay on the canvas.
+ */
+const removeGroup = (group: CanvasItemsDoc, rev: number) =>
+  Effect.gen(function* () {
+    const reader = yield* DatabaseReader;
+    const writer = yield* DatabaseWriter;
+    yield* writer.table("canvasItems").patch(group._id, { deletedAt: Date.now(), rev });
+    const members = yield* reader
+      .table("canvasItems")
+      .index("by_canvas_and_parent", (q) =>
+        q.eq("canvasId", group.canvasId).eq("parent", group.key),
+      )
+      .collect();
+    yield* Effect.forEach(
+      members,
+      (member) => writer.table("canvasItems").patch(member._id, { parent: undefined, rev }),
+      { discard: true },
+    );
+  }).pipe(Effect.orDie);
+
+/** Fails unless each key names a live group of the canvas. */
+const liveGroups = (canvasId: Id<"canvases">, keys: ReadonlySet<string>) =>
+  Effect.forEach(
+    keys,
+    (key) =>
+      Effect.gen(function* () {
+        const reader = yield* DatabaseReader;
+        const group = yield* reader
+          .table("canvasItems")
+          .index("by_canvas_and_key", (q) => q.eq("canvasId", canvasId).eq("key", key))
+          .first()
+          .pipe(Effect.orDie);
+        if (
+          Option.isNone(group) ||
+          group.value.kind !== "group" ||
+          group.value.deletedAt !== undefined
+        ) {
+          return yield* new GroupNotFound({ key });
+        }
+      }),
+    { discard: true },
+  );
+
 // A typed error is thrown as a ConvexError, so Convex rolls back every write of a failed call.
 const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, ops }) =>
   Effect.gen(function* () {
@@ -299,15 +377,15 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
     yield* writer.table("canvases").patch(canvasId, { rev }).pipe(Effect.orDie);
     // An add with no z goes above every item, and above every z that this call writes.
     const zOf = (op: (typeof ops)[number]) =>
-      op.op === "patch" ? op.fields.z : op.op === "remove" ? undefined : op.z;
+      op.op === "patch" ? op.fields.z : op.op === "add" || op.op === "addNote" ? op.z : undefined;
     const adds = ops.flatMap((op, index) =>
-      op.op !== "patch" && op.op !== "remove" && op.z === undefined ? [index] : [],
+      (op.op === "add" || op.op === "addNote") && op.z === undefined ? [index] : [],
     );
     const below =
       adds.length === 0
         ? []
         : [
-            ...(yield* itemsOf(canvasId)).map((item) => item.z),
+            ...placedOf(yield* itemsOf(canvasId)).map((item) => item.z),
             ...ops.flatMap((op) => zOf(op) ?? []),
           ];
     const addedZ = new Map(Arr.zip(adds, zAbove(below, adds.length)));
@@ -321,6 +399,9 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
           if (op.op === "addNote") {
             return yield* putNote(found, rev, op, op.z ?? addedZ.get(index)!);
           }
+          if (op.op === "addGroup") {
+            return yield* putGroup(found, rev, op.key);
+          }
           const item = yield* reader
             .table("canvasItems")
             .get("by_canvas_and_key", canvasId, op.key)
@@ -329,6 +410,9 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
             return yield* new ItemNotFound({ key: op.key });
           }
           if (op.op === "remove") {
+            if (item.kind === "group") {
+              return yield* removeGroup(item, rev);
+            }
             if (item.kind === "image" && found.collectionId !== undefined) {
               return yield* leaveCollection(found.collectionId, [item.refId], { canvasId, rev });
             }
@@ -341,12 +425,25 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
           if (field !== undefined) {
             return yield* new FieldNotOnItem({ key: op.key, field });
           }
+          const { parent, ...fields } = op.fields;
           yield* writer
             .table("canvasItems")
-            .patch(item._id, { ...op.fields, rev })
+            .patch(
+              item._id,
+              parent === undefined
+                ? { ...fields, rev }
+                : { ...fields, parent: parent ?? undefined, rev },
+            )
             .pipe(Effect.orDie);
         }),
       { discard: true },
+    );
+    // Checked after every op, so one call can add a group and put items in it.
+    yield* liveGroups(
+      canvasId,
+      new Set(
+        ops.flatMap((op) => (op.op === "patch" && op.fields.parent ? [op.fields.parent] : [])),
+      ),
     );
     return rev;
   }),

@@ -1,10 +1,35 @@
 import { api } from "@refhaven/backend/api";
 import { type Camera, type Point, screenToWorld, topmostAt, worldToScreen } from "@refhaven/scene";
-import type { FunctionReturnType } from "convex/server";
+import type { ConvexHttpClient } from "convex/browser";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { PNG } from "pngjs";
 import type { Page } from "playwright";
 
-export type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
+type Listed = FunctionReturnType<typeof api.canvas.open>["items"][number];
+
+/** An item with a place: an image or a note. */
+export type Item = Exclude<Listed, { kind: "group" }>;
+
+const placedOf = (items: ReadonlyArray<Listed>) =>
+  items.filter((item): item is Item => item.kind !== "group");
+
+/** `canvas.open` with the items that have a place. A group has none. */
+export const openCanvas = (
+  client: ConvexHttpClient,
+  args: FunctionArgs<typeof api.canvas.open> = {},
+) =>
+  client
+    .mutation(api.canvas.open, args)
+    .then((opened) => ({ ...opened, items: placedOf(opened.items) }));
+
+/** `canvas.changes` with the items that have a place. */
+export const canvasChanges = (
+  client: ConvexHttpClient,
+  args: FunctionArgs<typeof api.canvas.changes>,
+) =>
+  client
+    .query(api.canvas.changes, args)
+    .then((changes) => ({ ...changes, items: placedOf(changes.items) }));
 
 /** The Ref of an image item. A check that reads it puts only images where it reads. */
 export const refOf = (item: Item) => {

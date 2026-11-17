@@ -29,6 +29,8 @@ import {
   until,
   waitForCanvas,
   refOf,
+  openCanvas,
+  canvasChanges,
 } from "./canvas-screen";
 
 const images = [
@@ -41,7 +43,7 @@ const canvasUrl = `${appUrl}/library?view=canvas`;
 const evidence = process.env.EVIDENCE;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
-const snapshotOf = (owner: ConvexHttpClient) => owner.mutation(api.canvas.open, {});
+const snapshotOf = (owner: ConvexHttpClient) => openCanvas(owner, {});
 
 const libraryOf = async (owner: ConvexHttpClient) =>
   (
@@ -354,7 +356,7 @@ try {
       (await offCanvas.count()) === 0,
     `Put them back places the image to the right of the layout, its left edge ${boundsOf([blueBack!])?.left.toFixed(1)} > ${layout.right.toFixed(1)}, and the line goes away`,
   );
-  const again = await owner.mutation(api.canvas.open, { placeRemoved: true });
+  const again = await openCanvas(owner, { placeRemoved: true });
   assert(
     again.rev === putBack.rev && again.removed === 0,
     `a second ask to put them back finds nothing to place: rev stays ${putBack.rev}`,
@@ -520,12 +522,12 @@ try {
   });
   await page.goto(`${appUrl}/c/${board}?view=canvas`);
   await waitForCanvas(page, 2);
-  const firstInBoard = await owner.mutation(api.canvas.open, { collectionId: board });
+  const firstInBoard = await openCanvas(owner, { collectionId: board });
   await owner.mutation(api.canvas.apply, {
     canvasId: firstInBoard.canvasId,
     ops: [{ op: "patch", key: red.key, fields: { rotation: 0.4, scale: red.scale * 1.5 } }],
   });
-  const inBoard = await owner.mutation(api.canvas.open, { collectionId: board });
+  const inBoard = await openCanvas(owner, { collectionId: board });
   const redInBoard = find(inBoard.items, red.key)!;
   await click(page, toPage(await pageView(page), exposedPoint(redInBoard, inBoard.items)));
   await selected(page, 1);
@@ -551,7 +553,7 @@ try {
     (r) => r.items === 2,
     "Mod+Z on the collection's canvas",
   );
-  const boardBack = await owner.mutation(api.canvas.open, { collectionId: board });
+  const boardBack = await openCanvas(owner, { collectionId: board });
   assert(
     (await galleryOf(owner, board)).includes(refOf(red)) &&
       samePlace(find(boardBack.items, red.key), redInBoard),
@@ -602,7 +604,7 @@ try {
     "the first move, its undo, and the second move to be saved",
   );
   const written = (
-    await owner.query(api.canvas.changes, { canvasId: onLibrary.canvasId, rev: onLibrary.rev })
+    await canvasChanges(owner, { canvasId: onLibrary.canvasId, rev: onLibrary.rev })
   ).items.map((item) => item.key);
   await until(
     () => slow.getByRole("button", { name: "Undo", exact: true }).isEnabled(),
