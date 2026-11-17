@@ -6,6 +6,7 @@
   "exports": {
     "./api": "./convex/_generated/api.js",
     "./blob": "./confect/blob.ts",
+    "./collection": "./confect/collection.ts",
     "./id": "./confect/_generated/id.ts",
     "./refs": "./confect/_generated/refs.ts"
   },

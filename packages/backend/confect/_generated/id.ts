@@ -1,7 +1,7 @@
 import { GenericId } from "@confect/core";
 import type { SystemTableNames } from "convex/server";
 
-export type TableNames = "blobs" | "canvasItems" | "canvases" | "refs" | "users" | "workspaces";
+export type TableNames = "blobs" | "canvasItems" | "canvases" | "collectionRefs" | "collections" | "refs" | "users" | "workspaces";
 
 export type Id<TableName extends TableNames | SystemTableNames> = GenericId.GenericId<TableName>;
 

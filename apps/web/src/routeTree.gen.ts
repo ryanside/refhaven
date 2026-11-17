@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AppLibraryRouteImport } from './routes/_app/library'
+import { Route as AppCCollectionIdRouteImport } from './routes/_app/c.$collectionId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -33,16 +34,23 @@ const AppLibraryRoute = AppLibraryRouteImport.update({
   path: '/library',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCCollectionIdRoute = AppCCollectionIdRouteImport.update({
+  id: '/c/$collectionId',
+  path: '/c/$collectionId',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/library': typeof AppLibraryRoute
+  '/c/$collectionId': typeof AppCCollectionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/library': typeof AppLibraryRoute
+  '/c/$collectionId': typeof AppCCollectionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -50,13 +58,20 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/_app/library': typeof AppLibraryRoute
+  '/_app/c/$collectionId': typeof AppCCollectionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sign-in' | '/library'
+  fullPaths: '/' | '/sign-in' | '/library' | '/c/$collectionId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sign-in' | '/library'
-  id: '__root__' | '/' | '/_app' | '/sign-in' | '/_app/library'
+  to: '/' | '/sign-in' | '/library' | '/c/$collectionId'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/sign-in'
+    | '/_app/library'
+    | '/_app/c/$collectionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -95,15 +110,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLibraryRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/c/$collectionId': {
+      id: '/_app/c/$collectionId'
+      path: '/c/$collectionId'
+      fullPath: '/c/$collectionId'
+      preLoaderRoute: typeof AppCCollectionIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppLibraryRoute: typeof AppLibraryRoute
+  AppCCollectionIdRoute: typeof AppCCollectionIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppLibraryRoute: AppLibraryRoute,
+  AppCCollectionIdRoute: AppCCollectionIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

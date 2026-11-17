@@ -4,6 +4,8 @@ import type schemaDefinition from "./schema";
 export type BlobsDoc = Document.Document<typeof schemaDefinition, "blobs">;
 export type CanvasItemsDoc = Document.Document<typeof schemaDefinition, "canvasItems">;
 export type CanvasesDoc = Document.Document<typeof schemaDefinition, "canvases">;
+export type CollectionRefsDoc = Document.Document<typeof schemaDefinition, "collectionRefs">;
+export type CollectionsDoc = Document.Document<typeof schemaDefinition, "collections">;
 export type RefsDoc = Document.Document<typeof schemaDefinition, "refs">;
 export type UsersDoc = Document.Document<typeof schemaDefinition, "users">;
 export type WorkspacesDoc = Document.Document<typeof schemaDefinition, "workspaces">;
@@ -12,6 +14,8 @@ export interface Docs {
   blobs: BlobsDoc;
   canvasItems: CanvasItemsDoc;
   canvases: CanvasesDoc;
+  collectionRefs: CollectionRefsDoc;
+  collections: CollectionsDoc;
   refs: RefsDoc;
   users: UsersDoc;
   workspaces: WorkspacesDoc;

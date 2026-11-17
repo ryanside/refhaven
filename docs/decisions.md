@@ -29,6 +29,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 - A table is one file in `confect/tables/`. A function group is a `*.spec.ts` and `*.impl.ts` pair. A spec is bundled into the browser, so it must not import server code.
 - `confect/auth.ts` is the Convex auth config. The sign-in functions that Convex Auth returns are plain Convex functions, and they live in the `session` group.
 - Every group that acts for a user attaches the `RequireWorkspace` middleware and reads the user and workspace from `CurrentWorkspace`. Never take a user ID or a workspace ID from a function's arguments.
+- An action that calls a function gets that function's declared `error` as typed errors. Declare the error on the called function and pass it on, as `library.save` does with `record`. An undeclared error reaches the caller as a defect.
 - Sign R2 URLs in a mutation or an action, never in a query. Convex caches query results, so a query returns the same signed URL after it has expired.
 - Name unit tests `*.test.ts`. Confect's specs are named `*.spec.ts`, and Vitest must not run them.
 
@@ -70,12 +71,12 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | ID | Rule | State |
 |---|---|---|
 | B1 | The library is everything you have saved. Each saved thing is a Ref. | Built, lock |
-| B2 | A collection is a named set of Refs. A Ref can sit in many collections. | Planned, lock |
-| B3 | Any set of Refs can be shown as a gallery or as a canvas. The set is the whole library, a filter, or one collection. Only the whole library exists, in both views. | Planned, lock |
+| B2 | A collection is a named set of Refs. A Ref can sit in many collections, and in each at most once. A name is trimmed and then 1 to 100 characters, and two collections may share one. Deleting a collection waits for C15. | Built, lock |
+| B3 | Any set of Refs can be shown as a gallery or as a canvas. The set is the whole library, a filter, or one collection. The whole library exists in both views, and a collection as a gallery. Both galleries use one component and one item shape. | Planned, lock |
 | B4 | A canvas is the canvas view of a collection or of the whole library. There are no separate boards. Only the whole library's canvas exists. `/library?view=canvas` shows it. | Built, lock |
 | B5 | Each collection keeps one saved layout. The whole library keeps one too, as the one canvas of its workspace. Only the whole library's layout exists. | Built, lock |
 | B6 | An item dropped on the canvas lands where you dropped it. An item added anywhere else is placed beside the existing layout the next time the canvas opens. `canvas.open` places each Ref that has no item in rows to the right of the layout, 40 units away, with its longer edge at 400 units. Dropping is not built. | Built |
-| B7 | Removing an item from a canvas removes it from that collection. It stays in the library. On the whole library's canvas, `open` does not place a removed item's Ref again. Collections are not built. | Built |
+| B7 | Removing an item from a canvas removes it from that collection. It stays in the library. On the whole library's canvas, `open` does not place a removed item's Ref again. A collection has no canvas yet. | Built |
 | B8 | A canvas holds one item per Ref. | Built |
 | B9 | Notes and groups live on the canvas and not in the library. | Planned |
 | B10 | The whole library on one canvas works like any canvas. Loading thousands of items in pieces comes with the speed work. Until then `canvas.open` reads every Ref and item of the canvas in one transaction, plus one Blob for each image it places. A Convex transaction allows 4,096 reads, so the first open of a library is good to about 2,000 images. That size is worked out from the limit, not measured. | Later |
@@ -86,12 +87,12 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | ID | Rule | State |
 |---|---|---|
 | C4 | Every document carries `workspaceId`. Each user gets a personal workspace at sign-up. | Built, lock |
-| C5 | The tables are Workspace, Blob, Ref, Collection, CollectionRef, Tag, Canvas, and CanvasItem. Workspace, Blob, and Ref exist. | Planned, lock |
+| C5 | The tables are Workspace, Blob, Ref, Collection, CollectionRef, Tag, Canvas, and CanvasItem. All but Tag exist. A CollectionRef row is one Ref's membership in one collection. | Planned, lock |
 | C6 | A Blob is bytes keyed by SHA-256 inside a workspace. A Ref points at its original Blob, in `blobs.original`. The Blob records its variants, a thumbnail and a display copy, because they derive from its bytes. Every Ref that shares the Blob shares them. A page asks for a role, original, thumbnail, or display, and gets the variant when the Blob has it and the original otherwise. | Built, lock |
 | C16 | A Ref records its file name, and its creation time is the upload time. The Blob records the hash, byte size, MIME type, pixel size, ThumbHash, and the byte size and pixel size of each variant, because they describe the bytes. Source URL and note join the Ref with the first feature that sets them. | Built, lock |
 | C8 | IDs are Convex document IDs. A canvas item also carries a client-made `key`, so the canvas can create it at once. A key is unique inside its canvas. An item that `canvas.open` places takes its Ref's ID as its key. | Built, lock |
 | C15 | A delete is a soft delete with a 30-day trash. A removed canvas item already keeps its row with a `deletedAt`, so `canvas.changes` can report the removal. Nothing purges yet. | Planned |
-| C17 | The URLs are `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas`. Only `/library` exists. Its `view` defaults to `gallery`, and two links switch between the views. | Planned, lock |
+| C17 | The URLs are `/library`, `/c/{collectionId}`, and `/r/{refId}`, with `view=gallery` or `view=canvas`. `/library` and `/c/{collectionId}` exist. The library's `view` defaults to `gallery`, and two links switch between the views. A collection has only its gallery, and `/r/{refId}` does not exist. | Planned, lock |
 | C18 | Export is a zip with `manifest.json` and the original files. | Later |
 | I7 | One helper resolves the caller's workspace, and every function uses it. It is the `RequireWorkspace` middleware. Scopes join it with API keys. | Built, lock |
 | I5 | The CLI and agents call a Confect HTTP API inside Convex, which runs the same functions as the browser. | Planned |
@@ -161,7 +162,7 @@ Known gaps in the upload path:
 | ID | Rule | State |
 |---|---|---|
 | E3 | Images are added by paste, drop, and the file picker, from the gallery or a canvas. Only the file picker exists. | Planned |
-| E4 | Uploading inside a collection adds the Ref to that collection. | Planned |
+| E4 | Uploading inside a collection adds the Ref to that collection. `library.save` takes an optional `collectionId`, and `library.record` writes the Ref and its membership in one mutation. A save into a missing or foreign collection fails with `CollectionNotFound` and saves nothing. | Built |
 | E2 | Filters are tags, collection, and search text, and they are kept in the URL. | Planned |
 | E6 | Search is a Convex full-text search index over name, note, tags, and source. | Planned |
 | E7 | Bulk actions are tag, add to collection, and delete. | Later |

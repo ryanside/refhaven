@@ -1,14 +1,12 @@
-import { PaginatedQueryResult, QueryResult, usePaginatedQuery, useQuery } from "@confect/react";
+import { QueryResult, useMutation, usePaginatedQuery, useQuery } from "@confect/react";
+import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
-import { Button } from "@refhaven/ui/components/button";
-import { Input } from "@refhaven/ui/components/input";
-import { Label } from "@refhaven/ui/components/label";
+import { NativeSelect, NativeSelectOption } from "@refhaven/ui/components/native-select";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { thumbHashToDataURL } from "thumbhash";
+import * as Result from "effect/Result";
 import { CanvasView } from "@/canvas/canvas-view";
-import { useRefUrls } from "@/library/use-ref-urls";
-import { type SaveOutcome, useSaveImage } from "@/library/use-save-image";
+import { NameForm } from "@/collections/name-form";
+import { Gallery, galleryPage } from "@/library/gallery";
 
 type View = "gallery" | "canvas";
 
@@ -18,15 +16,6 @@ export const Route = createFileRoute("/_app/library")({
   component: Library,
 });
 
-const pageSize = 60;
-
-const outcomeText = (outcome: SaveOutcome) =>
-  outcome.status === "rejected"
-    ? `not saved (${outcome.reason})`
-    : outcome.duplicate
-      ? "saved. Your library already had this image, so its bytes were reused."
-      : "saved.";
-
 function Library() {
   const { view = "gallery" } = Route.useSearch();
   return view === "canvas" ? (
@@ -34,7 +23,7 @@ function Library() {
       <ViewLinks />
     </CanvasView>
   ) : (
-    <Gallery />
+    <LibraryGallery />
   );
 }
 
@@ -51,100 +40,73 @@ function ViewLinks() {
   );
 }
 
-function Gallery() {
-  const saveImage = useSaveImage();
-  const [outcomes, setOutcomes] = useState<
-    ReadonlyArray<{ fileName: string; outcome: SaveOutcome }>
-  >([]);
-
-  const items = usePaginatedQuery(refs.public.library.list, {}, { initialNumItems: pageSize });
-  const refIds = useMemo(() => items.results.map((item) => item.refId), [items.results]);
-  const urls = useRefUrls(refIds, "thumbnail");
+function LibraryGallery() {
+  const items = usePaginatedQuery(refs.public.library.list, {}, galleryPage);
+  const collections = useQuery(refs.public.collections.list, {});
+  const create = useMutation(refs.public.collections.create);
+  const addRefs = useMutation(refs.public.collections.addRefs);
+  const owned = QueryResult.isSuccess(collections) ? collections.value : [];
 
   return (
     <main className="flex flex-col gap-4 p-6">
       <h1 className="font-medium">Library</h1>
       <ViewLinks />
 
-      <div className="flex max-w-sm flex-col gap-2">
-        <Label htmlFor="images">Add images</Label>
-        <Input
-          id="images"
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={async (event) => {
-            const input = event.currentTarget;
-            for (const file of Array.from(input.files ?? [])) {
-              const outcome = await saveImage(file);
-              setOutcomes((earlier) => [...earlier, { fileName: file.name, outcome }]);
-            }
-            input.value = "";
+      <section className="flex flex-col gap-2">
+        <h2 className="font-medium">Collections</h2>
+        <ul>
+          {owned.map(({ collectionId, name }) => (
+            <li key={collectionId}>
+              <Link
+                to="/c/$collectionId"
+                params={{ collectionId }}
+                data-collection-id={collectionId}
+                className="underline"
+              >
+                {name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <NameForm
+          label="New collection"
+          submit="Create"
+          save={async (name) => {
+            const created = await create({ name });
+            return Result.isFailure(created) ? created.failure._tag : null;
           }}
         />
-      </div>
-      <ul role="status">
-        {outcomes.map(({ fileName, outcome }, index) => (
-          <li key={index} data-outcome={outcome.status}>
-            {fileName}: {outcomeText(outcome)}
-          </li>
-        ))}
-      </ul>
+      </section>
 
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
-        {items.results.map((item) => (
-          <li key={item.refId} data-ref-id={item.refId}>
-            <Thumbnail item={item} url={urls.get(item.refId)?.url} />
-            <p className="truncate">{item.fileName}</p>
-          </li>
-        ))}
-      </ul>
-      {PaginatedQueryResult.isLoading(items) ? <p>Loading…</p> : null}
-      {PaginatedQueryResult.isFailure(items) ? <p role="alert">{items.error._tag}</p> : null}
-      {PaginatedQueryResult.isExhausted(items) && items.results.length === 0 ? (
-        <p>Nothing saved yet.</p>
-      ) : null}
-      {PaginatedQueryResult.isCanLoadMore(items) ? (
-        <Button variant="outline" className="self-start" onClick={() => items.loadMore(pageSize)}>
-          Load more
-        </Button>
-      ) : null}
+      <Gallery
+        items={items}
+        action={(refId) =>
+          owned.length === 0 ? null : (
+            <NativeSelect
+              aria-label="Add to collection"
+              value=""
+              onChange={(event) =>
+                void addRefs({
+                  collectionId: event.currentTarget.value as Id<"collections">,
+                  refIds: [refId],
+                })
+              }
+            >
+              <NativeSelectOption value="" disabled>
+                Add to collection
+              </NativeSelectOption>
+              {owned.map(({ collectionId, name }) => (
+                <NativeSelectOption key={collectionId} value={collectionId}>
+                  {name}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          )
+        }
+      />
 
       <Account />
     </main>
-  );
-}
-
-type Item = {
-  fileName: string;
-  width: number;
-  height: number;
-  thumbHash: string | null;
-};
-
-function Thumbnail({ item, url }: { item: Item; url: string | undefined }) {
-  const [loaded, setLoaded] = useState(false);
-  const placeholder = useMemo(
-    () =>
-      item.thumbHash === null
-        ? undefined
-        : `url(${thumbHashToDataURL(Uint8Array.from(atob(item.thumbHash), (c) => c.charCodeAt(0)))})`,
-    [item.thumbHash],
-  );
-
-  return (
-    <img
-      // Every image load is a CORS request. A response cached from a plain <img> has
-      // no CORS headers, and a later canvas load of the same URL would fail on it.
-      crossOrigin="anonymous"
-      src={url}
-      alt={item.fileName}
-      width={item.width}
-      height={item.height}
-      onLoad={() => setLoaded(true)}
-      style={loaded ? undefined : { backgroundImage: placeholder, backgroundSize: "100% 100%" }}
-      className="h-auto w-full"
-    />
   );
 }
 
