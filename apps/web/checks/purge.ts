@@ -22,6 +22,7 @@ const backend = `${import.meta.dir}/../../../packages/backend`;
 const firstPage = { paginationOpts: { numItems: 100, cursor: null } };
 
 const cards = (page: Page) => page.locator("[data-ref-id]");
+const card = (page: Page, refId: string) => page.locator(`[data-ref-id="${refId}"]`);
 
 const save = async (page: Page, files: Array<{ name: string; buffer: Buffer }>) => {
   const outcomes = page.locator('[role="status"] li');
@@ -93,6 +94,7 @@ const state = async () => {
   };
 };
 
+const evidence = process.env.EVIDENCE;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 const first = await openPageWithPasskeyDevice();
@@ -250,6 +252,24 @@ try {
     "a purge 29 days after the last delete purges nothing",
   );
 
+  await page.getByRole("link", { name: "Trash", exact: true }).click();
+  await page.getByRole("heading", { name: "Trash" }).waitFor();
+  await card(page, p).waitFor();
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll<HTMLImageElement>("[data-ref-id] img")].every(
+      (image) => image.complete && image.naturalWidth > 0,
+    ),
+  );
+  await page.screenshot({ path: `${evidence}/01-trash-before-purge.png` });
+  assert(
+    (await page
+      .getByText("Images in the trash are deleted for good 30 days after they were deleted.")
+      .count()) === 1 &&
+      (await card(page, p).getByText("30 days left").count()) === 1 &&
+      (await card(page, k).getByText("30 days left").count()) === 1,
+    "/trash says that images there are deleted for good 30 days after they were deleted, and each card deleted today has 30 days left",
+  );
+
   const prepared = await owner.mutation(api.library.prepareUpload, { sha256: qHash!, roles: [] });
   const revs = () =>
     Promise.all(
@@ -325,6 +345,17 @@ try {
     "all 150 Refs on one Blob are purged, and their Blob goes with the last",
   );
 
+  await card(page, p).waitFor({ state: "detached" });
+  await page.screenshot({ path: `${evidence}/02-trash-after-purge.png` });
+  assert(
+    (await cards(page).count()) === 2 &&
+      (await card(page, k).count()) === 1 &&
+      (await card(page, d2).count()) === 1,
+    "the open trash page drops the purged images without a reload and keeps the two deleted under 30 days before",
+  );
+
+  await page.getByRole("link", { name: "Library", exact: true }).click();
+  await card(page, l).waitFor();
   await save(page, [{ name: "r-again.png", buffer: rBuffer }]);
   const rAgain = (await refsByName(owner)).get("r-again.png")!;
   const savedAgain = await state();

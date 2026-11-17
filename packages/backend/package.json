@@ -9,7 +9,8 @@
     "./collection": "./confect/collection.ts",
     "./id": "./confect/_generated/id.ts",
     "./refFields": "./confect/refFields.ts",
-    "./refs": "./confect/_generated/refs.ts"
+    "./refs": "./confect/_generated/refs.ts",
+    "./trash": "./confect/trash.ts"
   },
   "scripts": {
     "dev": "convex dev --tail-logs",
