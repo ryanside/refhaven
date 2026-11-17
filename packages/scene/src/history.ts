@@ -7,7 +7,13 @@ export type ItemFields = Partial<Point & { readonly z: string }>;
 export type ItemOp =
   | { readonly op: "patch"; readonly key: string; readonly fields: ItemFields }
   | { readonly op: "remove"; readonly key: string }
-  | { readonly op: "add"; readonly refId: string; readonly x: number; readonly y: number };
+  | {
+      readonly op: "add";
+      readonly refId: string;
+      readonly x: number;
+      readonly y: number;
+      readonly z?: string;
+    };
 
 /** One edit: the ops that undo it and the ops that redo it, each sent as one call. */
 export type Entry = { readonly undo: ReadonlyArray<ItemOp>; readonly redo: ReadonlyArray<ItemOp> };
@@ -22,23 +28,27 @@ export const moveEntry = (from: ReadonlyArray<Placed>, to: ReadonlyArray<Placed>
 });
 
 /**
- * Removing items. An add puts each back at its old place but on top, so a patch in the same call
- * gives it its old z.
+ * Removing items. An add with the old z puts each back at its old place in the stack. That is one
+ * op per item each way, so a removal that one call could make can be undone by one call.
  */
 export const removalEntry = (
   items: ReadonlyArray<Placed & { readonly refId: string; readonly z: string }>,
 ): Entry => ({
-  undo: [
-    ...items.map(({ refId, x, y }): ItemOp => ({ op: "add", refId, x, y })),
-    ...items.map(({ key, z }): ItemOp => ({ op: "patch", key, fields: { z } })),
-  ],
+  undo: items.map(({ refId, x, y, z }) => ({ op: "add", refId, x, y, z })),
   redo: items.map(({ key }) => ({ op: "remove", key })),
 });
 
-/** Adding Refs at points. An image item's key is its Ref's ID. */
-export const addEntry = (adds: ReadonlyArray<Point & { readonly refId: string }>): Entry => ({
+/**
+ * Adding Refs at points. An image item's key is its Ref's ID. An add whose place in the stack is
+ * known keeps it, so a redo puts the item back there.
+ */
+export const addEntry = (
+  adds: ReadonlyArray<Point & { readonly refId: string; readonly z?: string }>,
+): Entry => ({
   undo: adds.map(({ refId }) => ({ op: "remove", key: refId })),
-  redo: adds.map(({ refId, x, y }) => ({ op: "add", refId, x, y })),
+  redo: adds.map(({ refId, x, y, z }) =>
+    z === undefined ? { op: "add", refId, x, y } : { op: "add", refId, x, y, z },
+  ),
 });
 
 /** The positions that the ops' patches set. */

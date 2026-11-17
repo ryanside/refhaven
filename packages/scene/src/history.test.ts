@@ -66,17 +66,15 @@ test("the summary keeps its identity while the answers stay the same, and listen
   expect(heard).toBe(2);
 });
 
-test("a removal is undone by an add at the old place and a patch of the old z, in one call", () => {
+test("a removal is undone by one add per item, at its old place and its old z", () => {
   const entry = removalEntry([
     { key: "r1", refId: "r1", x: 5, y: 6, z: "a3" },
     { key: "r2", refId: "r2", x: 7, y: 8, z: "a1" },
   ]);
 
   expect(entry.undo).toEqual([
-    { op: "add", refId: "r1", x: 5, y: 6 },
-    { op: "add", refId: "r2", x: 7, y: 8 },
-    { op: "patch", key: "r1", fields: { z: "a3" } },
-    { op: "patch", key: "r2", fields: { z: "a1" } },
+    { op: "add", refId: "r1", x: 5, y: 6, z: "a3" },
+    { op: "add", refId: "r2", x: 7, y: 8, z: "a1" },
   ]);
   expect(entry.redo).toEqual([
     { op: "remove", key: "r1" },
@@ -94,7 +92,27 @@ test("an add is undone by removing the Ref's item and redone by adding it at the
   });
 });
 
+test("an add whose place in the stack is known is redone at that place", () => {
+  expect(addEntry([{ refId: "r1", x: 1, y: 2, z: "a4" }]).redo).toEqual([
+    { op: "add", refId: "r1", x: 1, y: 2, z: "a4" },
+  ]);
+});
+
 test("a move patches the old positions to undo and the new ones to redo", () => {
   expect(movesOf(first.undo)).toEqual([{ key: "a", x: 0, y: 0 }]);
   expect(movesOf(first.redo)).toEqual([{ key: "a", x: 10, y: 0 }]);
+});
+
+test("undoing a removal takes as many ops as the removal, so the largest removal one call can make can be undone", () => {
+  const items = Array.from({ length: 1000 }, (_, index) => ({
+    key: `r${index}`,
+    refId: `r${index}`,
+    x: index,
+    y: 0,
+    z: "a0",
+  }));
+  const entry = removalEntry(items);
+
+  expect(entry.redo).toHaveLength(1000);
+  expect(entry.undo).toHaveLength(1000);
 });

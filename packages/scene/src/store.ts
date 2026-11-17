@@ -168,6 +168,8 @@ export function createSceneStore() {
     viewport: () => viewport,
     selection: () => selection,
     gesture: () => gesture,
+    /** The server revision the store has applied. */
+    rev: () => rev,
 
     /**
      * Replaces every item with a snapshot, and returns whether it did. A snapshot older than the
