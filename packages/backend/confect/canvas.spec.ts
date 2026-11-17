@@ -2,6 +2,7 @@ import { FunctionSpec, GroupSpec } from "@confect/core";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 import { Id } from "./_generated/id";
+import { CollectionNotFound } from "./collection";
 import { ItemKey, canvasItemFields, itemTransform } from "./canvasItem";
 import RequireWorkspace from "./middleware/RequireWorkspace.spec";
 
@@ -27,13 +28,14 @@ export default GroupSpec.make()
   .addFunction(
     FunctionSpec.publicMutation({
       name: "open",
-      args: () => ({}),
+      args: () => ({ collectionId: Schema.optionalKey(Id("collections")) }),
       returns: () =>
         Schema.Struct({
           canvasId: Id("canvases"),
           rev: Schema.Int,
           items: Schema.Array(CanvasItem),
         }),
+      error: () => CollectionNotFound,
     }),
   )
   .addFunction(

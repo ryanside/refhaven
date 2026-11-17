@@ -50,7 +50,7 @@ export function CanvasView({ children }: { children: ReactNode }) {
     if (snapshotting.current) return;
     snapshotting.current = true;
     try {
-      const opened = await open();
+      const opened = await open({});
       if (Result.isFailure(opened)) {
         setProblem(opened.failure._tag);
         return;

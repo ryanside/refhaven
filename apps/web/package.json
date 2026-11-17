@@ -8,6 +8,7 @@
     "check:auth": "bun --env-file=../../packages/backend/.env.local checks/auth.ts",
     "check:canvas": "bun --env-file=../../packages/backend/.env.local checks/canvas.ts",
     "check:canvas-page": "bun --env-file=../../packages/backend/.env.local checks/canvas-page.ts",
+    "check:collection-canvas": "bun --env-file=../../packages/backend/.env.local checks/collection-canvas.ts",
     "check:collections": "bun --env-file=../../packages/backend/.env.local checks/collections.ts",
     "check:confect": "bun --env-file=../../packages/backend/.env.local checks/confect.ts",
     "check:library": "bun --env-file=../../packages/backend/.env.local checks/library.ts",
