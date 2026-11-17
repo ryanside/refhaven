@@ -7,8 +7,12 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".output/**"]
     },
-    "typecheck": {},
-    "test": {},
+    "typecheck": {
+      "cache": false
+    },
+    "test": {
+      "cache": false
+    },
     "dev": {
       "cache": false,
       "persistent": true
