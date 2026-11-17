@@ -14,6 +14,7 @@ import type * as library from "../library.js";
 import type * as ref from "../ref.js";
 import type * as search from "../search.js";
 import type * as session from "../session.js";
+import type * as trash from "../trash.js";
 import type * as users from "../users.js";
 import type * as workspaces from "../workspaces.js";
 
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   ref: typeof ref;
   search: typeof search;
   session: typeof session;
+  trash: typeof trash;
   users: typeof users;
   workspaces: typeof workspaces;
 }>;

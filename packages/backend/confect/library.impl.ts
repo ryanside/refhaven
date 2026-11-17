@@ -9,7 +9,6 @@ import refs from "./_generated/refs";
 import databaseSchema from "./_generated/schema";
 import { DatabaseReader, DatabaseWriter, MutationRunner } from "./_generated/services";
 import {
-  type Sha256,
   maxImageBytes,
   originalKey,
   servedKey,
@@ -21,22 +20,12 @@ import {
 } from "./blob";
 import library, { ImageTooLarge, UnsupportedImage, UploadNotFound } from "./library.spec";
 import { addMember, ownedCollection } from "./membership";
+import { storedBlob, takeBack } from "./orphan";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 import { hashBoundUpload, r2 } from "./r2";
 import { holdsEveryWord } from "./searchText";
 import { isLive, liveRefs, ownedRef, writeSearchText } from "./ref";
-
-const storedBlob = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
-  Effect.gen(function* () {
-    const reader = yield* DatabaseReader;
-    return yield* reader
-      .table("blobs")
-      .index("by_workspace_and_sha256", (q) =>
-        q.eq("workspaceId", workspaceId).eq("sha256", sha256),
-      )
-      .first();
-  }).pipe(Effect.orDie);
 
 // A variant is not bound to a hash. The browser makes it, so the server has no hash to hold it to.
 const variantUpload = (key: string) =>
@@ -51,6 +40,7 @@ const prepareUpload = FunctionImpl.make(
   ({ sha256, roles }) =>
     Effect.gen(function* () {
       const { workspaceId } = yield* CurrentWorkspace;
+      yield* takeBack(workspaceId, sha256);
       const stored = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
       const original = stored
         ? []
@@ -146,6 +136,9 @@ const record = FunctionImpl.make(
       const { workspaceId } = yield* CurrentWorkspace;
       const writer = yield* DatabaseWriter;
       const existing = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
+      if (!existing) {
+        yield* takeBack(workspaceId, sha256);
+      }
       const blobId = existing
         ? existing._id
         : yield* writer

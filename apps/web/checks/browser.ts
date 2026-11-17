@@ -116,9 +116,9 @@ export const outcome = (call: Promise<unknown>) =>
         : `refused (${error.message.split("\n")[1]?.trim()})`,
   );
 
-export const rows = async (table: string) => {
+export const rows = async (table: string, limit = 200) => {
   const dump = Bun.spawn(
-    ["bunx", "convex", "data", table, "--limit", "200", "--format", "jsonLines"],
+    ["bunx", "convex", "data", table, "--limit", String(limit), "--format", "jsonLines"],
     { cwd: `${import.meta.dir}/../../../packages/backend`, stdout: "pipe", stderr: "ignore" },
   );
   return (await new Response(dump.stdout).text())

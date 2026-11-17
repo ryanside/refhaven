@@ -1,4 +1,4 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { R2 } from "@convex-dev/r2";
 import { components } from "./_generated/components";
@@ -23,3 +23,7 @@ export async function hashBoundUpload(key: string, sha256: Sha256) {
   );
   return { url, headers: { [checksumHeader]: checksum } };
 }
+
+/** Deletes an object. R2 answers a delete of a missing key as a success. */
+export const deleteObject = (key: string) =>
+  r2.client.send(new DeleteObjectCommand({ Bucket: r2.config.bucket, Key: key }));
