@@ -76,7 +76,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | B4 | A canvas is the canvas view of a collection or of the whole library. There are no separate boards. Only the whole library's canvas exists. `/library?view=canvas` shows it. | Built, lock |
 | B5 | Each collection keeps one saved layout. The whole library keeps one too, as the one canvas of its workspace. Only the whole library's layout exists. | Built, lock |
 | B6 | An item dropped on the canvas lands where you dropped it. An item added anywhere else is placed beside the existing layout the next time the canvas opens. `canvas.open` places each Ref that has no item in rows to the right of the layout, 40 units away, with its longer edge at 400 units. Dropping is not built. | Built |
-| B7 | Removing an item from a canvas removes it from that collection. It stays in the library. On the whole library's canvas, `open` does not place a removed item's Ref again. Collections are not built. | Built |
+| B7 | Removing an item from a canvas removes it from that collection. It stays in the library. On the whole library's canvas, `open` does not place a removed item's Ref again. A collection has no canvas yet. | Built |
 | B8 | A canvas holds one item per Ref. | Built |
 | B9 | Notes and groups live on the canvas and not in the library. | Planned |
 | B10 | The whole library on one canvas works like any canvas. Loading thousands of items in pieces comes with the speed work. Until then `canvas.open` reads every Ref and item of the canvas in one transaction, plus one Blob for each image it places. A Convex transaction allows 4,096 reads, so the first open of a library is good to about 2,000 images. That size is worked out from the limit, not measured. | Later |
