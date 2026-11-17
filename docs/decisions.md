@@ -43,6 +43,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 ### Git
 
 - Open a pull request for anything beyond a simple, high-confidence change. Push a simple, high-confidence change straight to `main`.
+- Whoever opens a pull request watches it and merges it once CI is green. Merge a stack bottom-up with merge commits, so the branches above need no rebase.
 - CI runs the typecheck, lint, the format check, and the unit tests on `main` and on every pull request. The browser checks need the dev deployment and R2, so they run locally, through the `verify-refhaven` skill.
 
 ### R2
