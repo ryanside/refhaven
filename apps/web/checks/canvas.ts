@@ -228,6 +228,24 @@ try {
     "the rows hold each patch and the removal, stamped with the rev of the call that wrote it",
   );
 
+  const bothRev = await owner.mutation(api.canvas.apply, {
+    canvasId,
+    ops: [
+      { op: "patch", key: moved!.key, fields: { rotation: 1 } },
+      { op: "patch", key: xOnly!.key, fields: { rotation: 2 } },
+    ],
+  });
+  const sinceRemoved = await owner.query(api.canvas.changes, { canvasId, rev: removedRev });
+  assert(
+    bothRev === removedRev + 1 &&
+      sinceRemoved.rev === bothRev &&
+      same(sinceRemoved.items, [
+        { ...moved!, x: 5000, y: -250, rotation: 1 },
+        { ...xOnly!, x: xOnly!.x + 10, rotation: 2 },
+      ]),
+    `one call with two ops raises rev once, and changes returns both items: rev ${removedRev} to ${bothRev}, ${sinceRemoved.items.length} items`,
+  );
+
   await signInWithPasskey(second.page, `check-canvas-b-${stamp}`);
   const other = await clientFor(second.page);
   assert(
@@ -243,10 +261,34 @@ try {
     )) === "CanvasNotFound",
     "a second user gets CanvasNotFound from apply on the first user's canvas",
   );
-  const own = await other.mutation(api.canvas.open, {});
+  const [own, ownAgain] = await Promise.all([
+    other.mutation(api.canvas.open, {}),
+    other.mutation(api.canvas.open, {}),
+  ]);
   assert(
     own.canvasId !== canvasId && own.rev === 0 && own.items.length === 0,
     `the second user's open returns their own empty canvas: ${own.items.length} items at rev ${own.rev}`,
+  );
+  const otherWorkspaceId = (await rows("canvases")).find(
+    (row) => row._id === own.canvasId,
+  )!.workspaceId;
+  assert(
+    ownAgain.canvasId === own.canvasId &&
+      (await rows("canvases")).filter((row) => row.workspaceId === otherWorkspaceId).length === 1,
+    "two opens at once for a new workspace make one canvas",
+  );
+
+  await save(second.page, [
+    { name: "one.png", buffer: await pngOf(second.page, "rgb(10, 90, 160)", 500, 300) },
+    { name: "two.png", buffer: await pngOf(second.page, "rgb(160, 90, 10)", 300, 500) },
+  ]);
+  await Promise.all([other.mutation(api.canvas.open, {}), other.mutation(api.canvas.open, {})]);
+  const settled = await other.mutation(api.canvas.open, {});
+  assert(
+    settled.items.length === 2 &&
+      new Set(settled.items.map((item) => item.refId)).size === 2 &&
+      (await rows("canvasItems")).filter((row) => row.canvasId === own.canvasId).length === 2,
+    `two opens at once place each new image once: ${settled.items.length} items at rev ${settled.rev}`,
   );
 } finally {
   await first.browser.close();
