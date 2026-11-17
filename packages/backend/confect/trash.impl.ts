@@ -181,8 +181,10 @@ const sweepDone = FunctionImpl.make(databaseSchema, trash, "sweepDone", ({ orpha
 );
 
 // Each batch's objects are deleted between the mutation that sets `sweepingAt` on its rows and
-// the one that deletes them, so a save never records bytes that this is deleting. A delete of an
-// object that is already gone succeeds, so a sweep that died halfway is finished by a later one.
+// the one that deletes them, so a save never records bytes while this is deleting them. A delete
+// that fails, or whose answer never comes, ends the sweep with its rows still marked. A later
+// sweep finishes it after `sweepLockMs`, which is the wait for a delete this one left in flight.
+// A delete of an object that is already gone succeeds.
 const sweep = FunctionImpl.make(databaseSchema, trash, "sweep", (args) =>
   Effect.gen(function* () {
     const { runMutation } = yield* MutationRunner;
