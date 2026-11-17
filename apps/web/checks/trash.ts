@@ -333,10 +333,15 @@ try {
 
   const beforeC = await owner.mutation(api.canvas.open, {});
   await owner.mutation(api.library.remove, { refIds: [c] });
+  const cInTrash =
+    typeof (await refRow(c))?.deletedAt === "number" &&
+    !find((await owner.mutation(api.canvas.open, { collectionId: board })).items, c);
   await owner.mutation(api.library.restore, { refIds: [c] });
   const afterC = await owner.mutation(api.canvas.open, {});
   assert(
-    !find(afterC.items, c) &&
+    cInTrash &&
+      (await refRow(c))?.deletedAt === undefined &&
+      !find(afterC.items, c) &&
       afterC.rev === beforeC.rev &&
       find((await owner.mutation(api.canvas.open, { collectionId: board })).items, c) !== undefined,
     "an item removed from the library's canvas before the delete stays removed after the restore, and the image is back on the collection's canvas",
