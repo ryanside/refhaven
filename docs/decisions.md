@@ -161,7 +161,7 @@ Known gaps in the upload path:
 
 | ID | Rule | State |
 |---|---|---|
-| E3 | Images are added by paste, drop, and the file picker, from the gallery or a canvas. A gallery takes all three, anywhere on its page, and a collection's gallery saves into that collection. A canvas takes none yet. | Planned |
+| E3 | Images are added by paste, drop, and the file picker, from the gallery or a canvas. A gallery takes all three, anywhere on its page, and a collection's gallery saves into that collection. A paste into a text field is left to the field. A drag that starts on the page itself is not a drop of files. A signed-in page that does not save a dropped file refuses it, so the browser does not open it. A canvas saves none yet, and an image dragged from another web page arrives as a link and is not saved. | Planned |
 | E4 | Uploading inside a collection adds the Ref to that collection. `library.save` takes an optional `collectionId`, and `library.record` writes the Ref and its membership in one mutation. A save into a missing or foreign collection fails with `CollectionNotFound` and saves nothing. | Built |
 | E2 | Filters are tags, collection, and search text, and they are kept in the URL. | Planned |
 | E6 | Search is a Convex full-text search index over name, note, tags, and source. | Planned |

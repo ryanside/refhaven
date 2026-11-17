@@ -20,7 +20,7 @@ The library lets a signed-in user save image files and see every saved image in 
 - Choose the `refhaven` link in the header from any app page.
 - Choose `Open your library` on the landing page `/`.
 
-Images are added through the `Add images` file picker on `/library`, by dropping files anywhere on the page, or by pasting an image. A collection's page takes the same three and saves into the collection. The canvas view and `/trash` take none.
+Images are added through the `Add images` file picker on `/library`, by dropping files anywhere on the page, or by pasting an image. A collection's page takes the same three and saves into the collection. The canvas view and `/trash` save none. Every signed-in page refuses a dropped file it does not save, so the browser never opens it.
 
 ## Driving it with Playwright
 
@@ -32,7 +32,7 @@ Preconditions:
 
 - **Empty state.** Run `await page.getByText("Nothing saved yet.").waitFor()`.
 - **Save.** Pick files. Run `await page.getByLabel("Add images").setInputFiles([{ name: "red.png", mimeType: "image/png", buffer }])`. One `[role="status"] li` appears per file, with `data-outcome="saved"` and the text `red.png: saved.`
-- **Paste or drop.** Send the page a `drop` or `paste` event that carries files, as `send` does in `apps/web/checks/paste-drop.ts`. The page cancels the event, and one outcome line appears per file. An event that carries only text is not cancelled and saves nothing.
+- **Paste or drop.** Send the page a `drop` or `paste` event that carries files, as `send` does in `apps/web/checks/paste-drop.ts`. The page cancels the event, and one outcome line appears per file. An event that carries only text is not cancelled and saves nothing. A paste into a text field, and a drag that began on the page itself, save nothing either.
 - **Grid.** Run `await page.locator("[data-ref-id]").first().waitFor()`. Each card holds an `img` and the file name. The newest card is first. Wait until every image has loaded with `page.waitForFunction(() => [...document.querySelectorAll<HTMLImageElement>("[data-ref-id] img")].every((image) => image.complete && image.naturalWidth > 0))`.
 - **Variants.** Count the `PUT` requests to `*.r2.cloudflarestorage.com` with `page.on("request", ...)`. A 3000 by 2000 image sends three, to `/w/{workspaceId}/o/{sha256}`, `/w/{workspaceId}/v/{sha256}/512.webp`, and `/w/{workspaceId}/v/{sha256}/2048.webp`. A 300 px image sends one. The card's `img` has a `naturalWidth` of 512 for the large image and 300 for the small one.
 - **Placeholder.** Abort `GET` requests to R2 with `page.route`, then reload. Each card's `img` has `style.backgroundImage` starting with `url("data:image/png;base64`. Once the image loads the style is empty.
@@ -54,5 +54,5 @@ Preconditions:
 - The outcome list reports one line per picked file, in order. Wait for the line you expect, not for a fixed count of cards.
 - Image URLs are signed and expire after an hour. Read `src` from the card when you need it. Never store one for a later run.
 - A card's `img` has no `src` for a moment after the card appears, until the page has fetched the signed URL.
-- The file picker accepts `image/*`, so `setInputFiles` is the only way to offer a non-image file.
+- The file picker accepts `image/*` and a person cannot pick another file with it. `setInputFiles` and a drop can both offer one, and the page reports it as not saved.
 - Files are saved one after another. The picker is cleared after the last one.
