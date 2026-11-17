@@ -12,4 +12,5 @@ export default Table.make(() =>
   }),
 )
   .index("by_canvas_and_key", ["canvasId", "key"])
-  .index("by_canvas_and_rev", ["canvasId", "rev"]);
+  .index("by_canvas_and_rev", ["canvasId", "rev"])
+  .index("by_ref", ["refId"]);

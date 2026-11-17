@@ -40,6 +40,11 @@ export const GalleryItem = Schema.Struct({
   savedAt: Schema.Number,
 });
 
+/** An image in the trash, with the time it was deleted. */
+export const TrashedItem = Schema.Struct({ ...GalleryItem.fields, deletedAt: Schema.Number });
+
+export const RefIds = Schema.Array(Id("refs")).check(Schema.isMaxLength(100));
+
 export class UploadNotFound extends Schema.TaggedError<UploadNotFound>()("UploadNotFound", {}) {}
 
 export class UnsupportedImage extends Schema.TaggedError<UnsupportedImage>()(
@@ -109,10 +114,32 @@ export default GroupSpec.make()
     FunctionSpec.publicMutation({
       name: "urls",
       args: () => ({
-        refIds: Schema.Array(Id("refs")).check(Schema.isMaxLength(100)),
+        refIds: RefIds,
         role: ImageRole,
       }),
       returns: () => Schema.Array(Schema.Struct({ refId: Id("refs"), url: Schema.String })),
       error: () => RefNotFound,
+    }),
+  )
+  .addFunction(
+    FunctionSpec.publicMutation({
+      name: "remove",
+      args: () => ({ refIds: RefIds }),
+      returns: () => Schema.Null,
+      error: () => RefNotFound,
+    }),
+  )
+  .addFunction(
+    FunctionSpec.publicMutation({
+      name: "restore",
+      args: () => ({ refIds: RefIds }),
+      returns: () => Schema.Null,
+      error: () => RefNotFound,
+    }),
+  )
+  .addFunction(
+    FunctionSpec.publicPaginatedQuery({
+      name: "trash",
+      item: () => TrashedItem,
     }),
   );

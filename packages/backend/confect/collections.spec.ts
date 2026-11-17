@@ -2,10 +2,8 @@ import { FunctionSpec, GroupSpec } from "@confect/core";
 import * as Schema from "effect/Schema";
 import { Id } from "./_generated/id";
 import { CollectionName, CollectionNotFound } from "./collection";
-import { GalleryItem, RefNotFound } from "./library.spec";
+import { GalleryItem, RefIds, RefNotFound } from "./library.spec";
 import RequireWorkspace from "./middleware/RequireWorkspace.spec";
-
-const RefIds = Schema.Array(Id("refs")).check(Schema.isMaxLength(100));
 
 export default GroupSpec.make()
   .middleware(RequireWorkspace)

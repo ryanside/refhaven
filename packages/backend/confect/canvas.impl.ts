@@ -12,6 +12,7 @@ import canvas, { CanvasNotFound, ItemNotFound } from "./canvas.spec";
 import { canvasOf, leaveCollection, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
+import { isLive, liveRefs } from "./ref";
 
 const ownedCanvas = (canvasId: Id<"canvases">) =>
   Effect.gen(function* () {
@@ -51,7 +52,19 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
       .table("canvasItems")
       .index("by_canvas_and_key", (q) => q.eq("canvasId", canvasId))
       .collect();
-    const shown = items.filter((item) => item.deletedAt === undefined);
+    const live = (
+      collectionId === undefined
+        ? yield* (yield* liveRefs).collect()
+        : yield* Effect.forEach(
+            yield* reader
+              .table("collectionRefs")
+              .index("by_collection", (q) => q.eq("collectionId", collectionId))
+              .collect(),
+            (member) => reader.table("refs").get(member.refId),
+          )
+    ).filter(isLive);
+    const liveIds = new Set(live.map((ref) => ref._id));
+    const shown = items.filter((item) => item.deletedAt === undefined && liveIds.has(item.refId));
 
     // On the library's canvas a removed item still counts as placed, so a Ref removed from it is
     // not placed again. On a collection's canvas removal means leaving the collection, so a member
@@ -59,19 +72,7 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
     const placedRefs = new Set(
       (collectionId === undefined ? items : shown).map((item) => item.refId),
     );
-    const unplaced =
-      collectionId === undefined
-        ? (yield* reader
-            .table("refs")
-            .index("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-            .collect()).filter((ref) => !placedRefs.has(ref._id))
-        : yield* Effect.forEach(
-            (yield* reader
-              .table("collectionRefs")
-              .index("by_collection", (q) => q.eq("collectionId", collectionId))
-              .collect()).filter((member) => !placedRefs.has(member.refId)),
-            (member) => reader.table("refs").get(member.refId),
-          );
+    const unplaced = live.filter((ref) => !placedRefs.has(ref._id));
     if (unplaced.length === 0) {
       return { canvasId, rev: openedRev, items: shown.map(toItem) };
     }
@@ -124,6 +125,8 @@ const open = FunctionImpl.make(databaseSchema, canvas, "open", ({ collectionId }
   }),
 );
 
+// An item of a Ref in the trash goes out as removed, at the time of the delete. Trashing and
+// restoring a Ref stamp its items, so the client hears of both.
 const changes = FunctionImpl.make(databaseSchema, canvas, "changes", ({ canvasId, rev }) =>
   Effect.gen(function* () {
     const found = yield* ownedCanvas(canvasId);
@@ -133,7 +136,19 @@ const changes = FunctionImpl.make(databaseSchema, canvas, "changes", ({ canvasId
       .index("by_canvas_and_rev", (q) => q.eq("canvasId", canvasId).gt("rev", rev))
       .collect()
       .pipe(Effect.orDie);
-    return { rev: found.rev, items: items.map(toItem) };
+    const shown = yield* Effect.forEach(items, (item) =>
+      reader
+        .table("refs")
+        .get(item.refId)
+        .pipe(
+          Effect.orDie,
+          Effect.map((ref) => {
+            const deletedAt = item.deletedAt ?? ref.deletedAt;
+            return deletedAt === undefined ? toItem(item) : { ...toItem(item), deletedAt };
+          }),
+        ),
+    );
+    return { rev: found.rev, items: shown };
   }),
 );
 
@@ -153,7 +168,8 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
             .table("canvasItems")
             .get("by_canvas_and_key", canvasId, op.key)
             .pipe(Effect.mapError(() => new ItemNotFound({ key: op.key })));
-          if (item.deletedAt !== undefined) {
+          const ref = yield* reader.table("refs").get(item.refId).pipe(Effect.orDie);
+          if (item.deletedAt !== undefined || !isLive(ref)) {
             return yield* new ItemNotFound({ key: op.key });
           }
           if (op.op === "remove" && found.collectionId !== undefined) {
