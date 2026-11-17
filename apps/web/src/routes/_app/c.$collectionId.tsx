@@ -7,7 +7,8 @@ import * as Result from "effect/Result";
 import { CanvasView } from "@/canvas/canvas-view";
 import { NameForm } from "@/collections/name-form";
 import { FilteredGallery, GalleryFilters, isFiltered } from "@/library/filters";
-import { type CardAction, Gallery, SaveImages, galleryPage } from "@/library/gallery";
+import { type CardAction, Gallery, galleryPage } from "@/library/gallery";
+import { SaveImages } from "@/library/save-images";
 import { ViewLinks, validateGallerySearch } from "@/view";
 
 export const Route = createFileRoute("/_app/c/$collectionId")({

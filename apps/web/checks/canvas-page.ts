@@ -1,15 +1,32 @@
 import { api } from "@refhaven/backend/api";
-import { type Camera, type Point, screenToWorld, topmostAt, worldToScreen } from "@refhaven/scene";
+import { type Point, topmostAt } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
 import type { FunctionReturnType } from "convex/server";
-import { PNG } from "pngjs";
 import type { Page, Route } from "playwright";
 import { appUrl, assert, clientFor, openPageWithPasskeyDevice, signInWithPasskey } from "./browser";
+import {
+  type Item,
+  type Rgb,
+  near,
+  pageView,
+  pixelAt,
+  readout,
+  rectOf,
+  rectOnPage,
+  sameRect,
+  screenshot,
+  settle,
+  showRect,
+  sized,
+  solidPng,
+  toPage,
+  toWorld,
+  until,
+  waitForCanvas,
+  worldSize,
+} from "./canvas-screen";
 
 type Snapshot = FunctionReturnType<typeof api.canvas.open>;
-type Item = Snapshot["items"][number];
-type Rgb = readonly [number, number, number];
-type Rect = { left: number; top: number; right: number; bottom: number };
 
 const images = [
   { name: "red.png", color: [210, 40, 40], width: 600, height: 400 },
@@ -17,19 +34,8 @@ const images = [
   { name: "green.png", color: [40, 170, 70], width: 3000, height: 2000 },
 ] as const;
 
-const evidence = process.env.EVIDENCE;
 const canvasUrl = `${appUrl}/library?view=canvas`;
 const consoleErrors: Array<string> = [];
-
-const until = async <T>(read: () => Promise<T>, done: (value: T) => boolean, label: string) => {
-  const deadline = Date.now() + 15_000;
-  for (;;) {
-    const value = await read();
-    if (done(value)) return value;
-    if (Date.now() > deadline) throw new Error(`FAIL timed out waiting for ${label}`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-};
 
 const watchConsole = (page: Page) => {
   page.on("console", (message) => {
@@ -38,134 +44,9 @@ const watchConsole = (page: Page) => {
   page.on("pageerror", (error) => consoleErrors.push(String(error)));
 };
 
-const solidPng = async (page: Page, color: Rgb, width: number, height: number) =>
-  Buffer.from(
-    await page.evaluate(
-      ({ color, width, height }) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext("2d")!;
-        context.fillStyle = `rgb(${color.join(",")})`;
-        context.fillRect(0, 0, width, height);
-        return canvas.toDataURL("image/png").split(",")[1]!;
-      },
-      { color, width, height },
-    ),
-    "base64",
-  );
-
-const readout = async (page: Page) => {
-  const element = page.getByTestId("canvas-readout");
-  const number = async (name: string) => Number(await element.getAttribute(`data-${name}`));
-  return {
-    items: await number("items"),
-    selected: await number("selected"),
-    camera: {
-      x: await number("camera-x"),
-      y: await number("camera-y"),
-      zoom: (await number("zoom")) / 100,
-    } satisfies Camera,
-  };
-};
-
-const host = async (page: Page) => (await page.getByTestId("canvas").boundingBox())!;
-
-/** Waits until the frame after the latest input has drawn. */
-const settle = (page: Page) =>
-  page.evaluate(
-    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-  );
-
 const openCanvas = async (page: Page, count: number) => {
   await page.goto(canvasUrl);
   await waitForCanvas(page, count);
-};
-
-const waitForCanvas = async (page: Page, count: number) => {
-  await page
-    .locator(`[data-testid="canvas"][data-shown-thumbnails="${count}"]`)
-    .waitFor({ timeout: 15_000 });
-  await until(
-    () => readout(page),
-    (r) => r.items === count,
-    `${count} items in the readout`,
-  );
-  await settle(page);
-};
-
-const screenshot = async (page: Page, name?: string) => {
-  const buffer = await page.screenshot(evidence && name ? { path: `${evidence}/${name}` } : {});
-  return PNG.sync.read(buffer);
-};
-
-const pixelAt = (png: PNG, point: Point): Rgb => {
-  const offset = (Math.round(point.y) * png.width + Math.round(point.x)) * 4;
-  return [png.data[offset]!, png.data[offset + 1]!, png.data[offset + 2]!];
-};
-
-const near = (a: Rgb, b: Rgb) => a.every((channel, index) => Math.abs(channel - b[index]!) <= 12);
-
-/** The rectangle of the pixels near `color`, or null when none is. */
-const rectOf = (png: PNG, color: Rgb): Rect | null => {
-  let rect: Rect | null = null;
-  for (let y = 0; y < png.height; y++) {
-    for (let x = 0; x < png.width; x++) {
-      if (!near(pixelAt(png, { x, y }), color)) continue;
-      rect = rect
-        ? {
-            left: Math.min(rect.left, x),
-            top: Math.min(rect.top, y),
-            right: Math.max(rect.right, x + 1),
-            bottom: Math.max(rect.bottom, y + 1),
-          }
-        : { left: x, top: y, right: x + 1, bottom: y + 1 };
-    }
-  }
-  return rect;
-};
-
-const sameRect = (a: Rect | null, b: Rect, tolerance: number) =>
-  a !== null &&
-  (["left", "top", "right", "bottom"] as const).every(
-    (side) => Math.abs(a[side] - b[side]) <= tolerance,
-  );
-
-const showRect = (rect: Rect | null) =>
-  rect
-    ? `${Math.round(rect.left)},${Math.round(rect.top)} to ${Math.round(rect.right)},${Math.round(rect.bottom)}`
-    : "none";
-
-const worldSize = (item: Item) => ({
-  width: item.width * item.scale,
-  height: item.height * item.scale,
-});
-const sized = (items: ReadonlyArray<Item>) =>
-  items.map((item) => ({ ...item, ...worldSize(item) }));
-
-const pageView = async (page: Page) => ({
-  camera: (await readout(page)).camera,
-  box: await host(page),
-});
-type PageView = Awaited<ReturnType<typeof pageView>>;
-
-const toPage = ({ camera, box }: PageView, world: Point): Point => {
-  const screen = worldToScreen(camera, world);
-  return { x: box.x + screen.x, y: box.y + screen.y };
-};
-
-const toWorld = ({ camera, box }: PageView, point: Point) =>
-  screenToWorld(camera, { x: point.x - box.x, y: point.y - box.y });
-
-const rectOnPage = (view: PageView, item: Item): Rect => {
-  const { width, height } = worldSize(item);
-  const topLeft = toPage(view, { x: item.x - width / 2, y: item.y - height / 2 });
-  return {
-    left: topLeft.x,
-    top: topLeft.y,
-    right: topLeft.x + width * view.camera.zoom,
-    bottom: topLeft.y + height * view.camera.zoom,
-  };
 };
 
 /** A point of the item that no other item covers. */
@@ -486,6 +367,7 @@ try {
 
   const second = await page.context().newPage();
   watchConsole(second);
+  await second.setViewportSize({ width: 1400, height: 900 });
   await openCanvas(second, 3);
   const greenSaved = saved.find((item) => item.key === green.key)!;
   await drag(page, toPage(view, greenSaved), { x: -100, y: -50 });

@@ -14,7 +14,7 @@ import { useCallback } from "react";
 import { rgbaToThumbHash } from "thumbhash";
 
 export type SaveOutcome =
-  | { status: "saved"; duplicate: boolean }
+  | { status: "saved"; refId: Id<"refs">; duplicate: boolean }
   | { status: "rejected"; reason: string };
 
 const rejected = (reason: string): SaveOutcome => ({ status: "rejected", reason });
@@ -127,7 +127,7 @@ export function useSaveImage(collectionId?: Id<"collections">) {
         );
         return Result.isFailure(saved)
           ? rejected(saved.failure._tag)
-          : { status: "saved", duplicate: saved.success.duplicate };
+          : { status: "saved", ...saved.success };
       };
       // A network error or a server fault rejects. The caller still gets an outcome for the file.
       return decodeAndSave().catch((cause: unknown) => {
