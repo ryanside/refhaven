@@ -364,7 +364,8 @@ export function createSceneStore() {
       for (const [key, note] of added) {
         if (note.save === save) added.delete(key);
       }
-      settle();
+      // A note that was only held is gone now, so the selection and the gesture let go of it too.
+      forgetMissing();
       changed();
     },
 

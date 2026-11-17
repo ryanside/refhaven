@@ -709,6 +709,8 @@ test("a note whose save fails leaves, and so does its selection", () => {
   store.reject(save);
   expect(store.summary().items).toBe(2);
   expect(store.items().some((item) => item.key === "n")).toBe(false);
+  expect([...store.selection()].sort()).toEqual(["a", "b"]);
+  expect(store.summary().selected).toBe(2);
 });
 
 test("a held patch of a note's text and box shows at once", () => {
