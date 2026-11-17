@@ -121,6 +121,28 @@ export function createSceneStore() {
     }
   };
 
+  /**
+   * Lets go of every item the server state no longer holds: in the selection, in the pending
+   * moves, and in the gesture. A drag whose last item left has nothing to move, so it ends.
+   */
+  const forgetMissing = () => {
+    selection = new Set([...selection].filter((key) => server.has(key)));
+    settle();
+    if (gesture.kind !== "dragging") return;
+    const origins = new Map([...gesture.origins].filter(([key]) => server.has(key)));
+    gesture =
+      origins.size === 0
+        ? { kind: "idle" }
+        : {
+            ...gesture,
+            origins,
+            collapseTo:
+              gesture.collapseTo !== null && server.has(gesture.collapseTo)
+                ? gesture.collapseTo
+                : null,
+          };
+  };
+
   const setCamera = (next: Camera) => {
     camera = next;
     changed();
@@ -148,8 +170,7 @@ export function createSceneStore() {
       rev = snapshot.rev;
       server.clear();
       for (const item of snapshot.items) server.set(item.key, fromServer(item));
-      selection = new Set([...selection].filter((key) => server.has(key)));
-      settle();
+      forgetMissing();
       if (!fitted) {
         fitted = true;
         camera = fitCamera(viewport, server.values());
@@ -169,8 +190,7 @@ export function createSceneStore() {
           server.delete(item.key);
         }
       }
-      selection = new Set([...selection].filter((key) => server.has(key)));
-      settle();
+      forgetMissing();
       changed();
     },
 
