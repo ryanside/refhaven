@@ -10,6 +10,7 @@
     "check:canvas-add": "bun --env-file=../../packages/backend/.env.local checks/canvas-add.ts",
     "check:canvas-drop": "bun --env-file=../../packages/backend/.env.local checks/canvas-drop.ts",
     "check:canvas-page": "bun --env-file=../../packages/backend/.env.local checks/canvas-page.ts",
+    "check:canvas-transform": "bun --env-file=../../packages/backend/.env.local checks/canvas-transform.ts",
     "check:canvas-undo": "bun --env-file=../../packages/backend/.env.local checks/canvas-undo.ts",
     "check:collection-canvas": "bun --env-file=../../packages/backend/.env.local checks/collection-canvas.ts",
     "check:collections": "bun --env-file=../../packages/backend/.env.local checks/collections.ts",

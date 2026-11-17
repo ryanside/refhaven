@@ -4,13 +4,13 @@ import {
   callsOf,
   createHistory,
   maxOpsPerCall,
-  moveEntry,
-  movesOf,
+  patchEntry,
+  posesOf,
   removalEntry,
 } from "./index";
 
-const first = moveEntry([{ key: "a", x: 0, y: 0 }], [{ key: "a", x: 10, y: 0 }]);
-const second = moveEntry([{ key: "b", x: 0, y: 0 }], [{ key: "b", x: 0, y: 10 }]);
+const first = patchEntry([{ key: "a", x: 0, y: 0 }], [{ key: "a", x: 10, y: 0 }]);
+const second = patchEntry([{ key: "b", x: 0, y: 0 }], [{ key: "b", x: 0, y: 10 }]);
 
 test("an empty history has nothing to undo or redo", () => {
   const history = createHistory();
@@ -88,7 +88,7 @@ test("a removal is undone by one add per item, at its old place and its old z", 
     { op: "remove", key: "r1" },
     { op: "remove", key: "r2" },
   ]);
-  expect(movesOf(entry.undo)).toEqual([]);
+  expect(posesOf(entry.undo)).toEqual([]);
 });
 
 test("an add is undone by removing the Ref's item and redone by adding it at the same place", () => {
@@ -107,8 +107,8 @@ test("an add whose place in the stack is known is redone at that place", () => {
 });
 
 test("a move patches the old positions to undo and the new ones to redo", () => {
-  expect(movesOf(first.undo)).toEqual([{ key: "a", x: 0, y: 0 }]);
-  expect(movesOf(first.redo)).toEqual([{ key: "a", x: 10, y: 0 }]);
+  expect(posesOf(first.undo)).toEqual([{ key: "a", x: 0, y: 0 }]);
+  expect(posesOf(first.redo)).toEqual([{ key: "a", x: 10, y: 0 }]);
 });
 
 test("undoing a removal takes as many ops as the removal, so the largest removal one call can make can be undone", () => {

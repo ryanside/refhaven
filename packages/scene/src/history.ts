@@ -1,7 +1,8 @@
 import type { Point } from "./index";
+import type { Pose } from "./transform";
 
 /** The fields of an item that an op of this client sets. */
-export type ItemFields = Partial<Point & { readonly z: string }>;
+export type ItemFields = Partial<Pose & { readonly z: string }>;
 
 /** One operation of a canvas edit, in the shape `canvas.apply` takes. */
 export type ItemOp =
@@ -29,9 +30,13 @@ export const callsOf = <Op>(ops: ReadonlyArray<Op>): Array<ReadonlyArray<Op>> =>
 
 type Placed = Point & { readonly key: string };
 
-const patchTo = ({ key, x, y }: Placed): ItemOp => ({ op: "patch", key, fields: { x, y } });
+/** An item's key and the fields a patch sets on it. */
+type Patch = ItemFields & { readonly key: string };
 
-export const moveEntry = (from: ReadonlyArray<Placed>, to: ReadonlyArray<Placed>): Entry => ({
+const patchTo = ({ key, ...fields }: Patch): ItemOp => ({ op: "patch", key, fields });
+
+/** Patching items: the old fields to undo, and the new ones to redo. */
+export const patchEntry = (from: ReadonlyArray<Patch>, to: ReadonlyArray<Patch>): Entry => ({
   undo: from.map(patchTo),
   redo: to.map(patchTo),
 });
@@ -60,13 +65,13 @@ export const addEntry = (
   ),
 });
 
-/** The positions that the ops' patches set. */
-export const movesOf = (ops: ReadonlyArray<ItemOp>): Array<Placed> =>
-  ops.flatMap((op) =>
-    op.op === "patch" && op.fields.x !== undefined && op.fields.y !== undefined
-      ? [{ key: op.key, x: op.fields.x, y: op.fields.y }]
-      : [],
-  );
+/** The pose fields that the ops' patches set, for each patch that sets one. */
+export const posesOf = (ops: ReadonlyArray<ItemOp>): Array<Partial<Pose> & { key: string }> =>
+  ops.flatMap((op) => {
+    if (op.op !== "patch") return [];
+    const { z, ...pose } = op.fields;
+    return Object.keys(pose).length > 0 ? [{ key: op.key, ...pose }] : [];
+  });
 
 export type HistorySummary = { readonly canUndo: boolean; readonly canRedo: boolean };
 

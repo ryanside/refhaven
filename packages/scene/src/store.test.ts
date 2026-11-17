@@ -4,7 +4,9 @@ import {
   type Point,
   type ServerItem,
   createSceneStore,
-  movesOf,
+  handleAt,
+  posesOf,
+  snapStep,
   worldToScreen,
 } from "./index";
 
@@ -91,7 +93,7 @@ test("a drag moves the whole selection and returns one entry that undoes and red
   const drop = drag("a", { x: 40, y: -20 });
 
   const byKey = (ops: ReadonlyArray<ItemOp>) =>
-    movesOf(ops).sort((m, n) => (m.key < n.key ? -1 : 1));
+    posesOf(ops).sort((m, n) => (m.key < n.key ? -1 : 1));
   expect(byKey(drop!.entry.redo)).toEqual([
     { key: "a", x: 40, y: -20 },
     { key: "b", x: 340, y: -20 },
@@ -130,7 +132,7 @@ test("dragging an unselected item selects it alone and moves only it", () => {
   const drop = drag("b", { x: 50, y: 0 });
 
   expect([...store.selection()]).toEqual(["b"]);
-  expect(movesOf(drop!.entry.redo)).toEqual([{ key: "b", x: 350, y: 0 }]);
+  expect(posesOf(drop!.entry.redo)).toEqual([{ key: "b", x: 350, y: 0 }]);
 });
 
 test("the gesture is panning between a pan press and its release, and moves the camera", () => {
@@ -241,7 +243,7 @@ test("when one of two dragged items is deleted, the drop moves only the other", 
 
   store.applyChanges({ rev: 2, items: [{ ...a, deletedAt: 1 }] });
 
-  expect(movesOf(store.release()!.entry.redo)).toEqual([{ key: "b", x: 340, y: 0 }]);
+  expect(posesOf(store.release()!.entry.redo)).toEqual([{ key: "b", x: 340, y: 0 }]);
 });
 
 test("an item deleted during a click on it is not selected by the release", () => {
@@ -369,4 +371,155 @@ test("ops apply when every item they patch or remove is on the canvas or added b
       { op: "patch", key: "gone", fields: { z: "a0" } },
     ]),
   ).toBe(true);
+});
+
+const item = (store: ReturnType<typeof setUp>["store"], key: string) =>
+  store.items().find((candidate) => candidate.key === key)!;
+
+test("a resize handle scales the selection about the opposite corner, and the release saves x, y, and scale", () => {
+  const { store, screen } = setUp();
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.release();
+  const frame = store.frame()!;
+  const grip = handleAt(frame, "se");
+  const during = store.summary();
+
+  store.grab("se", screen(grip));
+  store.move(screen({ x: grip.x + 100, y: grip.y + 50 }));
+
+  expect(store.gesture().kind).toBe("resizing");
+  expect(item(store, "a")).toMatchObject({ x: 50, y: 25, scale: 0.75, width: 300, height: 150 });
+  expect(store.summary()).toBe(during);
+  const drop = store.release()!;
+  expect(drop.entry).toEqual({
+    undo: [{ op: "patch", key: "a", fields: { x: 0, y: 0, scale: 0.5 } }],
+    redo: [{ op: "patch", key: "a", fields: { x: 50, y: 25, scale: 0.75 } }],
+  });
+  expect(store.frame()).toMatchObject({ x: 50, y: 25, width: 300, height: 150 });
+  expect(item(store, "a")).toMatchObject({ x: 50, y: 25, scale: 0.75 });
+});
+
+test("the rotate handle turns the selection about its frame's center, snaps with Shift, and saves x, y, and rotation", () => {
+  const scene = setUp();
+  const { store, screen } = scene;
+  selectBoth(scene);
+  const center = { x: store.frame()!.x, y: store.frame()!.y };
+
+  store.grab("rotate", screen({ x: center.x, y: center.y - 200 }));
+  store.move(screen({ x: center.x + 200, y: center.y - 10 }), true);
+
+  expect(store.gesture()).toMatchObject({ kind: "rotating", snap: true });
+  const drop = store.release()!;
+  expect(drop.entry.redo).toHaveLength(2);
+  for (const op of drop.entry.redo) {
+    expect(op).toMatchObject({ op: "patch" });
+    expect(Object.keys(op.op === "patch" ? op.fields : {}).sort()).toEqual(["rotation", "x", "y"]);
+  }
+  expect(item(store, "a").rotation).toBe(6 * snapStep);
+  expect(item(store, "b").rotation).toBe(6 * snapStep);
+  expect(item(store, "a").x).toBeCloseTo(center.x, 9);
+  expect(item(store, "a").y).toBeCloseTo(-center.x, 9);
+});
+
+test("a press on a handle released without moving saves nothing", () => {
+  const { store, screen } = setUp();
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.release();
+  const grip = screen(handleAt(store.frame()!, "n"));
+
+  store.grab("n", grip);
+  store.move(grip);
+  expect(store.release()).toBeNull();
+  store.grab("rotate", { x: grip.x, y: grip.y - 20 });
+  expect(store.release()).toBeNull();
+  expect(store.gesture().kind).toBe("idle");
+});
+
+test("a server change to an item in a resize does not change it", () => {
+  const { store, screen } = setUp();
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.release();
+  const grip = handleAt(store.frame()!, "e");
+  store.grab("e", screen(grip));
+  store.move(screen({ x: grip.x + 100, y: grip.y }));
+
+  store.applyChanges({ rev: 2, items: [{ ...a, scale: 2, rotation: 1, x: 900 }] });
+
+  expect(item(store, "a")).toMatchObject({ x: 50, y: 0, scale: 0.75, rotation: 0 });
+});
+
+test("with nothing selected, a handle press starts no gesture", () => {
+  const { store } = setUp();
+
+  store.grab("se", { x: 0, y: 0 });
+
+  expect(store.gesture().kind).toBe("idle");
+  expect(store.frame()).toBeNull();
+});
+
+test("a hold shows scale and rotation at once, and a later hold keeps the fields of one not yet settled", () => {
+  const { store } = setUp();
+  const resize = store.hold([{ op: "patch", key: "a", fields: { x: 5, y: 5, scale: 1 } }]);
+  const turn = store.hold([{ op: "patch", key: "a", fields: { x: 6, y: 6, rotation: 1 } }]);
+
+  expect(item(store, "a")).toMatchObject({ x: 6, y: 6, scale: 1, rotation: 1, width: 400 });
+
+  store.acknowledge(resize, 2);
+  store.applyChanges({ rev: 2, items: [{ ...a, x: 5, y: 5, scale: 1 }] });
+  expect(item(store, "a")).toMatchObject({ x: 6, y: 6, scale: 1, rotation: 1 });
+
+  store.acknowledge(turn, 3);
+  store.applyChanges({ rev: 3, items: [{ ...a, x: 6, y: 6, scale: 1, rotation: 1 }] });
+  store.applyChanges({ rev: 4, items: [{ ...a, scale: 3 }] });
+  expect(item(store, "a")).toMatchObject({ x: 0, y: 0, scale: 3, rotation: 0 });
+});
+
+test("a turn of one item about its own center saves only its rotation", () => {
+  const { store, screen } = setUp();
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.release();
+
+  store.grab("rotate", screen({ x: 0, y: -200 }));
+  store.move(screen({ x: 100, y: -200 }));
+  const drop = store.release()!;
+
+  // Its place did not change, so the patch must not name it. Another tab may have moved it.
+  const [redo] = drop.entry.redo;
+  expect(redo).toMatchObject({ op: "patch", key: "a" });
+  expect(Object.keys(redo?.op === "patch" ? redo.fields : {})).toEqual(["rotation"]);
+  expect(item(store, "a").rotation).toBeCloseTo(Math.atan2(100, 200), 9);
+  expect(drop.entry.undo).toEqual([{ op: "patch", key: "a", fields: { rotation: 0 } }]);
+});
+
+test("a press on a handle that moves less than the threshold saves nothing and changes nothing", () => {
+  const { store, screen } = setUp();
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.release();
+  const grip = screen(handleAt(store.frame()!, "se"));
+
+  store.grab("se", grip);
+  store.move({ x: grip.x + 2, y: grip.y + 1 });
+
+  expect(item(store, "a")).toMatchObject({ x: 0, y: 0, scale: 0.5 });
+  expect(store.release()).toBeNull();
+});
+
+test("a save that fails takes back the fields it set, and leaves a later save's fields held", () => {
+  const { store } = setUp();
+  const resize = store.hold([{ op: "patch", key: "a", fields: { scale: 1 } }]);
+  store.hold([{ op: "patch", key: "a", fields: { rotation: 1 } }]);
+
+  store.reject(resize);
+
+  expect(item(store, "a")).toMatchObject({ scale: 0.5, rotation: 1 });
+});
+
+test("a later save of the same field takes it over, so the earlier save's failure leaves it", () => {
+  const { store } = setUp();
+  const first = store.hold([{ op: "patch", key: "a", fields: { x: 10, y: 10 } }]);
+  store.hold([{ op: "patch", key: "a", fields: { x: 20, y: 20 } }]);
+
+  store.reject(first);
+
+  expect(item(store, "a")).toMatchObject({ x: 20, y: 20 });
 });

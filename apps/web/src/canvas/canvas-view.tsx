@@ -5,19 +5,23 @@ import type { Renderer } from "@refhaven/renderer";
 import { Button } from "@refhaven/ui/components/button";
 import { createPixiRenderer } from "@refhaven/renderer/pixi";
 import {
+  type Camera,
   type CanvasItem,
   type Drop,
   type Entry,
+  type Handle,
   type History,
   type ImageRole,
   type ItemOp,
   type Point,
+  type Rect,
   type SceneItem,
   type SceneStore,
   addEntry,
   callsOf,
   createHistory,
   createSceneStore,
+  handles,
   imageRole,
   itemsInView,
   placedEdge,
@@ -251,7 +255,7 @@ export function CanvasView({
 
   const onDrop = useRef((drop: Drop) => store.reject(drop.save));
   useEffect(() => {
-    onDrop.current = (drop) => void edit(drop.entry, drop.save, "A move could not be saved.");
+    onDrop.current = (drop) => void edit(drop.entry, drop.save, "A change could not be saved.");
   }, [edit]);
   // The images of one drop or paste go in a row from its point, a placed image's longer edge plus
   // the gap apart, so they never overlap.
@@ -462,6 +466,7 @@ function drive(
     host.dataset.shownThumbnails = String(thumbnails);
     host.dataset.displayKeys = displays.join(" ");
     drawOutlines(outlines, store, byKey);
+    drawFrame(outlines, store);
   }
 
   void createPixiRenderer(host).then((created) => {
@@ -485,11 +490,16 @@ function drive(
     return { x: event.clientX - box.left, y: event.clientY - box.top };
   };
 
+  // A press on a handle in the overlay reaches this listener on the overlay, not on the host. The
+  // host captures the pointer either way, so the rest of the gesture arrives there.
   const onPointerDown = (event: PointerEvent) => {
     if (pointerId !== null) return;
+    const grip = event.target instanceof HTMLElement ? event.target.dataset.handle : undefined;
     if (event.button === 1 || (event.button === 0 && spaceHeld)) {
       event.preventDefault();
       store.startPan(at(event));
+    } else if (event.button === 0 && isGrip(grip)) {
+      store.grab(grip, at(event));
     } else if (event.button === 0) {
       store.press(at(event), event.shiftKey);
     } else {
@@ -499,7 +509,7 @@ function drive(
     host.setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: PointerEvent) => {
-    if (event.pointerId === pointerId) store.move(at(event));
+    if (event.pointerId === pointerId) store.move(at(event), event.shiftKey);
   };
   // A release outside the window, or a switch to another window, sends no pointerup. The gesture
   // ends on a lost capture and on blur too, or the next pointer move would keep dragging.
@@ -542,6 +552,7 @@ function drive(
   };
 
   host.addEventListener("pointerdown", onPointerDown);
+  outlines.addEventListener("pointerdown", onPointerDown);
   host.addEventListener("pointermove", onPointerMove);
   host.addEventListener("pointerup", onPointerUp);
   host.addEventListener("pointercancel", onPointerUp);
@@ -557,6 +568,7 @@ function drive(
     unsubscribe();
     resize.disconnect();
     host.removeEventListener("pointerdown", onPointerDown);
+    outlines.removeEventListener("pointerdown", onPointerDown);
     host.removeEventListener("pointermove", onPointerMove);
     host.removeEventListener("pointerup", onPointerUp);
     host.removeEventListener("pointercancel", onPointerUp);
@@ -578,7 +590,7 @@ function drawOutlines(
 ) {
   const camera = store.camera();
   const selection = store.selection();
-  for (const element of [...layer.children] as Array<HTMLElement>) {
+  for (const element of layer.querySelectorAll<HTMLElement>("[data-outline-key]")) {
     if (!selection.has(element.dataset.outlineKey!)) element.remove();
   }
   for (const key of selection) {
@@ -591,13 +603,55 @@ function drawOutlines(
       element.className = "absolute border-2 border-primary";
       layer.appendChild(element);
     }
-    const center = worldToScreen(camera, item);
-    const width = item.width * camera.zoom;
-    const height = item.height * camera.zoom;
-    element.style.left = `${center.x - width / 2}px`;
-    element.style.top = `${center.y - height / 2}px`;
-    element.style.width = `${width}px`;
-    element.style.height = `${height}px`;
-    element.style.transform = `rotate(${item.rotation}rad)`;
+    place(element, camera, item);
   }
+}
+
+const isGrip = (name: string | undefined): name is Handle | "rotate" =>
+  name === "rotate" || (name !== undefined && Object.hasOwn(handles, name));
+
+/** Puts an element over a turned world rectangle on screen. */
+const place = (element: HTMLElement, camera: Camera, rect: Rect) => {
+  const center = worldToScreen(camera, rect);
+  const width = rect.width * camera.zoom;
+  const height = rect.height * camera.zoom;
+  element.style.left = `${center.x - width / 2}px`;
+  element.style.top = `${center.y - height / 2}px`;
+  element.style.width = `${width}px`;
+  element.style.height = `${height}px`;
+  element.style.transform = `rotate(${rect.rotation}rad)`;
+};
+
+const grip = (name: Handle | "rotate", left: string, top: string) => {
+  const element = document.createElement("div");
+  element.dataset.handle = name;
+  element.className =
+    "pointer-events-auto absolute size-2.5 -translate-1/2 rounded-full border border-primary bg-background";
+  element.style.left = left;
+  element.style.top = top;
+  return element;
+};
+
+/**
+ * Keeps the selection's frame over it, with a resize handle on each corner and edge and the rotate
+ * handle above the top edge. The handles are screen pixels in size, so they keep it at every zoom.
+ */
+function drawFrame(layer: HTMLDivElement, store: SceneStore) {
+  const frame = store.frame();
+  let element = layer.querySelector<HTMLElement>("[data-frame]");
+  if (!frame) {
+    element?.remove();
+    return;
+  }
+  if (!element) {
+    element = document.createElement("div");
+    element.dataset.frame = "";
+    element.className = "absolute outline outline-primary";
+    for (const [name, { x, y }] of Object.entries(handles) as Array<[Handle, Point]>) {
+      element.append(grip(name, `${(x + 1) * 50}%`, `${(y + 1) * 50}%`));
+    }
+    element.append(grip("rotate", "50%", "-24px"));
+    layer.append(element);
+  }
+  place(element, store.camera(), frame);
 }
