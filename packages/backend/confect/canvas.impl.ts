@@ -1,18 +1,25 @@
-import { boundsOf, placeBeside, zAbove } from "@refhaven/scene";
+import {
+  type Placement,
+  type Size,
+  boundsOf,
+  placeBeside,
+  placedScale,
+  zAbove,
+} from "@refhaven/scene";
 import { FunctionImpl, GroupImpl } from "@confect/server";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import type { CanvasItemsDoc } from "./_generated/docs";
+import type { CanvasItemsDoc, CanvasesDoc, RefsDoc } from "./_generated/docs";
 import type { Id } from "./_generated/id";
 import databaseSchema from "./_generated/schema";
 import { DatabaseReader, DatabaseWriter } from "./_generated/services";
 import canvas, { CanvasNotFound, ItemNotFound } from "./canvas.spec";
-import { canvasOf, leaveCollection, ownedCollection } from "./membership";
+import { addMember, canvasOf, leaveCollection, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
-import { isLive, liveRefs } from "./ref";
+import { isLive, liveRefs, ownedLiveRef } from "./ref";
 
 const ownedCanvas = (canvasId: Id<"canvases">) =>
   Effect.gen(function* () {
@@ -31,6 +38,35 @@ const ownedCanvas = (canvasId: Id<"canvases">) =>
 const toItem = ({ _id, _creationTime, workspaceId, canvasId, rev, ...item }: CanvasItemsDoc) =>
   item;
 
+const itemsOf = (canvasId: Id<"canvases">) =>
+  Effect.gen(function* () {
+    const reader = yield* DatabaseReader;
+    return yield* reader
+      .table("canvasItems")
+      .index("by_canvas_and_key", (q) => q.eq("canvasId", canvasId))
+      .collect();
+  }).pipe(Effect.orDie);
+
+const sizeOf = (ref: RefsDoc) =>
+  Effect.gen(function* () {
+    const reader = yield* DatabaseReader;
+    const { width, height } = yield* reader.table("blobs").get(ref.blobs.original);
+    return { refId: ref._id, width, height };
+  }).pipe(Effect.orDie);
+
+/** A new item for a Ref. Its key is the Ref's ID, so a canvas holds at most one item per Ref. */
+const imageItem = (placed: Size & Placement & { readonly refId: Id<"refs"> }, z: string) => ({
+  key: placed.refId,
+  kind: "image" as const,
+  ...placed,
+  rotation: 0,
+  flipX: false,
+  flipY: false,
+  opacity: 1,
+  grayscale: false,
+  z,
+});
+
 /** Opens or makes the canvas of a set, and places each Ref of the set that has no item. */
 const openSet = (collectionId: Id<"collections"> | undefined) =>
   Effect.gen(function* () {
@@ -48,10 +84,7 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
         ),
       rev: 0,
     };
-    const items = yield* reader
-      .table("canvasItems")
-      .index("by_canvas_and_key", (q) => q.eq("canvasId", canvasId))
-      .collect();
+    const items = yield* itemsOf(canvasId);
     const live = (
       collectionId === undefined
         ? yield* (yield* liveRefs).collect()
@@ -77,12 +110,7 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
       return { canvasId, rev: openedRev, items: shown.map(toItem) };
     }
 
-    const sizes = yield* Effect.forEach(unplaced, (ref) =>
-      reader
-        .table("blobs")
-        .get(ref.blobs.original)
-        .pipe(Effect.map(({ width, height }) => ({ refId: ref._id, width, height }))),
-    );
+    const sizes = yield* Effect.forEach(unplaced, sizeOf);
     const rev = openedRev + 1;
     const added = Arr.zip(
       placeBeside(boundsOf(shown), sizes),
@@ -90,17 +118,7 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
         items.map((item) => item.z),
         sizes.length,
       ),
-    ).map(([placed, z]) => ({
-      key: placed.refId,
-      kind: "image" as const,
-      ...placed,
-      rotation: 0,
-      flipX: false,
-      flipY: false,
-      opacity: 1,
-      grayscale: false,
-      z,
-    }));
+    ).map(([placed, z]) => imageItem(placed, z));
     const itemIdByKey = new Map(items.map((item) => [item.key, item._id]));
     yield* writer.table("canvases").patch(canvasId, { rev });
     yield* Effect.forEach(
@@ -152,6 +170,48 @@ const changes = FunctionImpl.make(databaseSchema, canvas, "changes", ({ canvasId
   }),
 );
 
+/**
+ * Puts a Ref on a canvas at a point and on top: inserts its item, brings a removed one back, or
+ * moves a live one. On a collection's canvas the Ref also joins the collection, because that
+ * canvas shows only members.
+ */
+const place = (
+  found: CanvasesDoc,
+  rev: number,
+  { refId, x, y }: { readonly refId: Id<"refs">; readonly x: number; readonly y: number },
+  z: string,
+) =>
+  Effect.gen(function* () {
+    const { workspaceId } = yield* CurrentWorkspace;
+    const reader = yield* DatabaseReader;
+    const writer = yield* DatabaseWriter;
+    const ref = yield* ownedLiveRef(refId);
+    if (found.collectionId !== undefined) {
+      yield* addMember(found.collectionId, refId);
+    }
+    const existing = yield* reader
+      .table("canvasItems")
+      .index("by_canvas_and_key", (q) => q.eq("canvasId", found._id).eq("key", refId))
+      .first()
+      .pipe(Effect.orDie);
+    if (Option.isSome(existing)) {
+      return yield* writer
+        .table("canvasItems")
+        .patch(existing.value._id, { x, y, z, rev, deletedAt: undefined })
+        .pipe(Effect.orDie);
+    }
+    const size = yield* sizeOf(ref);
+    yield* writer
+      .table("canvasItems")
+      .insert({
+        workspaceId,
+        canvasId: found._id,
+        rev,
+        ...imageItem({ ...size, x, y, scale: placedScale(size) }, z),
+      })
+      .pipe(Effect.orDie);
+  });
+
 // A typed error is thrown as a ConvexError, so Convex rolls back every write of a failed call.
 const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, ops }) =>
   Effect.gen(function* () {
@@ -160,10 +220,24 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
     const writer = yield* DatabaseWriter;
     const rev = found.rev + 1;
     yield* writer.table("canvases").patch(canvasId, { rev }).pipe(Effect.orDie);
+    const adds = ops.flatMap((op, index) => (op.op === "add" ? [index] : []));
+    const below =
+      adds.length === 0
+        ? []
+        : [
+            ...(yield* itemsOf(canvasId)).map((item) => item.z),
+            ...ops.flatMap((op) =>
+              op.op === "patch" && op.fields.z !== undefined ? [op.fields.z] : [],
+            ),
+          ];
+    const addedZ = new Map(Arr.zip(adds, zAbove(below, adds.length)));
     yield* Effect.forEach(
       ops,
-      (op) =>
+      (op, index) =>
         Effect.gen(function* () {
+          if (op.op === "add") {
+            return yield* place(found, rev, op, addedZ.get(index)!);
+          }
           const item = yield* reader
             .table("canvasItems")
             .get("by_canvas_and_key", canvasId, op.key)
