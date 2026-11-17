@@ -386,6 +386,14 @@ try {
     consoleErrors.length === 0,
     `the browser console shows no error: ${consoleErrors.join(" | ")}`,
   );
+
+  // This comes after the console assertion, because Convex's client logs the refused argument.
+  await page.goto(`${appUrl}/r/not-an-id`);
+  await page.getByText("Image not found.").waitFor();
+  assert(
+    (await page.getByText("ArgumentValidationError").count()) === 0,
+    "an image page whose ID is not an ID at all shows Image not found. and no server error",
+  );
 } finally {
   await first.browser.close();
   await second.browser.close();

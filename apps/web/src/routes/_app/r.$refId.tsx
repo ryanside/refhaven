@@ -7,7 +7,7 @@ import { Button } from "@refhaven/ui/components/button";
 import { Input } from "@refhaven/ui/components/input";
 import { Label } from "@refhaven/ui/components/label";
 import { Textarea } from "@refhaven/ui/components/textarea";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { ErrorComponent, Link, createFileRoute } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -16,6 +16,14 @@ import { useRefUrls } from "@/library/use-ref-urls";
 
 export const Route = createFileRoute("/_app/r/$refId")({
   component: RefPage,
+  // An ID from the URL that is not an image ID at all fails Convex's check of the arguments,
+  // before `ref.get` can answer with its own "not found".
+  errorComponent: ({ error }) =>
+    error instanceof Error && error.message.includes("ArgumentValidationError") ? (
+      <p className="p-6">Image not found.</p>
+    ) : (
+      <ErrorComponent error={error} />
+    ),
 });
 
 type Details = Ref.Returns<typeof refs.public.ref.get>;
