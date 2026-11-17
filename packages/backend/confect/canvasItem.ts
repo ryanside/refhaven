@@ -30,7 +30,10 @@ export const noteFields = {
   height: Schema.Finite.check(Schema.isGreaterThan(0)),
 };
 
-/** An image's or a note's group: the key of a live group item on the same canvas. */
+/**
+ * An image's or a note's group: the key of a group item on the same canvas. The item is in that
+ * group while the group is on the canvas. It keeps the key while the group is removed.
+ */
 const parent = Schema.optionalKey(ItemKey);
 
 const deletedAt = Schema.optionalKey(Schema.Number);

@@ -61,7 +61,7 @@ export class FieldNotOnItem extends Schema.TaggedError<FieldNotOnItem>()("FieldN
   field: Schema.String,
 }) {}
 
-/** A `parent` that names no live group of the canvas. */
+/** A `parent` that names no group of the canvas, live or removed. */
 export class GroupNotFound extends Schema.TaggedError<GroupNotFound>()("GroupNotFound", {
   key: Schema.String,
 }) {}

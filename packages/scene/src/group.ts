@@ -1,5 +1,5 @@
-/** An item as the group rule reads it: its key, and the key of its group when it has one. */
-type Member = { readonly key: string; readonly parent?: string | null };
+/** An item as the group rule reads it: its key, and the key of the group it is in when it is in one. */
+type Member = { readonly key: string; readonly group?: string };
 
 /**
  * The selection rule of groups: the keys of the items that `keys` names, and of every other item in
@@ -8,11 +8,11 @@ type Member = { readonly key: string; readonly parent?: string | null };
 export function grouped(items: ReadonlyArray<Member>, keys: Iterable<string>): Set<string> {
   const named = new Set(keys);
   const groups = new Set(
-    items.flatMap((item) => (named.has(item.key) && item.parent ? [item.parent] : [])),
+    items.flatMap((item) => (named.has(item.key) && item.group ? [item.group] : [])),
   );
   return new Set(
     items.flatMap((item) =>
-      named.has(item.key) || (item.parent && groups.has(item.parent)) ? [item.key] : [],
+      named.has(item.key) || (item.group && groups.has(item.group)) ? [item.key] : [],
     ),
   );
 }

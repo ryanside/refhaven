@@ -295,7 +295,7 @@ export function CanvasView({
 
   const ungroup = useCallback(() => {
     if (store.gesture().kind !== "idle") return;
-    const entry = ungroupEntry(store.selected(), store.items());
+    const entry = ungroupEntry(store.selected());
     if (entry) void edit(entry, store.hold(entry.redo), "The group could not be removed.");
   }, [edit, store]);
 
@@ -582,7 +582,7 @@ function GroupButtons({
     () => groupEntry(store.selected(), "") !== null,
   );
   const canUngroup = useSyncExternalStore(store.subscribe, () =>
-    store.selected().some((item) => item.parent),
+    store.selected().some((item) => item.group),
   );
   return (
     <div className="flex gap-2">

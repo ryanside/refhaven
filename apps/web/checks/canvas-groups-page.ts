@@ -363,7 +363,9 @@ try {
   await selectedOn(page, 2);
   calls = applied.length;
   await page.keyboard.press("ControlOrMeta+Shift+g");
-  await until(snapshot, ({ of }) => of(red).parent === undefined, "the ungroup to save");
+  const without = (key: string) => (groups: ReadonlyArray<string>) => !groups.includes(key);
+  const withGroup = (key: string) => (groups: ReadonlyArray<string>) => groups.includes(key);
+  await until(groupsNow, without(redGreen), "the ungroup to save");
   const ungroupOps = showOps(calls);
   await clickEmpty();
   await click(await on(red));
@@ -379,27 +381,49 @@ try {
 
   calls = applied.length;
   await page.keyboard.press("ControlOrMeta+z");
-  const undone = await until(
-    snapshot,
-    ({ of }) => of(red).parent !== undefined,
-    "the undo to regroup",
-  );
+  await until(groupsNow, withGroup(redGreen), "the undo to regroup");
+  const undone = await snapshot();
   await clickEmpty();
   await click(await on(green));
   await selectedOn(page, 2);
   const undoOps = showOps(calls);
   calls = applied.length;
   await page.keyboard.press("ControlOrMeta+Shift+z");
-  await until(snapshot, ({ of }) => of(red).parent === undefined, "the redo to ungroup");
+  await until(groupsNow, without(redGreen), "the redo to ungroup");
   await clickEmpty();
   await click(await on(green));
   await selectedOn(page, 1);
   assert(
     undone.of(red).parent === redGreen &&
       undone.of(green).parent === redGreen &&
-      undoOps === JSON.stringify([["addGroup", "patch parent", "patch parent"]]) &&
+      undoOps === JSON.stringify([["addGroup"]]) &&
       showOps(calls) === JSON.stringify([["remove"]]),
-    `undo brings the group back under its key with both members in one call (${undoOps}), and redo removes it again (${showOps(calls)})`,
+    `undo brings the group back under its key in one call that patches no member (${undoOps}), and a click then selects both. Redo removes it again (${showOps(calls)})`,
+  );
+
+  // A member whose image is in the trash for the whole of an ungroup and its undo.
+  await page.keyboard.press("ControlOrMeta+z");
+  await until(groupsNow, withGroup(redGreen), "the group to come back");
+  await owner.mutation(api.library.remove, { refIds: [greenRef!] });
+  await shown(page, 3);
+  await click(await on(red));
+  await selectedOn(page, 1);
+  await page.keyboard.press("ControlOrMeta+Shift+g");
+  await until(groupsNow, without(redGreen), "the ungroup with a member in the trash");
+  await page.keyboard.press("ControlOrMeta+z");
+  await until(groupsNow, withGroup(redGreen), "the undo with a member in the trash");
+  await owner.mutation(api.library.restore, { refIds: [greenRef!] });
+  await shown(page, 4);
+  await clickEmpty();
+  await click(await on(red));
+  await selectedOn(page, 2);
+  const withRestored = await outlined();
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await until(groupsNow, without(redGreen), "the redo to ungroup again");
+  await clickEmpty();
+  assert(
+    withRestored.join() === [red, green].sort().join(),
+    "a group that is removed and brought back by undo while a member's image is in the trash holds that member again after the restore: a click on the other selects both",
   );
 
   await click(await on(blue));
@@ -433,7 +457,7 @@ try {
   await page.keyboard.press("ControlOrMeta+g");
   const regrouped = await until(
     snapshot,
-    ({ of }) => of(green).parent !== undefined,
+    ({ of }) => of(label).parent !== blueLabel,
     "the three items to group",
   );
   const all = regrouped.of(green).parent!;

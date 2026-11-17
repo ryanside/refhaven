@@ -103,6 +103,16 @@ try {
     `removing one member at rev ${removedMember} writes only it, and leaves the group and the other member's parent`,
   );
 
+  const putBack = await owner.mutation(api.canvas.open, { placeRemoved: true });
+  const afterPutBack = await open();
+  await apply([{ op: "remove", key: a }]);
+  assert(
+    putBack.placed === 1 &&
+      parentOf(putBack.items, a) === "g1" &&
+      parentOf(afterPutBack.items, a) === "g1",
+    "an open that puts a removed member back returns it with its parent, as the next open does",
+  );
+
   await owner.mutation(api.library.remove, { refIds: [b] });
   const whileTrashed = await open();
   const bRow = (await itemRows()).find((row) => row.key === b);
@@ -117,21 +127,24 @@ try {
     "deleting a member's image to the trash hides its item and keeps its parent, and a restore puts it back in its group",
   );
 
+  // The group is removed while one member is off the canvas and the other's image is in the trash.
+  await owner.mutation(api.library.remove, { refIds: [b] });
+  const beforeUngroup = (await open()).rev;
   const ungrouped = await apply([{ op: "remove", key: "g1" }]);
+  const sinceUngroup = await changesSince(beforeUngroup);
+  await owner.mutation(api.library.restore, { refIds: [b] });
   const afterUngroup = await open();
-  const sinceRestored = await changesSince(restored.rev);
   const aRow = (await itemRows()).find((row) => row.key === a);
   assert(
     groupsOf(afterUngroup.items).length === 0 &&
-      parentOf(afterUngroup.items, b) === undefined &&
-      afterUngroup.items.length === restored.items.length - 1 &&
-      sinceRestored.rev === ungrouped &&
-      sinceRestored.items.some((item) => item.key === "g1" && item.deletedAt !== undefined) &&
-      parentOf(sinceRestored.items, b) === undefined &&
-      aRow !== undefined &&
-      aRow.deletedAt !== undefined &&
-      aRow.parent === undefined,
-    `removing a group at rev ${ungrouped} takes its live member out of it and leaves that member on the canvas, and takes its removed member out of it too`,
+      parentOf(afterUngroup.items, b) === "g1" &&
+      sinceUngroup.rev === ungrouped &&
+      sinceUngroup.items.length === 1 &&
+      sinceUngroup.items[0]!.key === "g1" &&
+      sinceUngroup.items[0]!.deletedAt !== undefined &&
+      aRow?.deletedAt !== undefined &&
+      aRow.parent === "g1",
+    `removing a group at rev ${ungrouped} writes only the group, and each member keeps a parent that names no group on the canvas`,
   );
 
   const board = await owner.mutation(api.collections.create, { name: "Board" });
@@ -145,7 +158,6 @@ try {
   const beforeRefusals = (await open()).rev;
   for (const [label, parent] of [
     ["a missing key", "nope"],
-    ["a removed group", "g1"],
     ["an image's key", b],
     ["a group of another canvas", "board-group"],
   ] as const) {
@@ -182,21 +194,41 @@ try {
     `a patch of a parent on a group fails with ${nested}, and of a place with ${placed}, and nothing was written`,
   );
 
+  const linked = await apply([{ op: "patch", key: c, fields: { parent: "g1" } }]);
+  const whileRemoved = await open();
+  assert(
+    whileRemoved.rev === linked &&
+      parentOf(whileRemoved.items, c) === "g1" &&
+      groupsOf(whileRemoved.items).join() === "g2",
+    "a parent may name a removed group, which is how an undo gives an item back the parent it had",
+  );
+
   const g1Row = async () => (await itemRows()).find((row) => row.key === "g1");
   const removedRow = await g1Row();
-  const revived = await apply([
-    { op: "addGroup", key: "g1" },
-    { op: "patch", key: b, fields: { parent: "g1" } },
-  ]);
+  const revived = await apply([{ op: "addGroup", key: "g1" }]);
   const revivedRow = await g1Row();
   const afterRevive = await open();
   assert(
     revivedRow?._id === removedRow?._id &&
       revivedRow?.deletedAt === undefined &&
       revivedRow?.rev === revived &&
+      (await changesSince(linked)).items.length === 1 &&
       groupsOf(afterRevive.items).join() === "g1,g2" &&
-      parentOf(afterRevive.items, b) === "g1",
-    "adding a group under a removed group's key brings that row back",
+      parentOf(afterRevive.items, b) === "g1" &&
+      parentOf(afterRevive.items, c) === "g1",
+    "adding a group under a removed group's key brings that row back and writes nothing else, and its members are in it again: the one whose image was in the trash when the group was removed too",
+  );
+
+  await owner.mutation(api.library.remove, { refIds: [b] });
+  await apply([{ op: "remove", key: "g1" }]);
+  await apply([{ op: "addGroup", key: "g1" }]);
+  await owner.mutation(api.library.restore, { refIds: [b] });
+  const afterHiddenUndo = await open();
+  const beforeTaken = afterHiddenUndo.rev;
+  assert(
+    parentOf(afterHiddenUndo.items, b) === "g1" &&
+      groupsOf(afterHiddenUndo.items).join() === "g1,g2",
+    "a group removed and brought back while a member's image is in the trash has that member again after the restore",
   );
   for (const [label, key] of [
     ["a live group", "g1"],
@@ -205,7 +237,7 @@ try {
     const taken = await outcome(apply([{ op: "addGroup", key }]));
     assert(taken === "KeyTaken", `a group under the key of ${label} fails with ${taken}`);
   }
-  assert((await open()).rev === revived, "the refused groups wrote nothing");
+  assert((await open()).rev === beforeTaken, "the refused groups wrote nothing");
 
   const [later] = (await save(page, ["later.png"])) as [Id<"refs">];
   const grown = await open();

@@ -103,18 +103,20 @@ export const addEntry = (
 
 /**
  * Putting items in a new group under `key`, which takes each out of the group it was in. Undone by
- * removing the group, which empties it, and putting back each item that had a group. Null for
- * fewer than two items, or for items that are already one group.
+ * removing the group and giving each item the `parent` it had, which may name a removed group. Null
+ * for fewer than two items, or for items that are already one group.
  */
 export const groupEntry = (chosen: ReadonlyArray<CanvasItem>, key: string): Entry | null => {
-  const parents = new Set(chosen.map((item) => item.parent ?? null));
-  if (chosen.length < 2 || (parents.size === 1 && !parents.has(null))) return null;
+  const groups = new Set(chosen.map((item) => item.group ?? null));
+  if (chosen.length < 2 || (groups.size === 1 && !groups.has(null))) return null;
   return {
     undo: [
       { op: "remove", key },
-      ...chosen.flatMap((item): Array<ItemOp> =>
-        item.parent ? [{ op: "patch", key: item.key, fields: { parent: item.parent } }] : [],
-      ),
+      ...chosen.map((item): ItemOp => ({
+        op: "patch",
+        key: item.key,
+        fields: { parent: item.parent ?? null },
+      })),
     ],
     redo: [
       { op: "addGroup", key },
@@ -124,26 +126,17 @@ export const groupEntry = (chosen: ReadonlyArray<CanvasItem>, key: string): Entr
 };
 
 /**
- * Removing every group that one of the chosen items is in. The server takes each member out of its
- * group. Undone by bringing each group back under its key and putting its members of `items` back.
- * Null when no chosen item is in a group.
+ * Removing every group that one of the chosen items is in. Each member keeps its `parent`, which
+ * counts for nothing while its group is removed. So bringing each group back under its key undoes
+ * it, also for a member that is out of view, such as one whose image is in the trash. Null when no
+ * chosen item is in a group.
  */
-export const ungroupEntry = (
-  chosen: ReadonlyArray<CanvasItem>,
-  items: ReadonlyArray<CanvasItem>,
-): Entry | null => {
-  const groups = new Set(chosen.flatMap((item) => (item.parent ? [item.parent] : [])));
-  if (groups.size === 0) return null;
+export const ungroupEntry = (chosen: ReadonlyArray<CanvasItem>): Entry | null => {
+  const groups = [...new Set(chosen.flatMap((item) => (item.group ? [item.group] : [])))];
+  if (groups.length === 0) return null;
   return {
-    undo: [
-      ...[...groups].map((key): ItemOp => ({ op: "addGroup", key })),
-      ...items.flatMap((item): Array<ItemOp> =>
-        item.parent && groups.has(item.parent)
-          ? [{ op: "patch", key: item.key, fields: { parent: item.parent } }]
-          : [],
-      ),
-    ],
-    redo: [...groups].map((key): ItemOp => ({ op: "remove", key })),
+    undo: groups.map((key): ItemOp => ({ op: "addGroup", key })),
+    redo: groups.map((key): ItemOp => ({ op: "remove", key })),
   };
 };
 

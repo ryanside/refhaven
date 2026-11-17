@@ -144,29 +144,38 @@ const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: bool
 
     const sizes = yield* Effect.forEach(unplaced, sizeOf);
     const rev = openedRev + 1;
+    const rowByKey = new Map(items.map((item) => [item.key, item]));
     const added = Arr.zip(
       placeBeside(boundsOf(placedOf(shown)), sizes),
       zAbove(
         placedOf(items).map((item) => item.z),
         sizes.length,
       ),
-    ).map(([placed, z]) => imageItem(placed, z));
-    const itemIdByKey = new Map(items.map((item) => [item.key, item._id]));
+    ).map(([placed, z]) => {
+      const row = rowByKey.get(placed.refId);
+      const item = imageItem(placed, z);
+      // A removed item that comes back keeps its `parent`.
+      return {
+        rowId: row?._id,
+        item:
+          row?.kind === "image" && row.parent !== undefined
+            ? { ...item, parent: row.parent }
+            : item,
+      };
+    });
     yield* writer.table("canvases").patch(canvasId, { rev });
     yield* Effect.forEach(
       added,
-      (item) => {
-        const itemId = itemIdByKey.get(item.key);
-        return itemId === undefined
+      ({ rowId, item }) =>
+        rowId === undefined
           ? writer.table("canvasItems").insert({ workspaceId, canvasId, rev, ...item })
-          : writer.table("canvasItems").patch(itemId, { ...item, rev, deletedAt: undefined });
-      },
+          : writer.table("canvasItems").patch(rowId, { ...item, rev, deletedAt: undefined }),
       { discard: true },
     );
     return {
       canvasId,
       rev,
-      items: [...shown.map(toItem), ...added],
+      items: [...shown.map(toItem), ...added.map(({ item }) => item)],
       placed: added.length,
       removed,
     };
@@ -323,29 +332,10 @@ const putGroup = (found: CanvasesDoc, rev: number, key: string) =>
   });
 
 /**
- * Removes a group and takes every item out of it, removed items too, so none comes back into a
- * group that is gone. Its members stay on the canvas.
+ * Fails unless each key names a group of the canvas. A removed group counts, because an item keeps
+ * its `parent` while its group is removed, and undo gives an item back the `parent` it had.
  */
-const removeGroup = (group: CanvasItemsDoc, rev: number) =>
-  Effect.gen(function* () {
-    const reader = yield* DatabaseReader;
-    const writer = yield* DatabaseWriter;
-    yield* writer.table("canvasItems").patch(group._id, { deletedAt: Date.now(), rev });
-    const members = yield* reader
-      .table("canvasItems")
-      .index("by_canvas_and_parent", (q) =>
-        q.eq("canvasId", group.canvasId).eq("parent", group.key),
-      )
-      .collect();
-    yield* Effect.forEach(
-      members,
-      (member) => writer.table("canvasItems").patch(member._id, { parent: undefined, rev }),
-      { discard: true },
-    );
-  }).pipe(Effect.orDie);
-
-/** Fails unless each key names a live group of the canvas. */
-const liveGroups = (canvasId: Id<"canvases">, keys: ReadonlySet<string>) =>
+const areGroups = (canvasId: Id<"canvases">, keys: ReadonlySet<string>) =>
   Effect.forEach(
     keys,
     (key) =>
@@ -356,11 +346,7 @@ const liveGroups = (canvasId: Id<"canvases">, keys: ReadonlySet<string>) =>
           .index("by_canvas_and_key", (q) => q.eq("canvasId", canvasId).eq("key", key))
           .first()
           .pipe(Effect.orDie);
-        if (
-          Option.isNone(group) ||
-          group.value.kind !== "group" ||
-          group.value.deletedAt !== undefined
-        ) {
+        if (Option.isNone(group) || group.value.kind !== "group") {
           return yield* new GroupNotFound({ key });
         }
       }),
@@ -409,10 +395,8 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
           if (item.deletedAt !== undefined || (yield* trashedAt(item)) !== undefined) {
             return yield* new ItemNotFound({ key: op.key });
           }
+          // Removing a group writes its row only. Its members stay, each with its `parent`.
           if (op.op === "remove") {
-            if (item.kind === "group") {
-              return yield* removeGroup(item, rev);
-            }
             if (item.kind === "image" && found.collectionId !== undefined) {
               return yield* leaveCollection(found.collectionId, [item.refId], { canvasId, rev });
             }
@@ -439,7 +423,7 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
       { discard: true },
     );
     // Checked after every op, so one call can add a group and put items in it.
-    yield* liveGroups(
+    yield* areGroups(
       canvasId,
       new Set(
         ops.flatMap((op) => (op.op === "patch" && op.fields.parent ? [op.fields.parent] : [])),
