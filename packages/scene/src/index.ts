@@ -33,6 +33,7 @@ export function screenToWorld(camera: Camera, screen: Point): Point {
 }
 
 export * from "./camera";
+export * from "./history";
 export * from "./hit";
 export * from "./layout";
 export * from "./store";
