@@ -15,6 +15,7 @@ import {
   createSceneStore,
   type Drop,
   type Entry,
+  groupEntry,
   type Handle,
   handles,
   type History,
@@ -39,6 +40,7 @@ import {
   screenToWorld,
   topLeftOf,
   topmostAt,
+  ungroupEntry,
   worldToScreen,
   zAbove,
 } from "@refhaven/scene";
@@ -283,6 +285,20 @@ export function CanvasView({
     [edit, store],
   );
 
+  // Grouping adds the group and puts each selected item in it, and ungrouping removes each group the
+  // selection holds. The selection holds whole groups, so neither changes it.
+  const group = useCallback(() => {
+    if (store.gesture().kind !== "idle") return;
+    const entry = groupEntry(store.selected(), crypto.randomUUID());
+    if (entry) void edit(entry, store.hold(entry.redo), "The group could not be saved.");
+  }, [edit, store]);
+
+  const ungroup = useCallback(() => {
+    if (store.gesture().kind !== "idle") return;
+    const entry = ungroupEntry(store.selected(), store.items());
+    if (entry) void edit(entry, store.hold(entry.redo), "The group could not be removed.");
+  }, [edit, store]);
+
   const [draft, setDraft] = useState<Draft | null>(null);
   const [noteColor, setNoteColor] = useState<NoteColor>("black");
 
@@ -410,6 +426,8 @@ export function CanvasView({
     remove: removeSelection,
     bringToFront: () => restack("front"),
     sendToBack: () => restack("back"),
+    group,
+    ungroup,
     undo: () => step("undo"),
     redo: () => step("redo"),
     selectAll: store.selectAll,
@@ -481,6 +499,7 @@ export function CanvasView({
           actions={actions}
         />
         <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
+        <GroupButtons store={store} actions={actions} />
         {offCanvas > 0 ? (
           <div className="flex items-center gap-2">
             <p data-testid="off-canvas" data-count={offCanvas}>
@@ -548,6 +567,32 @@ function EditButtons({
         </Button>
       </div>
     </>
+  );
+}
+
+function GroupButtons({
+  store,
+  actions,
+}: {
+  store: SceneStore;
+  actions: Record<Action, () => void>;
+}) {
+  const canGroup = useSyncExternalStore(
+    store.subscribe,
+    () => groupEntry(store.selected(), "") !== null,
+  );
+  const canUngroup = useSyncExternalStore(store.subscribe, () =>
+    store.selected().some((item) => item.parent),
+  );
+  return (
+    <div className="flex gap-2">
+      <Button variant="outline" size="sm" disabled={!canGroup} onClick={actions.group}>
+        Group
+      </Button>
+      <Button variant="outline" size="sm" disabled={!canUngroup} onClick={actions.ungroup}>
+        Ungroup
+      </Button>
+    </div>
   );
 }
 

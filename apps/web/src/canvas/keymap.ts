@@ -8,6 +8,8 @@ export const keymap = [
   { hotkey: "Mod+A", action: "selectAll" },
   { hotkey: "Escape", action: "clearSelection" },
   { hotkey: "N", action: "addNote" },
+  { hotkey: "Mod+G", action: "group" },
+  { hotkey: "Mod+Shift+G", action: "ungroup" },
   { hotkey: "]", action: "bringToFront" },
   { hotkey: "[", action: "sendToBack" },
   // Some macOS layouts, German and French among them, type a bracket with Option held.
