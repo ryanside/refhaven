@@ -3,7 +3,7 @@ import * as Schema from "effect/Schema";
 import { Id } from "../_generated/id";
 
 // `by_collection` lists a collection's Refs in the order they were added. `by_collection_and_ref`
-// finds one membership, and lists them in ID order.
+// finds one membership, and lists them in ID order. `by_ref` lists the collections a Ref is in.
 export default Table.make(() =>
   Schema.Struct({
     workspaceId: Id("workspaces"),
@@ -12,4 +12,5 @@ export default Table.make(() =>
   }),
 )
   .index("by_collection", ["collectionId"])
-  .index("by_collection_and_ref", ["collectionId", "refId"]);
+  .index("by_collection_and_ref", ["collectionId", "refId"])
+  .index("by_ref", ["refId"]);

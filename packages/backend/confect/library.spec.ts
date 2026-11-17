@@ -12,6 +12,7 @@ import {
 } from "./blob";
 import { CollectionNotFound } from "./collection";
 import RequireWorkspace from "./middleware/RequireWorkspace.spec";
+import { FileName } from "./refFields";
 
 const Dimension = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_535 }));
 
@@ -22,7 +23,7 @@ const variantSizeUpTo = (maxEdge: number) => {
 
 const savedImage = {
   sha256: Sha256,
-  fileName: Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(255)),
+  fileName: FileName,
   width: Dimension,
   height: Dimension,
   thumbHash: ThumbHash,

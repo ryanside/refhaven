@@ -8,6 +8,7 @@
     "./blob": "./confect/blob.ts",
     "./collection": "./confect/collection.ts",
     "./id": "./confect/_generated/id.ts",
+    "./refFields": "./confect/refFields.ts",
     "./refs": "./confect/_generated/refs.ts"
   },
   "scripts": {

@@ -10,6 +10,8 @@ export default Table.make(() =>
     workspaceId: Id("workspaces"),
     blobs: Schema.Struct({ original: Id("blobs") }),
     fileName: Schema.String,
+    note: Schema.optionalKey(Schema.String),
+    sourceUrl: Schema.optionalKey(Schema.String),
     deletedAt: Schema.optionalKey(Schema.Number),
   }),
 ).index("by_workspace_and_deletedAt", ["workspaceId", "deletedAt"]);

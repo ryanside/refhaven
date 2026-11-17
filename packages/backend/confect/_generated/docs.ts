@@ -7,6 +7,7 @@ export type CanvasesDoc = Document.Document<typeof schemaDefinition, "canvases">
 export type CollectionRefsDoc = Document.Document<typeof schemaDefinition, "collectionRefs">;
 export type CollectionsDoc = Document.Document<typeof schemaDefinition, "collections">;
 export type RefsDoc = Document.Document<typeof schemaDefinition, "refs">;
+export type TagsDoc = Document.Document<typeof schemaDefinition, "tags">;
 export type UsersDoc = Document.Document<typeof schemaDefinition, "users">;
 export type WorkspacesDoc = Document.Document<typeof schemaDefinition, "workspaces">;
 
@@ -17,6 +18,7 @@ export interface Docs {
   collectionRefs: CollectionRefsDoc;
   collections: CollectionsDoc;
   refs: RefsDoc;
+  tags: TagsDoc;
   users: UsersDoc;
   workspaces: WorkspacesDoc;
 }
