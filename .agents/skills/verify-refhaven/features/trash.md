@@ -37,7 +37,7 @@ Preconditions:
 - **Private.** Call `library.remove` and `library.restore` with the first user's Ref from a second user's `clientFor(page)`. Both fail with `RefNotFound`.
 - **Proof.** Screenshot `/trash` with an image in it. Read `verify.sh rows refs` for the Ref's `deletedAt`, and `verify.sh rows collectionRefs` to see that its membership stays. Read `canvas.changes` through the API from the rev before the delete. It returns the item with a `deletedAt`, and after the restore without one, at the same `x`, `y`, `scale`, and `z`.
 
-`apps/web/checks/purge.ts` runs the purge and the sweep: every row of a purged image, Refs that share a Blob, the objects in R2 before and after the sweep, the same bytes saved again, a save during a sweep, a second sweep beside a running one and after a dead one, 150 Refs, 50 Refs with 600 rows that point at them, a second run, and a second user's image and orphan row left alone.
+`apps/web/checks/purge.ts` runs the purge and the sweep: every row of a purged image, Refs that share a Blob, the objects in R2 before and after the sweep, the same bytes saved again, a save during a sweep, a second sweep beside a running one and after a dead one, 150 Refs, an image with 520 tags and 50 Refs with 600 rows that point at them, purged one mutation at a time, a second run, and a second user's image and orphan row left alone.
 
 `apps/web/checks/trash.ts` runs this journey and adds the rules the UI cannot reach: deleting and restoring twice, a Ref in the trash refused by `collections.addRefs` and `canvas.apply`, an item removed from a canvas before the delete, a Ref deleted before any canvas placed it, saving the same bytes again, byte-exact serving, and a call that mixes an own and a foreign Ref.
 
@@ -48,6 +48,6 @@ Preconditions:
 - An item removed from a canvas before the delete stays removed after the restore. Count the canvas's items with that in mind.
 - A restored Ref that had an item on a canvas comes back at once, at its old place, through `canvas.changes`. A restored Ref that never had one is placed by the next `open`, beside the layout. `canvas.open` through the API places images.
 - Saving bytes whose Ref is in the trash adds a new card to the library and leaves the old Ref in the trash.
-- Never run `trash:purge` or `trash:sweep` without `pretend`, and never name a workspace other than the run's own. Without `pretend` they purge every workspace on the real clock, the owner's included. The daily jobs do that, and nothing else should.
+- Never run `trash:purge` or `trash:sweep` without `pretend`, and never name a workspace other than the run's own. A pretend clock skips the week that keeps a save safe from the sweep, so in a real workspace it can delete the bytes of an image that is being saved. Without `pretend` they purge every workspace on the real clock, the owner's included. The daily jobs do that, and nothing else should.
 - `trash:sweepBatch` alone begins a sweep and deletes nothing, which is how the check holds a sweep open. A `trash:sweep` 12 hours later by the pretend clock finishes it.
 - The pretend time is compared with the real `deletedAt`, so a Ref deleted seconds ago is 30 days old at a pretend now 30 days ahead. An orphan row takes the pretend time of the purge that wrote it.

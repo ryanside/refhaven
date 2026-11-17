@@ -212,19 +212,25 @@ try {
   );
 
   await signInWithPasskey(second.page, `check-purge-b-${stamp}`);
-  const [fBuffer, gBuffer, hBuffer] = (await Promise.all(
-    ["rgb(250, 120, 0)", "rgb(0, 120, 250)", "rgb(120, 250, 0)"].map((color, index) =>
-      pngOf(second.page, color, 140 + index * 10, 90),
+  const [fBuffer, gBuffer, hBuffer, tBuffer] = (await Promise.all(
+    ["rgb(250, 120, 0)", "rgb(0, 120, 250)", "rgb(120, 250, 0)", "rgb(250, 0, 120)"].map(
+      (color, index) => pngOf(second.page, color, 140 + index * 10, 90),
     ),
-  )) as [Buffer, Buffer, Buffer];
+  )) as [Buffer, Buffer, Buffer, Buffer];
   await save(second.page, [
     { name: "f.png", buffer: fBuffer },
     { name: "g.png", buffer: gBuffer },
     { name: "h.png", buffer: hBuffer },
+    { name: "t.png", buffer: tBuffer },
   ]);
   const intruder = await clientFor(second.page);
   const theirs = await refsByName(intruder);
-  const [f, g, h] = [theirs.get("f.png")!, theirs.get("g.png")!, theirs.get("h.png")!];
+  const [f, g, h, t] = [
+    theirs.get("f.png")!,
+    theirs.get("g.png")!,
+    theirs.get("h.png")!,
+    theirs.get("t.png")!,
+  ];
   const [fObject, gObject] = await Promise.all(
     [f, g].map((refId) => signed(intruder, refId, "original")),
   );
@@ -545,7 +551,15 @@ try {
     "the second user's orphan row, a week old at the first user's sweeps, is still there and unmarked, and its object is still in R2",
   );
 
-  // More rows than one purge mutation deletes: 50 Refs in 6 collections, each on its canvas.
+  // More rows than one purge mutation deletes: an image with 520 tags, and 50 Refs in 6
+  // collections, each on its canvas. The purge is run one mutation at a time, to see each state
+  // between two of them.
+  for (let index = 0; index < 26; index += 1) {
+    await intruder.mutation(api.ref.addTags, {
+      refId: t,
+      names: Array.from({ length: 20 }, (_, tag) => `tag-${index}-${tag}`),
+    });
+  }
   const hHash = sha256(hBuffer);
   const hBlob = afterKAgain.blobsOf(foreignWorkspace, hHash)[0]!;
   const hCopies = await Promise.all(
@@ -568,35 +582,71 @@ try {
     await intruder.mutation(api.collections.addRefs, { collectionId, refIds: hRefs });
     await intruder.mutation(api.canvas.open, { collectionId });
   }
+  await intruder.mutation(api.library.remove, { refIds: [t] });
+  await Bun.sleep(1100);
   await intruder.mutation(api.library.remove, { refIds: hRefs });
-  const pointingAtMany = async () => {
-    const [memberships, items] = await Promise.all([
+
+  /** The Refs of the 50 that still have a row, and the rows that point at each and at the tagged image. */
+  const many = async () => {
+    const [refRows, tags, memberships, items] = await Promise.all([
+      rows("refs", 1000),
+      rows("tags", 1000),
       rows("collectionRefs", 1000),
       rows("canvasItems", 1000),
     ]);
-    const many = new Set<string>(hRefs);
+    const present = new Set(refRows.map((row) => row._id as string));
+    const count = (table: Array<Row>, refId: string) =>
+      table.filter((row) => row.refId === refId).length;
     return {
-      memberships: memberships.filter((row) => many.has(row.refId)).length,
-      items: items.filter((row) => many.has(row.refId)).length,
+      lastDeleted: Math.max(
+        ...refRows.flatMap((row) => (hRefs.includes(row._id) ? [row.deletedAt as number] : [])),
+      ),
+      left: hRefs.filter((refId) => present.has(refId)).length,
+      // A Ref that kept its row kept every row that points at it, and a purged one kept none.
+      whole: hRefs.every((refId) => {
+        const pointing = [count(memberships, refId), count(items, refId)].join();
+        return pointing === (present.has(refId) ? "6,6" : "0,0");
+      }),
+      tagged: { row: present.has(t), tags: count(tags, t) },
     };
   };
-  const manyBefore = await pointingAtMany();
-  const beforeMany = await state();
-  const lastOfMany = Math.max(...hRefs.map((refId) => beforeMany.refRow(refId)!.deletedAt));
-  const manyPurged = await purgeAt(lastOfMany + 30 * day + 1000, foreignWorkspace);
-  const manyAfter = await pointingAtMany();
+  const manyBefore = await many();
+  const atMany = manyBefore.lastDeleted + 30 * day + 1000;
+  const steps: Array<{ purged: number; more: boolean } & Awaited<ReturnType<typeof many>>> = [];
+  do {
+    const batch = JSON.parse(
+      await convexRun(
+        "trash:purgeBatch",
+        JSON.stringify({ pretend: { workspaceId: foreignWorkspace, now: atMany } }),
+      ),
+    ) as { purged: number; more: boolean };
+    steps.push({ ...batch, ...(await many()) });
+  } while (steps.at(-1)!.more);
+  const shown = JSON.stringify(
+    steps.map(({ purged, left, whole, tagged }) => ({ purged, left, whole, tagged })),
+  );
   const afterMany = await state();
   assert(
-    manyBefore.memberships === 300 &&
-      manyBefore.items === 300 &&
-      manyPurged === 51 &&
-      manyAfter.memberships === 0 &&
-      manyAfter.items === 0 &&
-      hRefs.every((refId) => afterMany.refRow(refId) === undefined) &&
+    manyBefore.left === 50 &&
+      manyBefore.whole &&
+      manyBefore.tagged.tags === 520 &&
+      steps.length > 2 &&
+      steps.reduce((sum, { purged }) => sum + purged, 0) === 52 &&
+      steps.at(-1)!.left === 0 &&
       afterMany.refRow(f) === undefined &&
       afterMany.blobsOf(foreignWorkspace, hHash).length === 0 &&
       afterMany.orphansOf(foreignWorkspace, hHash).length === 1,
-    `a purge of 50 Refs with 600 rows that point at them, more than one mutation deletes, purges every expired Ref (${manyPurged}) and leaves none of those rows: ${JSON.stringify(manyAfter)}`,
+    `a purge of an image with 520 tags and of 50 Refs with 600 rows that point at them takes several mutations and purges all 52 expired Refs: ${shown}`,
+  );
+  assert(
+    steps.every(({ whole }) => whole),
+    "between two purge mutations, each of the 50 Refs has its row and every row that points at it, or none of them",
+  );
+  assert(
+    steps.some(({ tagged }) => tagged.row && tagged.tags === 20) &&
+      !steps.at(-1)!.tagged.row &&
+      steps.at(-1)!.tagged.tags === 0,
+    "the image with more tags than one mutation deletes keeps its row while 20 tags are left, and goes with the last of them",
   );
   assertCleanConsole();
 } finally {

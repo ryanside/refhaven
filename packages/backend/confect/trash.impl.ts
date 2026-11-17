@@ -22,16 +22,14 @@ const batchSize = 50;
  */
 const maxPointers = 500;
 
-/** Deletes up to `limit` of the rows that point at a Ref, and returns how many it deleted. */
-const deletePointers = (refId: Id<"refs">, limit: number) =>
+/** Up to `limit` of the rows that point at a Ref: its tags, its memberships, its canvas items. */
+const pointersOf = (refId: Id<"refs">, limit: number) =>
   Effect.gen(function* () {
     const reader = yield* DatabaseReader;
-    const writer = yield* DatabaseWriter;
     const tags = yield* reader
       .table("tags")
       .index("by_ref", (q) => q.eq("refId", refId))
       .take(limit);
-    yield* Effect.forEach(tags, ({ _id }) => writer.table("tags").delete(_id), { discard: true });
     const memberships =
       tags.length === limit
         ? []
@@ -39,9 +37,6 @@ const deletePointers = (refId: Id<"refs">, limit: number) =>
             .table("collectionRefs")
             .index("by_ref", (q) => q.eq("refId", refId))
             .take(limit - tags.length);
-    yield* Effect.forEach(memberships, ({ _id }) => writer.table("collectionRefs").delete(_id), {
-      discard: true,
-    });
     const found = tags.length + memberships.length;
     const items =
       found === limit
@@ -50,10 +45,7 @@ const deletePointers = (refId: Id<"refs">, limit: number) =>
             .table("canvasItems")
             .index("by_ref", (q) => q.eq("refId", refId))
             .take(limit - found);
-    yield* Effect.forEach(items, ({ _id }) => writer.table("canvasItems").delete(_id), {
-      discard: true,
-    });
-    return found + items.length;
+    return { tags, memberships, items, count: found + items.length };
   }).pipe(Effect.orDie);
 
 /**
@@ -84,13 +76,16 @@ const purgeRef = (ref: RefsDoc, now: number) =>
 /**
  * Purges the Refs that have been in the trash the longest, each with every row that points at it.
  * A Ref's canvas items go as rows, with no new rev: every canvas heard that they were removed when
- * the Ref went to the trash. A Ref with more rows than the batch may still delete keeps its own
- * row, and the next batch goes on with it. `more` says whether to ask again.
+ * the Ref went to the trash. A Ref goes whole when it can: one whose rows may not fit in what is
+ * left of this mutation waits for the next. Only the first Ref of a mutation is ever cut, when it
+ * has more rows than a mutation deletes. It keeps its own row, and the next mutation goes on with
+ * it. `more` says whether to ask again.
  */
 const purgeBatch = FunctionImpl.make(databaseSchema, trash, "purgeBatch", ({ pretend }) =>
   Effect.gen(function* () {
     const now = pretend?.now ?? Date.now();
     const reader = yield* DatabaseReader;
+    const writer = yield* DatabaseWriter;
     const expired = pretend
       ? yield* reader
           .table("refs")
@@ -108,7 +103,20 @@ const purgeBatch = FunctionImpl.make(databaseSchema, trash, "purgeBatch", ({ pre
     let left = maxPointers;
     let purged = 0;
     for (const ref of expired) {
-      left -= yield* deletePointers(ref._id, left);
+      const pointers = yield* pointersOf(ref._id, left);
+      if (pointers.count === left && purged > 0) break;
+      yield* Effect.forEach(pointers.tags, ({ _id }) => writer.table("tags").delete(_id), {
+        discard: true,
+      });
+      yield* Effect.forEach(
+        pointers.memberships,
+        ({ _id }) => writer.table("collectionRefs").delete(_id),
+        { discard: true },
+      );
+      yield* Effect.forEach(pointers.items, ({ _id }) => writer.table("canvasItems").delete(_id), {
+        discard: true,
+      });
+      left -= pointers.count;
       if (left === 0) break;
       yield* purgeRef(ref, now);
       purged += 1;
@@ -180,6 +188,12 @@ const sweepDone = FunctionImpl.make(databaseSchema, trash, "sweepDone", ({ orpha
   }).pipe(Effect.orDie),
 );
 
+/**
+ * A sweep begins no batch after this long, and leaves the rest to the next day's. Convex ends an
+ * action after 30 minutes, and a sweep that it ends may leave a delete in flight.
+ */
+const sweepRunMs = 10 * 60 * 1000;
+
 // Each batch's objects are deleted between the mutation that sets `sweepingAt` on its rows and
 // the one that deletes them, so a save never records bytes while this is deleting them. A delete
 // that fails, or whose answer never comes, ends the sweep with its rows still marked. A later
@@ -188,6 +202,7 @@ const sweepDone = FunctionImpl.make(databaseSchema, trash, "sweepDone", ({ orpha
 const sweep = FunctionImpl.make(databaseSchema, trash, "sweep", (args) =>
   Effect.gen(function* () {
     const { runMutation } = yield* MutationRunner;
+    const until = Date.now() + sweepRunMs;
     let swept = 0;
     let deleted = 0;
     for (;;) {
@@ -201,7 +216,7 @@ const sweep = FunctionImpl.make(databaseSchema, trash, "sweep", (args) =>
       });
       swept += batch.sweeping.length;
       deleted += keys.length;
-      if (!batch.more) return { swept, deleted };
+      if (!batch.more || Date.now() > until) return { swept, deleted };
     }
   }).pipe(Effect.orDie),
 );
