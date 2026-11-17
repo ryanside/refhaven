@@ -20,6 +20,14 @@ export const signedUrlSeconds = 60 * 60;
 
 export const originalKey = (workspaceId: string, sha256: Sha256) => `w/${workspaceId}/o/${sha256}`;
 
+/** The hash in base64, the form R2 takes it in when it checks an upload. */
+export const sha256Base64 = (sha256: Sha256) =>
+  btoa(
+    String.fromCharCode(
+      ...Array.from(sha256.matchAll(/../g), ([byte]) => Number.parseInt(byte, 16)),
+    ),
+  );
+
 export const variantSpecs = {
   thumbnail: { maxEdge: 512, file: "512.webp" },
   display: { maxEdge: 2048, file: "2048.webp" },

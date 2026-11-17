@@ -87,9 +87,9 @@ export function useSaveImage() {
           ...variants.map(({ role, bytes }) => [role, bytes] as const),
         ]);
         return {
-          uploads: prepared.success.flatMap(({ role, url }) => {
+          uploads: prepared.success.flatMap(({ role, url, headers }) => {
             const body = bodies.get(role);
-            return body ? [{ url, body }] : [];
+            return body ? [{ url, headers, body }] : [];
           }),
           image: {
             sha256,
@@ -109,8 +109,8 @@ export function useSaveImage() {
         if ("status" in prepared) return prepared;
 
         const uploaded = await Promise.all(
-          prepared.uploads.map(({ url, body }) =>
-            fetch(url, { method: "PUT", body, headers: { "Content-Type": body.type } }),
+          prepared.uploads.map(({ url, headers, body }) =>
+            fetch(url, { method: "PUT", body, headers: { "Content-Type": body.type, ...headers } }),
           ),
         );
         if (uploaded.some((response) => !response.ok)) return rejected("UploadFailed");

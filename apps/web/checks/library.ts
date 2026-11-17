@@ -209,12 +209,17 @@ try {
     "saving a hash that was never uploaded fails with UploadNotFound",
   );
 
-  const putEach = (prepared: ReadonlyArray<{ url: string }>, body: Uint8Array) =>
-    Promise.all(
-      prepared.map(({ url }) =>
-        fetch(url, { method: "PUT", body, headers: { "Content-Type": "image/png" } }),
-      ),
-    );
+  type Upload = { url: string; headers: Record<string, string> };
+  const put = async ({ url, headers }: Upload, body: Uint8Array) =>
+    (
+      await fetch(url, {
+        method: "PUT",
+        body,
+        headers: { "Content-Type": "image/png", ...headers },
+      })
+    ).status;
+  const putEach = (prepared: ReadonlyArray<Upload>, body: Uint8Array) =>
+    Promise.all(prepared.map((upload) => put(upload, body)));
 
   const html = new TextEncoder().encode("<!DOCTYPE html><script>alert(1)</script>");
   const preparedHtml = await owner.mutation(api.library.prepareUpload, {
@@ -272,6 +277,33 @@ try {
   );
   assert(zeroWidth !== "accepted", `a width of 0 is ${zeroWidth}`);
   assert((await cards(page).count()) === 3, "none of the refused saves added a Ref");
+
+  const teal = await pngOf(page, "rgb(30, 200, 200)", 40);
+  const tealImage = { ...image, width: 40, height: 40, sha256: sha256(teal) };
+  const [tealUpload] = await owner.mutation(api.library.prepareUpload, {
+    sha256: sha256(teal),
+    roles: [],
+  });
+  const wrongBytes = await put(tealUpload!, small);
+  assert(
+    wrongBytes === 400 &&
+      (await outcome(owner.action(api.library.save, tealImage))) === "UploadNotFound",
+    `R2 refuses bytes that do not match the hash their upload URL was signed for, and stores nothing: ${wrongBytes}`,
+  );
+  const noHash = await put({ ...tealUpload!, headers: {} }, teal);
+  assert(noHash === 403, `R2 refuses the right bytes sent without their hash: ${noHash}`);
+  const rightBytes = await put(tealUpload!, teal);
+  const tealRef = await owner.action(api.library.save, tealImage);
+  assert(
+    rightBytes === 200 && tealRef.duplicate === false,
+    `R2 stores the bytes that match the hash, and the save records them: ${rightBytes}`,
+  );
+  const replaced = await put(tealUpload!, small);
+  assert(
+    replaced === 400 &&
+      sha256(await bytesAt(await signed("original", tealRef.refId))) === sha256(teal),
+    `after the save, the same upload URL cannot replace the stored bytes: ${replaced}`,
+  );
 
   const earlierUrl = await signed("thumbnail");
   await Bun.sleep(1100);
