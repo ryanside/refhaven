@@ -10,6 +10,7 @@ import {
   Variants,
   variantSpecs,
 } from "./blob";
+import { CollectionNotFound } from "./collection";
 import RequireWorkspace from "./middleware/RequireWorkspace.spec";
 
 const Dimension = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_535 }));
@@ -28,6 +29,16 @@ const savedImage = {
 };
 
 const SavedRef = Schema.Struct({ refId: Id("refs"), duplicate: Schema.Boolean });
+
+/** One image of a set, as a gallery shows it. */
+export const GalleryItem = Schema.Struct({
+  refId: Id("refs"),
+  fileName: Schema.String,
+  width: Schema.Int,
+  height: Schema.Int,
+  thumbHash: Schema.NullOr(Schema.String),
+  savedAt: Schema.Number,
+});
 
 export class UploadNotFound extends Schema.TaggedError<UploadNotFound>()("UploadNotFound", {}) {}
 
@@ -67,9 +78,11 @@ export default GroupSpec.make()
           thumbnail: Schema.optionalKey(variantSizeUpTo(variantSpecs.thumbnail.maxEdge)),
           display: Schema.optionalKey(variantSizeUpTo(variantSpecs.display.maxEdge)),
         }),
+        collectionId: Schema.optionalKey(Id("collections")),
       }),
       returns: () => SavedRef,
-      error: () => Schema.Union([UploadNotFound, UnsupportedImage, ImageTooLarge]),
+      error: () =>
+        Schema.Union([UploadNotFound, UnsupportedImage, ImageTooLarge, CollectionNotFound]),
     }),
   )
   .addFunction(
@@ -80,22 +93,16 @@ export default GroupSpec.make()
         byteSize: Schema.Int,
         mimeType: ImageMimeType,
         variants: Variants,
+        collectionId: Schema.optionalKey(Id("collections")),
       }),
       returns: () => SavedRef,
+      error: () => CollectionNotFound,
     }),
   )
   .addFunction(
     FunctionSpec.publicPaginatedQuery({
       name: "list",
-      item: () =>
-        Schema.Struct({
-          refId: Id("refs"),
-          fileName: Schema.String,
-          width: Schema.Int,
-          height: Schema.Int,
-          thumbHash: Schema.NullOr(Schema.String),
-          savedAt: Schema.Number,
-        }),
+      item: () => GalleryItem,
     }),
   )
   .addFunction(

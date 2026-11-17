@@ -2,6 +2,7 @@ import { FunctionImpl, GroupImpl } from "@confect/server";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import type { RefsDoc } from "./_generated/docs";
 import type { Id } from "./_generated/id";
 import refs from "./_generated/refs";
 import databaseSchema from "./_generated/schema";
@@ -23,6 +24,7 @@ import library, {
   UnsupportedImage,
   UploadNotFound,
 } from "./library.spec";
+import { addMember, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 import { hashBoundUpload, r2 } from "./r2";
@@ -130,7 +132,7 @@ const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...
       ...image,
       ...stored,
       variants: Object.fromEntries(storedVariants),
-    }).pipe(Effect.orDie);
+    }).pipe(Effect.catchTags({ NotSignedIn: Effect.die, SchemaError: Effect.die }));
   }),
 );
 
@@ -138,39 +140,66 @@ const record = FunctionImpl.make(
   databaseSchema,
   library,
   "record",
-  ({ sha256, fileName, width, height, byteSize, mimeType, thumbHash, variants }) =>
+  ({ sha256, fileName, width, height, byteSize, mimeType, thumbHash, variants, collectionId }) =>
     Effect.gen(function* () {
+      if (collectionId !== undefined) {
+        yield* ownedCollection(collectionId);
+      }
       const { workspaceId } = yield* CurrentWorkspace;
       const writer = yield* DatabaseWriter;
       const existing = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
       const blobId = existing
         ? existing._id
-        : yield* writer.table("blobs").insert({
-            workspaceId,
-            sha256,
-            byteSize,
-            mimeType,
-            width,
-            height,
-            thumbHash,
-            variants,
-          });
+        : yield* writer
+            .table("blobs")
+            .insert({
+              workspaceId,
+              sha256,
+              byteSize,
+              mimeType,
+              width,
+              height,
+              thumbHash,
+              variants,
+            })
+            .pipe(Effect.orDie);
       if (
         existing &&
         (existing.thumbHash === undefined ||
           variantRoles.some((role) => variants[role] && !existing.variants?.[role]))
       ) {
-        yield* writer.table("blobs").patch(existing._id, {
-          thumbHash: existing.thumbHash ?? thumbHash,
-          variants: { ...variants, ...existing.variants },
-        });
+        yield* writer
+          .table("blobs")
+          .patch(existing._id, {
+            thumbHash: existing.thumbHash ?? thumbHash,
+            variants: { ...variants, ...existing.variants },
+          })
+          .pipe(Effect.orDie);
       }
       const refId = yield* writer
         .table("refs")
-        .insert({ workspaceId, blobs: { original: blobId }, fileName });
+        .insert({ workspaceId, blobs: { original: blobId }, fileName })
+        .pipe(Effect.orDie);
+      if (collectionId !== undefined) {
+        yield* addMember(collectionId, refId);
+      }
       return { refId, duplicate: existing !== undefined };
-    }).pipe(Effect.orDie),
+    }),
 );
+
+export const galleryItem = (ref: RefsDoc) =>
+  Effect.gen(function* () {
+    const reader = yield* DatabaseReader;
+    const blob = yield* reader.table("blobs").get(ref.blobs.original);
+    return {
+      refId: ref._id,
+      fileName: ref.fileName,
+      width: blob.width,
+      height: blob.height,
+      thumbHash: blob.thumbHash ?? null,
+      savedAt: ref._creationTime,
+    };
+  }).pipe(Effect.orDie);
 
 const list = FunctionImpl.make(databaseSchema, library, "list", ({ paginationOpts }) =>
   Effect.gen(function* () {
@@ -180,22 +209,7 @@ const list = FunctionImpl.make(databaseSchema, library, "list", ({ paginationOpt
       .table("refs")
       .index("by_workspace", (q) => q.eq("workspaceId", workspaceId), "desc")
       .paginate(paginationOpts);
-    const page = yield* Effect.forEach(result.page, (ref) =>
-      reader
-        .table("blobs")
-        .get(ref.blobs.original)
-        .pipe(
-          Effect.map((blob) => ({
-            refId: ref._id,
-            fileName: ref.fileName,
-            width: blob.width,
-            height: blob.height,
-            thumbHash: blob.thumbHash ?? null,
-            savedAt: ref._creationTime,
-          })),
-        ),
-    );
-    return { ...result, page };
+    return { ...result, page: yield* Effect.forEach(result.page, galleryItem) };
   }).pipe(Effect.orDie),
 );
 
