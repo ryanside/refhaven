@@ -1,3 +1,4 @@
+import { maxOpsPerCall } from "@refhaven/scene";
 import { FunctionSpec, GroupSpec } from "@confect/core";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
@@ -66,7 +67,7 @@ export default GroupSpec.make()
       name: "apply",
       args: () => ({
         canvasId: Id("canvases"),
-        ops: Schema.Array(Op).check(Schema.isMinLength(1), Schema.isMaxLength(1000)),
+        ops: Schema.Array(Op).check(Schema.isMinLength(1), Schema.isMaxLength(maxOpsPerCall)),
       }),
       returns: () => Schema.Int,
       error: () => Schema.Union([CanvasNotFound, ItemNotFound, RefNotFound]),

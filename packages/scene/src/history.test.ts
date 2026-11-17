@@ -1,5 +1,13 @@
 import { expect, test } from "vitest";
-import { addEntry, createHistory, moveEntry, movesOf, removalEntry } from "./index";
+import {
+  addEntry,
+  callsOf,
+  createHistory,
+  maxOpsPerCall,
+  moveEntry,
+  movesOf,
+  removalEntry,
+} from "./index";
 
 const first = moveEntry([{ key: "a", x: 0, y: 0 }], [{ key: "a", x: 10, y: 0 }]);
 const second = moveEntry([{ key: "b", x: 0, y: 0 }], [{ key: "b", x: 0, y: 10 }]);
@@ -115,4 +123,13 @@ test("undoing a removal takes as many ops as the removal, so the largest removal
 
   expect(entry.redo).toHaveLength(1000);
   expect(entry.undo).toHaveLength(1000);
+});
+
+test("an edit of more ops than one call takes is split into calls, in order", () => {
+  const ops = Array.from({ length: maxOpsPerCall * 2 + 1 }, (_, index) => index);
+
+  expect(callsOf(ops).map((call) => call.length)).toEqual([maxOpsPerCall, maxOpsPerCall, 1]);
+  expect(callsOf(ops).flat()).toEqual(ops);
+  expect(callsOf([1, 2])).toEqual([[1, 2]]);
+  expect(callsOf([])).toEqual([]);
 });

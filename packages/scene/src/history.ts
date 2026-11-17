@@ -15,8 +15,17 @@ export type ItemOp =
       readonly z?: string;
     };
 
-/** One edit: the ops that undo it and the ops that redo it, each sent as one call. */
+/** One edit: the ops that undo it and the ops that redo it. */
 export type Entry = { readonly undo: ReadonlyArray<ItemOp>; readonly redo: ReadonlyArray<ItemOp> };
+
+/** The most ops `canvas.apply` takes in one call. */
+export const maxOpsPerCall = 1000;
+
+/** The ops of one edit as the calls that carry them, each within the budget of a call. */
+export const callsOf = <Op>(ops: ReadonlyArray<Op>): Array<ReadonlyArray<Op>> =>
+  Array.from({ length: Math.ceil(ops.length / maxOpsPerCall) }, (_, call) =>
+    ops.slice(call * maxOpsPerCall, (call + 1) * maxOpsPerCall),
+  );
 
 type Placed = Point & { readonly key: string };
 
