@@ -67,8 +67,12 @@ const imageItem = (placed: Size & Placement & { readonly refId: Id<"refs"> }, z:
   z,
 });
 
-/** Opens or makes the canvas of a set, and places each Ref of the set that has no item. */
-const openSet = (collectionId: Id<"collections"> | undefined) =>
+/**
+ * Opens or makes the canvas of a set, and places each Ref of the set that has no item. On the
+ * library's canvas a Ref whose item was removed stays off it, unless `placeRemoved` asks for it,
+ * and `removed` counts the Refs that stay off.
+ */
+const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: boolean) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
     const reader = yield* DatabaseReader;
@@ -103,11 +107,13 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
     // not placed again. On a collection's canvas removal means leaving the collection, so a member
     // with a removed item was added again, and its item comes back.
     const placedRefs = new Set(
-      (collectionId === undefined ? items : shown).map((item) => item.refId),
+      (collectionId === undefined && !placeRemoved ? items : shown).map((item) => item.refId),
     );
+    const shownRefs = new Set(shown.map((item) => item.refId));
     const unplaced = live.filter((ref) => !placedRefs.has(ref._id));
+    const removed = live.filter((ref) => !shownRefs.has(ref._id)).length - unplaced.length;
     if (unplaced.length === 0) {
-      return { canvasId, rev: openedRev, items: shown.map(toItem) };
+      return { canvasId, rev: openedRev, items: shown.map(toItem), removed };
     }
 
     const sizes = yield* Effect.forEach(unplaced, sizeOf);
@@ -131,16 +137,20 @@ const openSet = (collectionId: Id<"collections"> | undefined) =>
       },
       { discard: true },
     );
-    return { canvasId, rev, items: [...shown.map(toItem), ...added] };
+    return { canvasId, rev, items: [...shown.map(toItem), ...added], removed };
   }).pipe(Effect.orDie);
 
-const open = FunctionImpl.make(databaseSchema, canvas, "open", ({ collectionId }) =>
-  Effect.gen(function* () {
-    if (collectionId !== undefined) {
-      yield* ownedCollection(collectionId);
-    }
-    return yield* openSet(collectionId);
-  }),
+const open = FunctionImpl.make(
+  databaseSchema,
+  canvas,
+  "open",
+  ({ collectionId, placeRemoved = false }) =>
+    Effect.gen(function* () {
+      if (collectionId !== undefined) {
+        yield* ownedCollection(collectionId);
+      }
+      return yield* openSet(collectionId, placeRemoved);
+    }),
 );
 
 // An item of a Ref in the trash goes out as removed, at the time of the delete. Trashing and

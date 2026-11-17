@@ -172,8 +172,9 @@ try {
   assert(
     afterRemove.rev === removedRev &&
       afterRemove.items.length === 3 &&
-      afterRemove.items.every((item) => item.refId !== removed!.refId),
-    `open leaves the removed item out and does not place its Ref again: ${afterRemove.items.length} items at rev ${afterRemove.rev}`,
+      afterRemove.items.every((item) => item.refId !== removed!.refId) &&
+      afterRemove.removed === 1,
+    `open leaves the removed item out, does not place its Ref again, and counts ${afterRemove.removed} image off the canvas: ${afterRemove.items.length} items at rev ${afterRemove.rev}`,
   );
 
   const mixed = await outcome(
@@ -259,6 +260,27 @@ try {
         { ...xOnly!, x: xOnly!.x + 10, rotation: 2 },
       ]),
     `one call with two ops raises rev once, and changes returns both items: rev ${removedRev} to ${bothRev}, ${sinceRemoved.items.length} items`,
+  );
+
+  const putBack = await owner.mutation(api.canvas.open, { placeRemoved: true });
+  const back = putBack.items.find((item) => item.key === removed!.key);
+  const layoutBefore = boundsOf(putBack.items.filter((item) => item.key !== removed!.key))!;
+  assert(
+    putBack.rev === bothRev + 1 &&
+      putBack.removed === 0 &&
+      putBack.items.length === 4 &&
+      back !== undefined &&
+      back.deletedAt === undefined &&
+      boxOf(back).left > layoutBefore.right &&
+      noneOverlap(putBack.items),
+    `open with placeRemoved places the removed image again to the right of the layout, at rev ${putBack.rev}, and counts ${putBack.removed} off the canvas`,
+  );
+  const putBackAgain = await owner.mutation(api.canvas.open, { placeRemoved: true });
+  assert(
+    putBackAgain.rev === putBack.rev &&
+      putBackAgain.removed === 0 &&
+      same(putBackAgain.items, putBack.items),
+    `a second open with placeRemoved finds nothing to place and keeps rev ${putBack.rev}: ${putBackAgain.rev}`,
   );
 
   await signInWithPasskey(second.page, `check-canvas-b-${stamp}`);

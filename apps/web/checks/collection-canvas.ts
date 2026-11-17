@@ -152,8 +152,9 @@ try {
     removedRev === movedRev + 1 &&
       removedItem?.key === applied &&
       typeof removedItem.deletedAt === "number" &&
-      !(await galleryOf(owner, board)).includes(applied),
-    "removing an item from the collection's canvas removes the image from the collection: its gallery no longer lists it",
+      !(await galleryOf(owner, board)).includes(applied) &&
+      (await owner.mutation(api.canvas.open, { collectionId: board })).removed === 0,
+    "removing an item from the collection's canvas removes the image from the collection: its gallery no longer lists it, and the canvas counts no image off it",
   );
   const libraryAfterRemove = await owner.mutation(api.canvas.open, {});
   assert(
@@ -234,8 +235,9 @@ try {
   assert(
     libraryAfterOwnRemove.rev === libraryBeforeOwnRemove.rev + 1 &&
       !find(libraryAfterOwnRemove.items, kept) &&
-      (await owner.mutation(api.canvas.open, {})).rev === libraryAfterOwnRemove.rev,
-    "on the library's canvas a removed item is still not placed again by open",
+      (await owner.mutation(api.canvas.open, {})).rev === libraryAfterOwnRemove.rev &&
+      libraryAfterOwnRemove.removed === libraryBeforeOwnRemove.removed + 1,
+    "on the library's canvas a removed item is still not placed again by open, and it counts as one more image off the canvas",
   );
   assert(
     (await galleryOf(owner, board)).includes(kept) &&

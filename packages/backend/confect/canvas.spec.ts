@@ -35,12 +35,16 @@ export default GroupSpec.make()
   .addFunction(
     FunctionSpec.publicMutation({
       name: "open",
-      args: () => ({ collectionId: Schema.optionalKey(Id("collections")) }),
+      args: () => ({
+        collectionId: Schema.optionalKey(Id("collections")),
+        placeRemoved: Schema.optionalKey(Schema.Boolean),
+      }),
       returns: () =>
         Schema.Struct({
           canvasId: Id("canvases"),
           rev: Schema.Int,
           items: Schema.Array(CanvasItem),
+          removed: Schema.Int,
         }),
       error: () => CollectionNotFound,
     }),
