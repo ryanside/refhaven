@@ -490,28 +490,34 @@ try {
     (item) => item.x !== greenSaved.x,
     "the move in the first page to save",
   );
+  // The image's center stays inside its old rectangle, so it cannot show the move. These two
+  // points can: one the move newly covers, and one it leaves.
+  const greenWidth = worldSize(greenMoved).width;
+  const middle = (greenMoved.x + greenSaved.x) / 2;
+  const newlyCovered = { x: middle - greenWidth / 2, y: greenMoved.y };
+  const leftBehind = { x: middle + greenWidth / 2, y: greenSaved.y };
+  const afterMove = saved.map((item) => (item.key === green.key ? greenMoved : item));
+  if (topmostAt(sized(afterMove), newlyCovered)?.key !== green.key) {
+    throw new Error("FAIL the point the move newly covers is hidden by another image");
+  }
   const secondView = await pageView(second);
+  const greenColor = colorOf(green, refColors);
   const shownInSecond = await until(
     async () => {
       await settle(second);
-      return pixelAt(
-        await screenshot(second),
-        toPage(
-          secondView,
-          exposedPoint(
-            greenMoved,
-            saved.map((item) => (item.key === green.key ? greenMoved : item)),
-          ),
-        ),
-      );
+      const png = await screenshot(second);
+      return {
+        newlyCovered: pixelAt(png, toPage(secondView, newlyCovered)),
+        leftBehind: pixelAt(png, toPage(secondView, leftBehind)),
+      };
     },
-    (pixel) => near(pixel, colorOf(green, refColors)),
+    (shown) => near(shown.newlyCovered, greenColor) && !near(shown.leftBehind, greenColor),
     "the second page to show the move",
   );
   await screenshot(second, "06-second-page.png");
   assert(
-    near(shownInSecond, colorOf(green, refColors)),
-    "a second page of the same user shows a move made in the first one, without a reload",
+    near(shownInSecond.newlyCovered, greenColor) && !near(shownInSecond.leftBehind, greenColor),
+    `a second page of the same user shows a move made in the first one, without a reload: the newly covered point is ${shownInSecond.newlyCovered} and the vacated point is ${shownInSecond.leftBehind}`,
   );
   await second.close();
 
@@ -571,6 +577,39 @@ try {
   assert(
     displayResponses.length > 0 && displayResponses.every(({ status }) => status === 200),
     `the 2048 px copy loaded from ${displayResponses.map(({ path, status }) => `${path} (${status})`).join(", ")}`,
+  );
+
+  await openCanvas(page, 3);
+  view = await pageView(page);
+  const beforeBlur = await snapshotOf(owner);
+  const dragged = beforeBlur.items.find((item) => item.key === red.key)!;
+  const grab = toPage(view, exposedPoint(dragged, beforeBlur.items));
+  await page.mouse.move(grab.x, grab.y);
+  await page.mouse.down();
+  await page.mouse.move(grab.x + 40, grab.y + 20, { steps: 4 });
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  const dropped = await until(
+    async () => (await snapshotOf(owner)).items.find((item) => item.key === red.key)!,
+    (item) => item.x !== dragged.x,
+    "the drag that a blur interrupted to save",
+  );
+  await page.mouse.move(grab.x + 300, grab.y + 200, { steps: 4 });
+  await page.mouse.up();
+  await click(page, toPage(view, exposedPoint(dropped, [dropped])));
+  await until(
+    () => readout(page),
+    (r) => r.selected === 1,
+    "a click after the interrupted drag to select",
+  );
+  const afterBlur = await snapshotOf(owner);
+  const settled = afterBlur.items.find((item) => item.key === red.key)!;
+  assert(
+    Math.abs(dropped.x - dragged.x - 40 / view.camera.zoom) < 0.01 &&
+      Math.abs(dropped.y - dragged.y - 20 / view.camera.zoom) < 0.01 &&
+      settled.x === dropped.x &&
+      settled.y === dropped.y &&
+      afterBlur.rev === beforeBlur.rev + 1,
+    `a drag that the window losing focus interrupts is saved once where it was, and later pointer moves do not move the image: rev ${beforeBlur.rev} to ${afterBlur.rev}`,
   );
 
   assert(
