@@ -14,6 +14,7 @@ import {
 import {
   type Item,
   type Rgb,
+  exposedPoint,
   near,
   pageView,
   pixelAt,
@@ -47,22 +48,6 @@ const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 const openCanvas = async (page: Page, count: number) => {
   await page.goto(canvasUrl);
   await waitForCanvas(page, count);
-};
-
-/** A point of the item that no other item covers. */
-const exposedPoint = (item: Item, items: ReadonlyArray<Item>): Point => {
-  const { width, height } = worldSize(item);
-  for (const [fx, fy] of [
-    [0, 0],
-    [0.35, 0],
-    [-0.35, 0],
-    [0, 0.35],
-    [0, -0.35],
-  ] as const) {
-    const point = { x: item.x + fx * width, y: item.y + fy * height };
-    if (topmostAt(sized(items), point)?.key === item.key) return point;
-  }
-  throw new Error(`FAIL item ${item.key} has no exposed point to test`);
 };
 
 const colorOf = (item: Item, refs: ReadonlyMap<string, Rgb>) => refs.get(item.refId)!;

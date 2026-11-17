@@ -2,22 +2,30 @@ import { QueryResult, useMutation, useQuery } from "@confect/react";
 import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
 import type { Renderer } from "@refhaven/renderer";
+import { Button } from "@refhaven/ui/components/button";
 import { createPixiRenderer } from "@refhaven/renderer/pixi";
 import {
   type CanvasItem,
   type Drop,
+  type Entry,
+  type History,
   type ImageRole,
+  type ItemOp,
   type Point,
   type SceneItem,
   type SceneStore,
+  addEntry,
+  createHistory,
   createSceneStore,
   imageRole,
   itemsInView,
   placedEdge,
   placementGap,
+  removalEntry,
   screenToWorld,
   worldToScreen,
 } from "@refhaven/scene";
+import { useHotkeys } from "@tanstack/react-hotkeys";
 import * as Result from "effect/Result";
 import {
   type ReactNode,
@@ -28,6 +36,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { type PlaceAt, SaveImages } from "@/library/save-images";
+import { type Action, keymap } from "./keymap";
 import { type Need, type Sign, createTextureLoader, textureKey } from "./textures";
 
 /** A change list longer than this is replaced by a new snapshot. */
@@ -38,6 +47,8 @@ const loadMargin = 256;
 
 type Base = { canvasId: Id<"canvases">; rev: number };
 
+const toApplyOp = (op: ItemOp) => (op.op === "add" ? { ...op, refId: op.refId as Id<"refs"> } : op);
+
 /** The canvas of a set: the collection's, or the whole library's when `collectionId` is absent. */
 export function CanvasView({
   collectionId,
@@ -47,6 +58,7 @@ export function CanvasView({
   children: ReactNode;
 }) {
   const [store] = useState(createSceneStore);
+  const [history] = useState(createHistory);
   const host = useRef<HTMLDivElement>(null);
   const outlines = useRef<HTMLDivElement>(null);
   const [problem, setProblem] = useState<string>();
@@ -55,24 +67,31 @@ export function CanvasView({
   const apply = useMutation(refs.public.canvas.apply);
   const urls = useMutation(refs.public.library.urls);
   const [base, setBase] = useState<Base>();
+  const [offCanvas, setOffCanvas] = useState(0);
   const snapshotting = useRef(false);
 
-  const takeSnapshot = useCallback(async () => {
-    if (snapshotting.current) return;
-    snapshotting.current = true;
-    try {
-      const opened = await open(collectionId === undefined ? {} : { collectionId });
-      if (Result.isFailure(opened)) {
-        setProblem(opened.failure._tag);
-        return;
+  const takeSnapshot = useCallback(
+    async (placeRemoved = false) => {
+      if (snapshotting.current) return;
+      snapshotting.current = true;
+      try {
+        const opened = await open(
+          collectionId === undefined ? { placeRemoved } : { collectionId, placeRemoved },
+        );
+        if (Result.isFailure(opened)) {
+          setProblem(opened.failure._tag);
+          return;
+        }
+        if (store.loadSnapshot(opened.success)) {
+          setBase({ canvasId: opened.success.canvasId, rev: opened.success.rev });
+          setOffCanvas(opened.success.removed);
+        }
+      } finally {
+        snapshotting.current = false;
       }
-      if (store.loadSnapshot(opened.success)) {
-        setBase({ canvasId: opened.success.canvasId, rev: opened.success.rev });
-      }
-    } finally {
-      snapshotting.current = false;
-    }
-  }, [collectionId, open, store]);
+    },
+    [collectionId, open, store],
+  );
 
   useEffect(() => {
     void takeSnapshot();
@@ -85,35 +104,79 @@ export function CanvasView({
     if (changes.value.items.length > snapshotAfterChanges) void takeSnapshot();
   }, [changes, store, takeSnapshot]);
 
-  const save = useRef((drop: Drop) => store.reject(drop.save));
-  useEffect(() => {
-    save.current = (drop) => {
-      if (!base) return store.reject(drop.save);
-      apply({
-        canvasId: base.canvasId,
-        ops: drop.moves.map(({ key, x, y }) => ({ op: "patch" as const, key, fields: { x, y } })),
-      }).then(
-        (result) => {
-          if (Result.isSuccess(result)) {
-            store.acknowledge(drop.save, result.success);
-          } else {
-            store.reject(drop.save);
-            setProblem("A move could not be saved.");
-          }
-        },
-        () => {
-          store.reject(drop.save);
-          setProblem("A move could not be saved.");
-        },
-      );
-    };
-  }, [apply, base, store]);
-
-  // An upload can outlast the first snapshot, so a placement reads the canvas when it runs.
+  // An upload can outlast the first snapshot, so a call reads the canvas when it runs.
   const latestBase = useRef(base);
   useEffect(() => {
     latestBase.current = base;
   }, [base]);
+
+  /** Saves ops with one call, and settles the hold that shows their positions. */
+  const send = useCallback(
+    async (ops: ReadonlyArray<ItemOp>, save: number) => {
+      const canvasId = latestBase.current?.canvasId;
+      const result = canvasId
+        ? await apply({ canvasId, ops: ops.map(toApplyOp) }).catch(() => null)
+        : null;
+      if (result && Result.isSuccess(result)) {
+        store.acknowledge(save, result.success);
+        return true;
+      }
+      store.reject(save);
+      return false;
+    },
+    [apply, store],
+  );
+
+  /** Records an edit for undo and saves it. An edit that is not saved leaves the stack. */
+  const edit = useCallback(
+    async (entry: Entry, save: number, failure: string) => {
+      history.record(entry);
+      if (!(await send(entry.redo, save))) {
+        history.drop(entry);
+        setProblem(failure);
+      }
+    },
+    [history, send],
+  );
+
+  const step = useCallback(
+    async (direction: "undo" | "redo") => {
+      const entry = direction === "undo" ? history.undo() : history.redo();
+      if (!entry) return;
+      const ops = entry[direction];
+      if (!store.applies(ops) || !(await send(ops, store.hold(ops)))) {
+        history.drop(entry);
+        setProblem(`That change could not be ${direction === "undo" ? "undone" : "redone"}.`);
+      }
+    },
+    [history, send, store],
+  );
+
+  const removeSelection = useCallback(() => {
+    const selection = store.selection();
+    const chosen = store.items().filter((item) => selection.has(item.key));
+    if (chosen.length === 0) return;
+    store.clearSelection();
+    const entry = removalEntry(chosen);
+    void edit(entry, store.hold(entry.redo), "An image could not be removed.");
+  }, [edit, store]);
+
+  const actions: Record<Action, () => void> = {
+    remove: removeSelection,
+    undo: () => void step("undo"),
+    redo: () => void step("redo"),
+    selectAll: store.selectAll,
+    clearSelection: store.clearSelection,
+  };
+  useHotkeys(
+    keymap.map(({ hotkey, action }) => ({ hotkey, callback: actions[action] })),
+    { ignoreInputs: true },
+  );
+
+  const onDrop = useRef((drop: Drop) => store.reject(drop.save));
+  useEffect(() => {
+    onDrop.current = (drop) => void edit(drop.entry, drop.save, "A move could not be saved.");
+  }, [edit]);
   // The images of one drop or paste go in a row from its point, a placed image's longer edge plus
   // the gap apart, so they never overlap.
   const placeAt = useCallback<PlaceAt>(
@@ -131,14 +194,11 @@ export function CanvasView({
       return async (refId) => {
         start ??= toWorld();
         const x = start.x + placed++ * (placedEdge + placementGap);
-        const canvasId = latestBase.current?.canvasId;
-        const result = canvasId
-          ? await apply({ canvasId, ops: [{ op: "add", refId, x, y: start.y }] }).catch(() => null)
-          : null;
-        if (!result || Result.isFailure(result)) setProblem("An image could not be placed.");
+        const entry = addEntry([{ refId, x, y: start.y }]);
+        await edit(entry, store.hold(entry.redo), "An image could not be placed.");
       };
     },
-    [apply, store],
+    [edit, store],
   );
 
   useEffect(() => {
@@ -146,20 +206,69 @@ export function CanvasView({
       const result = await urls({ refIds: refIds as Array<Id<"refs">>, role });
       return Result.isSuccess(result) ? result.success : [];
     };
-    return drive(store, host.current!, outlines.current!, sign, (drop) => save.current(drop));
+    return drive(store, host.current!, outlines.current!, sign, (drop) => onDrop.current(drop));
   }, [store, urls]);
 
   return (
     <main className="relative flex-1 overflow-hidden">
       <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
       <div ref={outlines} className="pointer-events-none absolute inset-0" />
-      <div className="absolute top-3 left-3 flex flex-col gap-1 rounded-md border bg-background p-2">
+      <div
+        data-testid="canvas-panel"
+        className="absolute top-3 left-3 flex flex-col gap-1 rounded-md border bg-background p-2"
+      >
         {children}
         <SaveImages collectionId={collectionId} placeAt={placeAt} />
+        <EditButtons
+          store={store}
+          history={history}
+          removeLabel={collectionId === undefined ? "Remove from canvas" : "Remove from collection"}
+          actions={actions}
+        />
+        {offCanvas > 0 ? (
+          <div className="flex items-center gap-2">
+            <p data-testid="off-canvas" data-count={offCanvas}>
+              {offCanvas === 1
+                ? "1 image of the library is not on this canvas."
+                : `${offCanvas} images of the library are not on this canvas.`}
+            </p>
+            <Button variant="outline" size="sm" onClick={() => void takeSnapshot(true)}>
+              Put them back
+            </Button>
+          </div>
+        ) : null}
         <Readout store={store} />
         {problem ? <p role="alert">{problem}</p> : null}
       </div>
     </main>
+  );
+}
+
+function EditButtons({
+  store,
+  history,
+  removeLabel,
+  actions,
+}: {
+  store: SceneStore;
+  history: History;
+  removeLabel: string;
+  actions: Record<Action, () => void>;
+}) {
+  const { selected } = useSyncExternalStore(store.subscribe, store.summary);
+  const { canUndo, canRedo } = useSyncExternalStore(history.subscribe, history.summary);
+  return (
+    <div className="flex gap-2">
+      <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.remove}>
+        {removeLabel}
+      </Button>
+      <Button variant="outline" size="sm" disabled={!canUndo} onClick={actions.undo}>
+        Undo
+      </Button>
+      <Button variant="outline" size="sm" disabled={!canRedo} onClick={actions.redo}>
+        Redo
+      </Button>
+    </div>
   );
 }
 
