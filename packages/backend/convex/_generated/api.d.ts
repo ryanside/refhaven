@@ -10,6 +10,7 @@
 
 import type * as canvas from "../canvas.js";
 import type * as collections from "../collections.js";
+import type * as crons from "../crons.js";
 import type * as library from "../library.js";
 import type * as ref from "../ref.js";
 import type * as search from "../search.js";
@@ -27,6 +28,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   canvas: typeof canvas;
   collections: typeof collections;
+  crons: typeof crons;
   library: typeof library;
   ref: typeof ref;
   search: typeof search;
