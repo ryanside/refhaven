@@ -68,7 +68,8 @@ export function useSaveImage() {
 
   return useCallback(
     (file: File): Promise<SaveOutcome> => {
-      const saveImage = async (bitmap: ImageBitmap): Promise<SaveOutcome> => {
+      /** Everything that needs the decoded pixels, so the bitmap can be closed before any upload starts. */
+      const prepare = async (bitmap: ImageBitmap) => {
         const sha256 = await sha256Of(file);
         const needed = variantRoles.flatMap((role): Array<Needed> => {
           const size = variantSize(bitmap, role);
@@ -77,46 +78,47 @@ export function useSaveImage() {
         const prepared = await prepareUpload({ sha256, roles: needed.map(({ role }) => role) });
         if (Result.isFailure(prepared)) return rejected(prepared.failure._tag);
 
-        const uploads = prepared.success;
         const variants = await variantsOf(
           bitmap,
-          needed.filter(({ role }) => uploads.some((upload) => upload.role === role)),
+          needed.filter(({ role }) => prepared.success.some((upload) => upload.role === role)),
         );
         const bodies = new Map<ImageRole, Blob>([
           ["original", file],
           ...variants.map(({ role, bytes }) => [role, bytes] as const),
         ]);
-        const uploaded = await Promise.all(
-          uploads.flatMap(({ role, url }) => {
+        return {
+          uploads: prepared.success.flatMap(({ role, url }) => {
             const body = bodies.get(role);
-            return body
-              ? [fetch(url, { method: "PUT", body, headers: { "Content-Type": body.type } })]
-              : [];
+            return body ? [{ url, body }] : [];
           }),
+          image: {
+            sha256,
+            fileName: file.name,
+            width: bitmap.width,
+            height: bitmap.height,
+            thumbHash: thumbHashOf(bitmap),
+            variants: Object.fromEntries(variants.map(({ role, size }) => [role, size])),
+          },
+        };
+      };
+
+      const decodeAndSave = async (): Promise<SaveOutcome> => {
+        const bitmap = await createImageBitmap(file).catch(() => null);
+        if (!bitmap) return rejected("UnsupportedImage");
+        const prepared = await prepare(bitmap).finally(() => bitmap.close());
+        if ("status" in prepared) return prepared;
+
+        const uploaded = await Promise.all(
+          prepared.uploads.map(({ url, body }) =>
+            fetch(url, { method: "PUT", body, headers: { "Content-Type": body.type } }),
+          ),
         );
         if (uploaded.some((response) => !response.ok)) return rejected("UploadFailed");
 
-        const saved = await save({
-          sha256,
-          fileName: file.name,
-          width: bitmap.width,
-          height: bitmap.height,
-          thumbHash: thumbHashOf(bitmap),
-          variants: Object.fromEntries(variants.map(({ role, size }) => [role, size])),
-        });
+        const saved = await save(prepared.image);
         return Result.isFailure(saved)
           ? rejected(saved.failure._tag)
           : { status: "saved", duplicate: saved.success.duplicate };
-      };
-
-      const decodeAndSave = async () => {
-        const bitmap = await createImageBitmap(file).catch(() => null);
-        if (!bitmap) return rejected("UnsupportedImage");
-        try {
-          return await saveImage(bitmap);
-        } finally {
-          bitmap.close();
-        }
       };
       // A network error or a server fault rejects. The caller still gets an outcome for the file.
       return decodeAndSave().catch(() => rejected("Failed"));
