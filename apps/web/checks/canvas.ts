@@ -39,10 +39,19 @@ const sizes = (items: ReadonlyArray<Item>) =>
 const cards = (page: Page) => page.locator("[data-ref-id]");
 
 const save = async (page: Page, files: Array<{ name: string; buffer: Buffer }>) => {
+  const outcomes = page.locator('[role="status"] li');
   const before = await cards(page).count();
+  const reported = await outcomes.count();
   await page
     .getByLabel("Add images")
     .setInputFiles(files.map((file) => ({ ...file, mimeType: "image/png" })));
+  await outcomes.nth(reported + files.length - 1).waitFor();
+  const refused = await page
+    .locator('[role="status"] li[data-outcome="rejected"]')
+    .allTextContents();
+  if (refused.length > 0) {
+    throw new Error(`FAIL the page saves every image it is given: ${refused.join(", ")}`);
+  }
   await cards(page)
     .nth(before + files.length - 1)
     .waitFor();
@@ -58,6 +67,11 @@ assert(
 
 const first = await openPageWithPasskeyDevice();
 const second = await openPageWithPasskeyDevice();
+for (const { page } of [first, second]) {
+  page.on("console", (message) => {
+    if (message.type() === "error") console.log(`     the page logged an error: ${message.text()}`);
+  });
+}
 try {
   const { page } = first;
   await signInWithPasskey(page, `check-canvas-a-${stamp}`);

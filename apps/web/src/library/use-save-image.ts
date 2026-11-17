@@ -113,7 +113,11 @@ export function useSaveImage() {
             fetch(url, { method: "PUT", body, headers: { "Content-Type": body.type, ...headers } }),
           ),
         );
-        if (uploaded.some((response) => !response.ok)) return rejected("UploadFailed");
+        const refused = uploaded.find((response) => !response.ok);
+        if (refused) {
+          console.error(`R2 answered ${refused.status} to an upload of ${file.name}`);
+          return rejected("UploadFailed");
+        }
 
         const saved = await save(prepared.image);
         return Result.isFailure(saved)
@@ -121,7 +125,10 @@ export function useSaveImage() {
           : { status: "saved", duplicate: saved.success.duplicate };
       };
       // A network error or a server fault rejects. The caller still gets an outcome for the file.
-      return decodeAndSave().catch(() => rejected("Failed"));
+      return decodeAndSave().catch((cause: unknown) => {
+        console.error(`Saving ${file.name} failed`, cause);
+        return rejected("Failed");
+      });
     },
     [prepareUpload, save],
   );
