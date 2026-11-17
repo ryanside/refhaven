@@ -2,7 +2,7 @@
 
 A reference library for images. You save images into a library, group them into collections, and view any set as a gallery or as a canvas. The rules for working in this repo are in [docs/decisions.md](docs/decisions.md).
 
-This repository is early. You can sign in with a passkey, save images into your library, and view the library as a gallery or as a canvas. On the canvas you can pan, zoom, select, and move images. You can group images into collections, rename a collection, and view it as a gallery or as its own canvas at `/c/{collectionId}`. You can delete an image from the library's gallery. It goes to the trash at `/trash`, and a restore brings it back to its collections and to its place on each canvas. Nothing empties the trash yet, and a collection cannot be deleted yet.
+This repository is early. You can sign in with a passkey, save images into your library by picking, pasting, or dropping them on a gallery, and view the library as a gallery or as a canvas. On the canvas you can pan, zoom, select, and move images. You can group images into collections, rename a collection, and view it as a gallery or as its own canvas at `/c/{collectionId}`. You can delete an image from the library's gallery. It goes to the trash at `/trash`, and a restore brings it back to its collections and to its place on each canvas. Nothing empties the trash yet, and a collection cannot be deleted yet.
 
 ## Run it locally
 
@@ -48,6 +48,7 @@ The browser checks need `bun dev` running. Run them from `apps/web`. Most of the
 | `bun run check:library` | Saving images with their thumbnail and display copy, a duplicate, byte-exact serving, uploads held to their hash, and the rules between two users. It needs R2. |
 | `bun run check:canvas` | The canvas functions: placing saved images, a patch, a removal, refused edits, and the rules between two users. It needs R2. |
 | `bun run check:canvas-page` | The canvas page with the real mouse and wheel: drawing, pan, zoom, selection, saved moves, a second page, the 2048 px copy, and a collection's canvas. It needs R2. |
+| `bun run check:paste-drop` | Dropping and pasting images on the library's and a collection's gallery, a file that is not an image refused with an outcome, text and a paste into a field left alone, a drag from the page itself ignored, and a canvas and the trash page refusing a drop. It needs R2. |
 | `bun run check:renderer` | A local bitmap drawn as a WebGL texture by the PixiJS renderer. |
 | `bun run check:trash` | Deleting an image on the page, the trash page, a second page's canvas, restoring to every gallery and canvas place, deleting and restoring twice, refused edits in the trash, and the rules between two users. It needs R2. |
 

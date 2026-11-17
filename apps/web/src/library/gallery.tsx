@@ -3,7 +3,7 @@ import type { Id } from "@refhaven/backend/id";
 import { Button } from "@refhaven/ui/components/button";
 import { Input } from "@refhaven/ui/components/input";
 import { Label } from "@refhaven/ui/components/label";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { thumbHashToDataURL } from "thumbhash";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { type SaveOutcome, useSaveImage } from "@/library/use-save-image";
@@ -26,12 +26,73 @@ const outcomeText = (outcome: SaveOutcome) =>
       ? "saved. Your library already had this image, so its bytes were reused."
       : "saved.";
 
-/** A file input that saves into the library, and into the collection when one is given. */
+const carriesFiles = (event: DragEvent) => event.dataTransfer?.types.includes("Files") ?? false;
+
+/**
+ * Saves picked, pasted, and dropped files into the library, and into the collection when one is
+ * given. Paste and drop work anywhere on the page while this is shown.
+ */
 export function SaveImages({ collectionId }: { collectionId?: Id<"collections"> }) {
   const saveImage = useSaveImage(collectionId);
   const [outcomes, setOutcomes] = useState<
     ReadonlyArray<{ fileName: string; outcome: SaveOutcome }>
   >([]);
+
+  const saveAll = useCallback(
+    async (files: ReadonlyArray<File>) => {
+      for (const file of files) {
+        const outcome = await saveImage(file);
+        setOutcomes((earlier) => [...earlier, { fileName: file.name, outcome }]);
+      }
+    },
+    [saveImage],
+  );
+
+  useEffect(() => {
+    // `dragstart` fires only for a drag that begins in this page, such as a card's own image.
+    // A browser can carry that image as a file, and dropping it back must not save it again.
+    let fromThisPage = false;
+    const startOwnDrag = () => {
+      fromThisPage = true;
+    };
+    const endOwnDrag = () => {
+      fromThisPage = false;
+    };
+    const takes = (event: DragEvent) => carriesFiles(event) && !fromThisPage;
+    // A browser performs a drop only when `dragover` was cancelled. During `dragover` it hides the
+    // files and shows only their type.
+    const allowDrop = (event: DragEvent) => {
+      if (takes(event)) event.preventDefault();
+    };
+    const saveDropped = (event: DragEvent) => {
+      if (!takes(event)) return;
+      event.preventDefault();
+      void saveAll(Array.from(event.dataTransfer!.files));
+    };
+    // A paste into a text field belongs to the field, even when it carries a picture of the text,
+    // as a copy from a spreadsheet does. A paste with no file is text.
+    const savePasted = (event: ClipboardEvent) => {
+      const files = Array.from(event.clipboardData?.files ?? []);
+      const intoField =
+        event.target instanceof Element &&
+        event.target.closest("input, textarea, [contenteditable]") !== null;
+      if (files.length === 0 || intoField) return;
+      event.preventDefault();
+      void saveAll(files);
+    };
+    document.addEventListener("dragstart", startOwnDrag);
+    document.addEventListener("dragend", endOwnDrag);
+    document.addEventListener("dragover", allowDrop);
+    document.addEventListener("drop", saveDropped);
+    document.addEventListener("paste", savePasted);
+    return () => {
+      document.removeEventListener("dragstart", startOwnDrag);
+      document.removeEventListener("dragend", endOwnDrag);
+      document.removeEventListener("dragover", allowDrop);
+      document.removeEventListener("drop", saveDropped);
+      document.removeEventListener("paste", savePasted);
+    };
+  }, [saveAll]);
 
   return (
     <>
@@ -44,13 +105,11 @@ export function SaveImages({ collectionId }: { collectionId?: Id<"collections"> 
           multiple
           onChange={async (event) => {
             const input = event.currentTarget;
-            for (const file of Array.from(input.files ?? [])) {
-              const outcome = await saveImage(file);
-              setOutcomes((earlier) => [...earlier, { fileName: file.name, outcome }]);
-            }
+            await saveAll(Array.from(input.files ?? []));
             input.value = "";
           }}
         />
+        <p>Or paste or drop images anywhere on this page.</p>
       </div>
       <ul role="status">
         {outcomes.map(({ fileName, outcome }, index) => (
