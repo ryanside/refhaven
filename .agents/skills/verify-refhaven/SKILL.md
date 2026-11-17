@@ -95,7 +95,7 @@ $H down <run>
 
 It stops the dev server only when this run started it. It interrupts the process tree it recorded at launch, waits until every process in it has exited, and fails if port 3000 is still in use. It removes the run's scratch directory and prints the evidence path it kept. Run `down` after every failed attempt too.
 
-Test users, their images, and their R2 objects stay in the dev deployment. Nothing deletes them yet.
+Test users, their images, and their R2 objects stay in the dev deployment. Only `check:purge` deletes data, the images of its own test user.
 
 ## Gotchas
 
