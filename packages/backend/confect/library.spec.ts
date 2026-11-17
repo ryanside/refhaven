@@ -12,7 +12,7 @@ import {
 } from "./blob";
 import { CollectionNotFound } from "./collection";
 import RequireWorkspace from "./middleware/RequireWorkspace.spec";
-import { FileName } from "./refFields";
+import { FileName, SearchQuery, TagName } from "./refFields";
 
 const Dimension = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_535 }));
 
@@ -109,6 +109,18 @@ export default GroupSpec.make()
     FunctionSpec.publicPaginatedQuery({
       name: "list",
       item: () => GalleryItem,
+    }),
+  )
+  .addFunction(
+    FunctionSpec.publicQuery({
+      name: "filter",
+      args: () => ({
+        q: Schema.optionalKey(SearchQuery),
+        tag: Schema.optionalKey(TagName),
+        collectionId: Schema.optionalKey(Id("collections")),
+      }),
+      returns: () => Schema.Struct({ items: Schema.Array(GalleryItem), more: Schema.Boolean }),
+      error: () => CollectionNotFound,
     }),
   )
   .addFunction(

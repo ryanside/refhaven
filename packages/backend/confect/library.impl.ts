@@ -24,7 +24,8 @@ import { addMember, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 import { hashBoundUpload, r2 } from "./r2";
-import { isLive, liveRefs, ownedRef } from "./ref";
+import { holdsEveryWord } from "./searchText";
+import { isLive, liveRefs, ownedRef, writeSearchText } from "./ref";
 
 const storedBlob = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
   Effect.gen(function* () {
@@ -177,6 +178,7 @@ const record = FunctionImpl.make(
         .table("refs")
         .insert({ workspaceId, blobs: { original: blobId }, fileName })
         .pipe(Effect.orDie);
+      yield* writeSearchText(refId);
       if (collectionId !== undefined) {
         yield* addMember(collectionId, refId);
       }
@@ -203,6 +205,78 @@ const list = FunctionImpl.make(databaseSchema, library, "list", ({ paginationOpt
     const result = yield* (yield* liveRefs).paginate(paginationOpts);
     return { ...result, page: yield* Effect.forEach(result.page, galleryItem) };
   }).pipe(Effect.orDie),
+);
+
+/** The most images a filtered gallery shows. */
+const filterLimit = 200;
+
+// A search reads at most 1,024 results, so every kind of filter reads at most that many Refs.
+const scanLimit = 1024;
+
+const memberIds = (collectionId: Id<"collections">) =>
+  Effect.gen(function* () {
+    yield* ownedCollection(collectionId);
+    const reader = yield* DatabaseReader;
+    const memberships = yield* reader
+      .table("collectionRefs")
+      .index("by_collection", (q) => q.eq("collectionId", collectionId))
+      .collect()
+      .pipe(Effect.orDie);
+    return new Set(memberships.map(({ refId }) => refId));
+  });
+
+/**
+ * Reads the Refs to check: the search results in relevance order when there is a search text,
+ * else the Refs of the tag, newest tagged first, else the whole library, newest first. Then keeps
+ * the live ones that hold every word of the search, carry the tag, and sit in the collection.
+ */
+const filter = FunctionImpl.make(databaseSchema, library, "filter", ({ q, tag, collectionId }) =>
+  Effect.gen(function* () {
+    const members = collectionId === undefined ? undefined : yield* memberIds(collectionId);
+    const { workspaceId } = yield* CurrentWorkspace;
+    const reader = yield* DatabaseReader;
+    const tagged =
+      tag === undefined
+        ? undefined
+        : yield* reader
+            .table("tags")
+            .index(
+              "by_workspace_and_name",
+              (range) => range.eq("workspaceId", workspaceId).eq("name", tag),
+              "desc",
+            )
+            .collect()
+            .pipe(Effect.orDie);
+    const scanned =
+      q !== undefined
+        ? yield* reader
+            .table("refs")
+            .search("search_text", (search) =>
+              search
+                .search("searchText", q)
+                .eq("workspaceId", workspaceId)
+                .eq("deletedAt", undefined),
+            )
+            .take(scanLimit)
+            .pipe(Effect.orDie)
+        : tagged !== undefined
+          ? yield* Effect.forEach(tagged.slice(0, scanLimit), ({ refId }) =>
+              reader.table("refs").get(refId).pipe(Effect.orDie),
+            )
+          : yield* (yield* liveRefs).take(scanLimit).pipe(Effect.orDie);
+    const taggedIds = tagged && new Set(tagged.map(({ refId }) => refId));
+    const matches = scanned.filter(
+      (ref) =>
+        isLive(ref) &&
+        (q === undefined || holdsEveryWord(ref.searchText ?? "", q)) &&
+        (taggedIds?.has(ref._id) ?? true) &&
+        (members?.has(ref._id) ?? true),
+    );
+    return {
+      items: yield* Effect.forEach(matches.slice(0, filterLimit), galleryItem),
+      more: matches.length > filterLimit || scanned.length === scanLimit,
+    };
+  }),
 );
 
 const trash = FunctionImpl.make(databaseSchema, library, "trash", ({ paginationOpts }) =>
@@ -303,6 +377,7 @@ export default GroupImpl.make(databaseSchema, library).pipe(
   Layer.provide(save),
   Layer.provide(record),
   Layer.provide(list),
+  Layer.provide(filter),
   Layer.provide(trash),
   Layer.provide(urls),
   Layer.provide(remove),

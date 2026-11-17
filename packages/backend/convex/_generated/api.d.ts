@@ -12,6 +12,7 @@ import type * as canvas from "../canvas.js";
 import type * as collections from "../collections.js";
 import type * as library from "../library.js";
 import type * as ref from "../ref.js";
+import type * as search from "../search.js";
 import type * as session from "../session.js";
 import type * as users from "../users.js";
 import type * as workspaces from "../workspaces.js";
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   collections: typeof collections;
   library: typeof library;
   ref: typeof ref;
+  search: typeof search;
   session: typeof session;
   users: typeof users;
   workspaces: typeof workspaces;

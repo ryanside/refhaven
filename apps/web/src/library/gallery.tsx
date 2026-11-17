@@ -123,32 +123,42 @@ export function SaveImages({ collectionId }: { collectionId?: Id<"collections"> 
   );
 }
 
-/** A set of Refs as a grid. `action` renders a control on each card. */
+/** Renders a control on each card. */
+export type CardAction = (refId: Id<"refs">) => ReactNode;
+
+/** Images as a grid of cards, each linking to its page. */
+export function Cards({ items, action }: { items: ReadonlyArray<Item>; action: CardAction }) {
+  const refIds = useMemo(() => items.map((item) => item.refId), [items]);
+  const urls = useRefUrls(refIds, "thumbnail");
+
+  return (
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
+      {items.map((item) => (
+        <li key={item.refId} data-ref-id={item.refId} className="flex flex-col gap-1">
+          <Link to="/r/$refId" params={{ refId: item.refId }}>
+            <Thumbnail item={item} url={urls.get(item.refId)?.url} />
+          </Link>
+          <p className="truncate">{item.fileName}</p>
+          {action(item.refId)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A set of Refs, loaded a page at a time. */
 export function Gallery<E extends { readonly _tag: string }>({
   items,
   action,
   empty = "Nothing saved yet.",
 }: {
   items: PaginatedQueryResult.PaginatedQueryResult<Item, E>;
-  action: (refId: Id<"refs">) => ReactNode;
+  action: CardAction;
   empty?: string;
 }) {
-  const refIds = useMemo(() => items.results.map((item) => item.refId), [items.results]);
-  const urls = useRefUrls(refIds, "thumbnail");
-
   return (
     <>
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
-        {items.results.map((item) => (
-          <li key={item.refId} data-ref-id={item.refId} className="flex flex-col gap-1">
-            <Link to="/r/$refId" params={{ refId: item.refId }}>
-              <Thumbnail item={item} url={urls.get(item.refId)?.url} />
-            </Link>
-            <p className="truncate">{item.fileName}</p>
-            {action(item.refId)}
-          </li>
-        ))}
-      </ul>
+      <Cards items={items.results} action={action} />
       {PaginatedQueryResult.isLoading(items) ? <p>Loading…</p> : null}
       {PaginatedQueryResult.isFailure(items) ? <p role="alert">{items.error._tag}</p> : null}
       {PaginatedQueryResult.isExhausted(items) && items.results.length === 0 ? (

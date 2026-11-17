@@ -34,3 +34,5 @@ export const TagName = Schema.String.pipe(
 );
 
 export const TagNames = Schema.Array(TagName).check(Schema.isMaxLength(20));
+
+export const SearchQuery = Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(200));

@@ -1,9 +1,10 @@
 import * as Effect from "effect/Effect";
 import type { RefsDoc } from "./_generated/docs";
 import type { Id } from "./_generated/id";
-import { DatabaseReader } from "./_generated/services";
+import { DatabaseReader, DatabaseWriter } from "./_generated/services";
 import { RefNotFound } from "./library.spec";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
+import { searchTextOf } from "./searchText";
 
 /** A Ref is live when it has no `deletedAt`, and in the trash otherwise. Every reader shows live Refs only. */
 export const isLive = (ref: RefsDoc) => ref.deletedAt === undefined;
@@ -45,3 +46,24 @@ export const ownedLiveRef = (refId: Id<"refs">) =>
     }
     return ref;
   });
+
+/**
+ * Writes a Ref's `searchText` from its name, note, source, and tags as they stand in this
+ * transaction. Every write that changes one of them calls it after the change.
+ */
+export const writeSearchText = (refId: Id<"refs">) =>
+  Effect.gen(function* () {
+    const reader = yield* DatabaseReader;
+    const writer = yield* DatabaseWriter;
+    const ref = yield* reader.table("refs").get(refId);
+    const tags = yield* reader
+      .table("tags")
+      .index("by_ref", (q) => q.eq("refId", refId))
+      .collect();
+    yield* writer.table("refs").patch(refId, {
+      searchText: searchTextOf(
+        ref,
+        tags.map(({ name }) => name),
+      ),
+    });
+  }).pipe(Effect.orDie);

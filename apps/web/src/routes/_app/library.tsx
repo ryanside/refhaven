@@ -7,11 +7,12 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import * as Result from "effect/Result";
 import { CanvasView } from "@/canvas/canvas-view";
 import { NameForm } from "@/collections/name-form";
-import { Gallery, SaveImages, galleryPage } from "@/library/gallery";
-import { ViewLinks, validateView } from "@/view";
+import { FilteredGallery, GalleryFilters, isFiltered } from "@/library/filters";
+import { type CardAction, Gallery, SaveImages, galleryPage } from "@/library/gallery";
+import { ViewLinks, validateGallerySearch } from "@/view";
 
 export const Route = createFileRoute("/_app/library")({
-  validateSearch: validateView,
+  validateSearch: validateGallerySearch,
   component: Library,
 });
 
@@ -27,12 +28,45 @@ function Library() {
 }
 
 function LibraryGallery() {
-  const items = usePaginatedQuery(refs.public.library.list, {}, galleryPage);
+  const { view: _, ...filters } = Route.useSearch();
   const collections = useQuery(refs.public.collections.list, {});
   const create = useMutation(refs.public.collections.create);
   const addRefs = useMutation(refs.public.collections.addRefs);
   const remove = useMutation(refs.public.library.remove);
   const owned = QueryResult.isSuccess(collections) ? collections.value : [];
+  const action: CardAction = (refId) => (
+    <>
+      {owned.length === 0 ? null : (
+        <NativeSelect
+          aria-label="Add to collection"
+          value=""
+          onChange={(event) =>
+            void addRefs({
+              collectionId: event.currentTarget.value as Id<"collections">,
+              refIds: [refId],
+            })
+          }
+        >
+          <NativeSelectOption value="" disabled>
+            Add to collection
+          </NativeSelectOption>
+          {owned.map(({ collectionId, name }) => (
+            <NativeSelectOption key={collectionId} value={collectionId}>
+              {name}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        className="self-start"
+        onClick={() => void remove({ refIds: [refId] })}
+      >
+        Delete
+      </Button>
+    </>
+  );
 
   return (
     <main className="flex flex-col gap-4 p-6">
@@ -69,46 +103,21 @@ function LibraryGallery() {
       </section>
 
       <SaveImages />
-      <Gallery
-        items={items}
-        action={(refId) => (
-          <>
-            {owned.length === 0 ? null : (
-              <NativeSelect
-                aria-label="Add to collection"
-                value=""
-                onChange={(event) =>
-                  void addRefs({
-                    collectionId: event.currentTarget.value as Id<"collections">,
-                    refIds: [refId],
-                  })
-                }
-              >
-                <NativeSelectOption value="" disabled>
-                  Add to collection
-                </NativeSelectOption>
-                {owned.map(({ collectionId, name }) => (
-                  <NativeSelectOption key={collectionId} value={collectionId}>
-                    {name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="self-start"
-              onClick={() => void remove({ refIds: [refId] })}
-            >
-              Delete
-            </Button>
-          </>
-        )}
-      />
+      <GalleryFilters {...filters} />
+      {isFiltered(filters) ? (
+        <FilteredGallery filters={filters} action={action} />
+      ) : (
+        <WholeLibrary action={action} />
+      )}
 
       <Account />
     </main>
   );
+}
+
+function WholeLibrary({ action }: { action: CardAction }) {
+  const items = usePaginatedQuery(refs.public.library.list, {}, galleryPage);
+  return <Gallery items={items} action={action} />;
 }
 
 function Account() {

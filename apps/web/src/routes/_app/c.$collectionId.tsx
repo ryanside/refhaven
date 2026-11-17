@@ -6,11 +6,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as Result from "effect/Result";
 import { CanvasView } from "@/canvas/canvas-view";
 import { NameForm } from "@/collections/name-form";
-import { Gallery, SaveImages, galleryPage } from "@/library/gallery";
-import { ViewLinks, validateView } from "@/view";
+import { FilteredGallery, GalleryFilters, isFiltered } from "@/library/filters";
+import { type CardAction, Gallery, SaveImages, galleryPage } from "@/library/gallery";
+import { ViewLinks, validateGallerySearch } from "@/view";
 
 export const Route = createFileRoute("/_app/c/$collectionId")({
-  validateSearch: validateView,
+  validateSearch: validateGallerySearch,
   component: CollectionPage,
 });
 
@@ -47,9 +48,19 @@ function CollectionGallery({
   collectionId: Id<"collections">;
   name: string;
 }) {
-  const items = usePaginatedQuery(refs.public.collections.refs, { collectionId }, galleryPage);
+  const { view: _, ...filters } = Route.useSearch();
   const rename = useMutation(refs.public.collections.rename);
   const removeRefs = useMutation(refs.public.collections.removeRefs);
+  const action: CardAction = (refId) => (
+    <Button
+      variant="outline"
+      size="sm"
+      className="self-start"
+      onClick={() => void removeRefs({ collectionId, refIds: [refId] })}
+    >
+      Remove from collection
+    </Button>
+  );
 
   return (
     <main className="flex flex-col gap-4 p-6">
@@ -65,19 +76,23 @@ function CollectionGallery({
         }}
       />
       <SaveImages collectionId={collectionId} />
-      <Gallery
-        items={items}
-        action={(refId) => (
-          <Button
-            variant="outline"
-            size="sm"
-            className="self-start"
-            onClick={() => void removeRefs({ collectionId, refIds: [refId] })}
-          >
-            Remove from collection
-          </Button>
-        )}
-      />
+      <GalleryFilters {...filters} />
+      {isFiltered(filters) ? (
+        <FilteredGallery filters={filters} collectionId={collectionId} action={action} />
+      ) : (
+        <Members collectionId={collectionId} action={action} />
+      )}
     </main>
   );
+}
+
+function Members({
+  collectionId,
+  action,
+}: {
+  collectionId: Id<"collections">;
+  action: CardAction;
+}) {
+  const items = usePaginatedQuery(refs.public.collections.refs, { collectionId }, galleryPage);
+  return <Gallery items={items} action={action} />;
 }
