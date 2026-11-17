@@ -7,12 +7,10 @@ import * as Result from "effect/Result";
 import { CanvasView } from "@/canvas/canvas-view";
 import { NameForm } from "@/collections/name-form";
 import { Gallery, galleryPage } from "@/library/gallery";
-
-type View = "gallery" | "canvas";
+import { ViewLinks, validateView } from "@/view";
 
 export const Route = createFileRoute("/_app/library")({
-  validateSearch: (search): { view?: View } =>
-    search.view === "canvas" || search.view === "gallery" ? { view: search.view } : {},
+  validateSearch: validateView,
   component: Library,
 });
 
@@ -24,19 +22,6 @@ function Library() {
     </CanvasView>
   ) : (
     <LibraryGallery />
-  );
-}
-
-function ViewLinks() {
-  return (
-    <nav className="flex gap-3">
-      <Link to="/library" search={{ view: "gallery" }} className="underline">
-        Gallery
-      </Link>
-      <Link to="/library" search={{ view: "canvas" }} className="underline">
-        Canvas
-      </Link>
-    </nav>
   );
 }
 

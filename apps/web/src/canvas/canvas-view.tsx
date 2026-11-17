@@ -34,7 +34,14 @@ const loadMargin = 256;
 
 type Base = { canvasId: Id<"canvases">; rev: number };
 
-export function CanvasView({ children }: { children: ReactNode }) {
+/** The canvas of a set: the collection's, or the whole library's when `collectionId` is absent. */
+export function CanvasView({
+  collectionId,
+  children,
+}: {
+  collectionId?: Id<"collections">;
+  children: ReactNode;
+}) {
   const [store] = useState(createSceneStore);
   const host = useRef<HTMLDivElement>(null);
   const outlines = useRef<HTMLDivElement>(null);
@@ -50,7 +57,7 @@ export function CanvasView({ children }: { children: ReactNode }) {
     if (snapshotting.current) return;
     snapshotting.current = true;
     try {
-      const opened = await open({});
+      const opened = await open(collectionId === undefined ? {} : { collectionId });
       if (Result.isFailure(opened)) {
         setProblem(opened.failure._tag);
         return;
@@ -61,7 +68,7 @@ export function CanvasView({ children }: { children: ReactNode }) {
     } finally {
       snapshotting.current = false;
     }
-  }, [open, store]);
+  }, [collectionId, open, store]);
 
   useEffect(() => {
     void takeSnapshot();

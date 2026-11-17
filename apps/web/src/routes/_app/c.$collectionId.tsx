@@ -4,10 +4,13 @@ import refs from "@refhaven/backend/refs";
 import { Button } from "@refhaven/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
 import * as Result from "effect/Result";
+import { CanvasView } from "@/canvas/canvas-view";
 import { NameForm } from "@/collections/name-form";
 import { Gallery, galleryPage } from "@/library/gallery";
+import { ViewLinks, validateView } from "@/view";
 
 export const Route = createFileRoute("/_app/c/$collectionId")({
+  validateSearch: validateView,
   component: CollectionPage,
 });
 
@@ -26,6 +29,24 @@ function CollectionPage() {
 }
 
 function Collection({ collectionId, name }: { collectionId: Id<"collections">; name: string }) {
+  const { view = "gallery" } = Route.useSearch();
+  return view === "canvas" ? (
+    <CanvasView collectionId={collectionId}>
+      <h1 className="font-medium">{name}</h1>
+      <ViewLinks />
+    </CanvasView>
+  ) : (
+    <CollectionGallery collectionId={collectionId} name={name} />
+  );
+}
+
+function CollectionGallery({
+  collectionId,
+  name,
+}: {
+  collectionId: Id<"collections">;
+  name: string;
+}) {
   const items = usePaginatedQuery(refs.public.collections.refs, { collectionId }, galleryPage);
   const rename = useMutation(refs.public.collections.rename);
   const removeRefs = useMutation(refs.public.collections.removeRefs);
@@ -33,6 +54,7 @@ function Collection({ collectionId, name }: { collectionId: Id<"collections">; n
   return (
     <main className="flex flex-col gap-4 p-6">
       <h1 className="font-medium">{name}</h1>
+      <ViewLinks />
       <NameForm
         label="Collection name"
         submit="Rename"
