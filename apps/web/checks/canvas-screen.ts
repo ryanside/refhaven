@@ -182,8 +182,21 @@ export const rectOnPage = (view: PageView, item: Item): Rect => {
   };
 };
 
-/** A point of the item that no other item covers. */
-export const exposedPoint = (item: Item, items: ReadonlyArray<Item>): Point => {
+/** A test of world points: whether the page shows each clear of the panel over the canvas's corner. */
+export const clearOfPanel = async (page: Page, view: PageView) => {
+  const panel = (await page.getByTestId("canvas-panel").boundingBox())!;
+  return (world: Point) => {
+    const point = toPage(view, world);
+    return point.x > panel.x + panel.width + 4 || point.y > panel.y + panel.height + 4;
+  };
+};
+
+/** A point of the item that no other item covers, and that `usable` takes. */
+export const exposedPoint = (
+  item: Item,
+  items: ReadonlyArray<Item>,
+  usable: (world: Point) => boolean = () => true,
+): Point => {
   const { width, height } = worldSize(item);
   for (const [fx, fy] of [
     [0, 0],
@@ -193,7 +206,7 @@ export const exposedPoint = (item: Item, items: ReadonlyArray<Item>): Point => {
     [0, -0.35],
   ] as const) {
     const point = { x: item.x + fx * width, y: item.y + fy * height };
-    if (topmostAt(sized(items), point)?.key === item.key) return point;
+    if (usable(point) && topmostAt(sized(items), point)?.key === item.key) return point;
   }
   throw new Error(`FAIL item ${item.key} has no exposed point to test`);
 };

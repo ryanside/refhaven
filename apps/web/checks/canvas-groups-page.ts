@@ -1,6 +1,6 @@
 import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
-import { type Point, topmostAt } from "@refhaven/scene";
+import type { Point } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
 import {
@@ -13,6 +13,8 @@ import {
 } from "./browser";
 import {
   type PageView,
+  clearOfPanel,
+  exposedPoint,
   type Rgb,
   openCanvas,
   pageView,
@@ -22,7 +24,6 @@ import {
   screenshot,
   settle,
   showRect,
-  sized,
   solidPng,
   toPage,
   until,
@@ -153,23 +154,10 @@ try {
   await second.locator('[data-testid="canvas"][data-shown-thumbnails="3"]').waitFor();
   await shown(second, 4);
 
-  const panelOf = async (on: Page) => (await on.getByTestId("canvas-panel").boundingBox())!;
   /** A point of the item that no other item covers and that the panel does not cover. */
   const pointOn = async (on: Page, view: PageView, key: string): Promise<Point> => {
     const { items, of } = await snapshot();
-    const item = of(key);
-    const panel = await panelOf(on);
-    const { width, height } = sized([item])[0]!;
-    for (const fx of [0, 0.3, -0.3]) {
-      for (const fy of [0, 0.3, -0.3]) {
-        const world = { x: item.x + fx * width, y: item.y + fy * height };
-        const point = round(toPage(view, world));
-        const underPanel =
-          point.x < panel.x + panel.width + 4 && point.y < panel.y + panel.height + 4;
-        if (!underPanel && topmostAt(sized(items), world)?.key === key) return point;
-      }
-    }
-    throw new Error(`FAIL item ${key} has no point clear of other items and of the panel`);
+    return round(toPage(view, exposedPoint(of(key), items, await clearOfPanel(on, view))));
   };
   const view = await pageView(page);
   const secondView = await pageView(second);

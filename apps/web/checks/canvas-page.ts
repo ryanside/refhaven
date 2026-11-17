@@ -13,6 +13,7 @@ import {
 import {
   type Item,
   type Rgb,
+  clearOfPanel,
   exposedPoint,
   near,
   pageView,
@@ -344,8 +345,9 @@ try {
   view = await pageView(page);
   png = await screenshot(page, "05-reloaded.png");
   const saved = (await snapshotOf(owner)).items;
+  let clear = await clearOfPanel(page, view);
   for (const item of saved) {
-    const point = exposedPoint(item, saved);
+    const point = exposedPoint(item, saved, clear);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
       `after a reload the ${item.width}x${item.height} image is drawn at its saved position ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
@@ -457,7 +459,10 @@ try {
   view = await pageView(page);
   const beforeBlur = await snapshotOf(owner);
   const dragged = beforeBlur.items.find((item) => item.key === red.key)!;
-  const grab = toPage(view, exposedPoint(dragged, beforeBlur.items));
+  const grab = toPage(
+    view,
+    exposedPoint(dragged, beforeBlur.items, await clearOfPanel(page, view)),
+  );
   await page.mouse.move(grab.x, grab.y);
   await page.mouse.down();
   await page.mouse.move(grab.x + 40, grab.y + 20, { steps: 4 });
@@ -469,7 +474,7 @@ try {
   );
   await page.mouse.move(grab.x + 300, grab.y + 200, { steps: 4 });
   await page.mouse.up();
-  await click(page, toPage(view, exposedPoint(dropped, [dropped])));
+  await click(page, toPage(view, exposedPoint(dropped, [dropped], await clearOfPanel(page, view))));
   await until(
     () => readout(page),
     (r) => r.selected === 1,
@@ -574,8 +579,9 @@ try {
   view = await pageView(page);
   png = await screenshot(page, "10-library-after-collection.png");
   const libraryLayout = (await snapshotOf(owner)).items;
+  clear = await clearOfPanel(page, view);
   for (const item of libraryLayout) {
-    const point = exposedPoint(item, libraryLayout);
+    const point = exposedPoint(item, libraryLayout, clear);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
       `going from the collection's canvas to the library's shows the library's layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
@@ -589,8 +595,9 @@ try {
   view = await pageView(page);
   png = await screenshot(page, "11-collection-again.png");
   const collectionLayout = (await collectionSnapshot()).items;
+  clear = await clearOfPanel(page, view);
   for (const item of collectionLayout) {
-    const point = exposedPoint(item, collectionLayout);
+    const point = exposedPoint(item, collectionLayout, clear);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
       `going back to the collection's canvas shows its own layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
