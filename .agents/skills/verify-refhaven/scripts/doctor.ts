@@ -92,7 +92,7 @@ report(
   missingR2.length === 0 ? true : "warn",
   missingR2.length === 0
     ? "the deployment has the four R2 variables"
-    : `the deployment lacks ${missingR2.join(", ")}. Saving images and the texture lab cannot be driven`,
+    : `the deployment lacks ${missingR2.join(", ")}. Saving images and the canvas cannot be driven`,
 );
 report(
   !names.has("AUTH_ORIGIN") && !names.has("AUTH_RP_ID") ? true : "warn",

@@ -13,7 +13,7 @@ Sign in lets a visitor create an account with a username and a passkey, stay sig
 ## How to get to it (user POV)
 
 - Open `/sign-in` directly.
-- Open `/library` or any `/lab/...` page while signed out.
+- Open `/library` or `/library?view=canvas` while signed out.
 - Choose `Open your library` on the landing page `/` while signed out.
 
 ## Driving it with Playwright
