@@ -15,13 +15,14 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
+import { refOf } from "./canvas-screen";
 
 type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
 
 const stamp = Date.now().toString(36);
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const find = (items: ReadonlyArray<Item>, refId: string) =>
-  items.find((item) => item.refId === refId);
+  items.find((item) => refOf(item) === refId);
 const placeOf = (item: Item | undefined) =>
   item && JSON.stringify([item.key, item.x, item.y, item.scale, item.z]);
 

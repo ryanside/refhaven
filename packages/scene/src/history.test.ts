@@ -1,9 +1,11 @@
 import { expect, test } from "vitest";
 import {
+  type CanvasItem,
   addEntry,
   callsOf,
   createHistory,
   maxOpsPerCall,
+  noteEntry,
   patchEntry,
   patchedFields,
   removalEntry,
@@ -74,11 +76,22 @@ test("the summary keeps its identity while the answers stay the same, and listen
   expect(heard).toBe(2);
 });
 
+const image = (refId: string, x: number, y: number, z: string): CanvasItem => ({
+  kind: "image",
+  key: refId,
+  refId,
+  x,
+  y,
+  z,
+  scale: 0.5,
+  rotation: 0,
+  width: 200,
+  height: 100,
+  base: { width: 400, height: 200 },
+});
+
 test("a removal is undone by one add per item, at its old place and its old z", () => {
-  const entry = removalEntry([
-    { key: "r1", refId: "r1", x: 5, y: 6, z: "a3" },
-    { key: "r2", refId: "r2", x: 7, y: 8, z: "a1" },
-  ]);
+  const entry = removalEntry([image("r1", 5, 6, "a3"), image("r2", 7, 8, "a1")]);
 
   expect(entry.undo).toEqual([
     { op: "add", refId: "r1", x: 5, y: 6, z: "a3" },
@@ -89,6 +102,39 @@ test("a removal is undone by one add per item, at its old place and its old z", 
     { op: "remove", key: "r2" },
   ]);
   expect(patchedFields(entry.undo)).toEqual([]);
+});
+
+test("a removed note comes back with its text, color, box at scale 1, place, scale, turn, and z", () => {
+  const note: CanvasItem = {
+    kind: "note",
+    key: "n1",
+    text: "hello",
+    color: "blue",
+    x: 5,
+    y: 6,
+    z: "a2",
+    scale: 2,
+    rotation: 1,
+    width: 120,
+    height: 60,
+    base: { width: 60, height: 30 },
+  };
+  const add = {
+    op: "addNote",
+    key: "n1",
+    text: "hello",
+    color: "blue",
+    x: 5,
+    y: 6,
+    z: "a2",
+    scale: 2,
+    rotation: 1,
+    width: 60,
+    height: 30,
+  } as const;
+
+  expect(removalEntry([note])).toEqual({ undo: [add], redo: [{ op: "remove", key: "n1" }] });
+  expect(noteEntry(add)).toEqual({ undo: [{ op: "remove", key: "n1" }], redo: [add] });
 });
 
 test("an add is undone by removing the Ref's item and redone by adding it at the same place", () => {
@@ -112,13 +158,7 @@ test("a move patches the old positions to undo and the new ones to redo", () => 
 });
 
 test("undoing a removal takes as many ops as the removal, so the largest removal one call can make can be undone", () => {
-  const items = Array.from({ length: 1000 }, (_, index) => ({
-    key: `r${index}`,
-    refId: `r${index}`,
-    x: index,
-    y: 0,
-    z: "a0",
-  }));
+  const items = Array.from({ length: 1000 }, (_, index) => image(`r${index}`, index, 0, "a0"));
   const entry = removalEntry(items);
 
   expect(entry.redo).toHaveLength(1000);

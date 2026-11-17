@@ -6,6 +6,12 @@ import type { Page } from "playwright";
 
 export type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
 
+/** The Ref of an image item. A check that reads it puts only images where it reads. */
+export const refOf = (item: Item) => {
+  if (item.kind !== "image") throw new Error(`FAIL item ${item.key} is a note, not an image`);
+  return item.refId;
+};
+
 const evidence = process.env.EVIDENCE;
 
 export type Rgb = readonly [number, number, number];

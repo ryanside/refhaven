@@ -37,6 +37,7 @@ import {
   toWorld,
   until,
   waitForCanvas,
+  refOf,
 } from "./canvas-screen";
 
 const red = { name: "red.png", color: [210, 40, 40] as Rgb, width: 600, height: 400 };
@@ -169,7 +170,7 @@ try {
 
   const owner = await clientFor(page);
   const placed = await snapshotOf(owner);
-  const keyOf = (refId: string) => placed.items.find((item) => item.refId === refId)!.key;
+  const keyOf = (refId: string) => placed.items.find((item) => refOf(item) === refId)!.key;
   const redKey = keyOf(redRef);
   const blueKey = keyOf(blueRef);
   await owner.mutation(api.canvas.apply, {

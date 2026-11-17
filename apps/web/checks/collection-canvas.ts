@@ -13,14 +13,15 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
+import { refOf } from "./canvas-screen";
 
 type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
 
 const stamp = Date.now().toString(36);
 const sorted = (values: ReadonlyArray<string>) => [...values].sort().join();
-const refIdsOf = (items: ReadonlyArray<Item>) => sorted(items.map((item) => item.refId));
+const refIdsOf = (items: ReadonlyArray<Item>) => sorted(items.map((item) => refOf(item)));
 const find = (items: ReadonlyArray<Item>, refId: string) =>
-  items.find((item) => item.refId === refId);
+  items.find((item) => refOf(item) === refId);
 
 const cards = (page: Page) => page.locator("[data-ref-id]");
 
@@ -93,7 +94,7 @@ try {
   const collection = await owner.mutation(api.canvas.open, { collectionId: board });
   assert(
     refIdsOf(collection.items) === sorted(members) &&
-      collection.items.every((item) => item.key === item.refId),
+      collection.items.every((item) => item.key === refOf(item)),
     `a collection's canvas holds exactly its members, each under its Ref's ID: ${collection.items.length} of ${saved.length} images`,
   );
   assert(
@@ -201,7 +202,7 @@ try {
       back.every(
         (item) =>
           item !== undefined &&
-          item.key === item.refId &&
+          item.key === refOf(item) &&
           item.deletedAt === undefined &&
           boundsOf([item])!.left > layout.right,
       ),

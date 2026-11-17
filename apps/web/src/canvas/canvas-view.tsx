@@ -3,32 +3,44 @@ import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
 import type { Renderer } from "@refhaven/renderer";
 import { Button } from "@refhaven/ui/components/button";
+import { NativeSelect, NativeSelectOption } from "@refhaven/ui/components/native-select";
 import { createPixiRenderer } from "@refhaven/renderer/pixi";
 import {
+  addEntry,
+  callsOf,
   type Camera,
   type CanvasItem,
+  centerFrom,
+  createHistory,
+  createSceneStore,
   type Drop,
   type Entry,
   type Handle,
+  handles,
   type History,
   type ImageRole,
-  type ItemOp,
-  type Point,
-  type Rect,
-  type SceneItem,
-  type SceneStore,
-  addEntry,
-  callsOf,
-  createHistory,
-  createSceneStore,
-  handles,
   imageRole,
+  type ItemOp,
   itemsInView,
+  maxNoteText,
+  type NoteAdd,
+  type NoteColor,
+  noteColors,
+  noteEntry,
+  noteType,
+  patchEntry,
   placedEdge,
   placementGap,
+  type Point,
+  type Rect,
   removalEntry,
+  type SceneItem,
+  type SceneStore,
   screenToWorld,
+  topLeftOf,
+  topmostAt,
   worldToScreen,
+  zAbove,
 } from "@refhaven/scene";
 import { useHotkeys } from "@tanstack/react-hotkeys";
 import * as Result from "effect/Result";
@@ -42,6 +54,7 @@ import {
 } from "react";
 import { type PlaceAt, SaveImages } from "@/library/save-images";
 import { type Action, keymap } from "./keymap";
+import { boxFor, createNoteTextures, noteFont, noteInk, noteTextureKey } from "./notes";
 import { type Need, type Sign, createTextureLoader, textureKey } from "./textures";
 
 /** A change list longer than this is replaced by a new snapshot. */
@@ -73,6 +86,20 @@ const reached = (store: SceneStore, rev: number) =>
   });
 
 /** Resolves when no gesture is under way. */
+/**
+ * A note open in the editor: the corner its text starts from, which stays put as the text grows,
+ * and what it looked like before, or null for a note that does not exist yet.
+ */
+type Draft = {
+  readonly key: string;
+  readonly corner: Point;
+  readonly scale: number;
+  readonly rotation: number;
+  readonly color: NoteColor;
+  readonly z: string;
+  readonly before: { readonly text: string } | null;
+};
+
 const idle = (store: SceneStore) =>
   new Promise<void>((resolve) => {
     if (store.gesture().kind === "idle") return resolve();
@@ -121,7 +148,13 @@ export function CanvasView({
           setOffCanvas(opened.success.removed);
           // Putting images back is an edit like a drop, so it can be undone and it empties redo.
           if (placeRemoved && opened.success.placed > 0) {
-            history.record(addEntry(opened.success.items.slice(-opened.success.placed)));
+            history.record(
+              addEntry(
+                opened.success.items
+                  .slice(-opened.success.placed)
+                  .flatMap((item) => (item.kind === "image" ? [item] : [])),
+              ),
+            );
           }
         }
       } finally {
@@ -250,7 +283,130 @@ export function CanvasView({
     [edit, store],
   );
 
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [noteColor, setNoteColor] = useState<NoteColor>("black");
+
+  const openEditor = useCallback(
+    (next: Draft) => {
+      setDraft(next);
+      store.setEditing(next.key);
+    },
+    [store],
+  );
+
+  // A new note starts at the center of the view, at a scale that shows its text at its type size.
+  const addNote = useCallback(() => {
+    if (store.gesture().kind !== "idle") return;
+    const camera = store.camera();
+    const viewport = store.viewport();
+    const scale = 1 / camera.zoom;
+    const box = boxFor("Note");
+    const center = screenToWorld(camera, { x: viewport.width / 2, y: viewport.height / 2 });
+    openEditor({
+      key: crypto.randomUUID(),
+      corner: { x: center.x - (box.width / 2) * scale, y: center.y - (box.height / 2) * scale },
+      scale,
+      rotation: 0,
+      color: noteColor,
+      z: zAbove(
+        store.items().map((item) => item.z),
+        1,
+      )[0]!,
+      before: null,
+    });
+  }, [noteColor, openEditor, store]);
+
+  const onEditNote = useRef<(key: string) => void>(() => {});
+  useEffect(() => {
+    onEditNote.current = (key) => {
+      const note = store.items().find((item) => item.key === key);
+      if (note?.kind !== "note") return;
+      openEditor({
+        key,
+        corner: topLeftOf({ ...note, ...note.base }),
+        scale: note.scale,
+        rotation: note.rotation,
+        color: note.color,
+        z: note.z,
+        before: { text: note.text },
+      });
+    };
+  }, [openEditor, store]);
+
+  /** Saves the editor's text: a new note, a patch of the text and its box, or a removal when empty. */
+  const commitNote = useCallback(
+    (text: string | null) => {
+      if (!draft) return;
+      setDraft(null);
+      store.setEditing(null);
+      if (text === null) return;
+      const empty = text.trim() === "";
+      if (!draft.before) {
+        if (empty) return;
+        const box = boxFor(text);
+        const add: NoteAdd = {
+          op: "addNote",
+          key: draft.key,
+          ...centerFrom(draft.corner, box, draft),
+          scale: draft.scale,
+          rotation: draft.rotation,
+          z: draft.z,
+          text,
+          color: draft.color,
+          ...box,
+        };
+        const entry = noteEntry(add);
+        void edit(entry, store.hold(entry.redo), "The note could not be saved.");
+        return;
+      }
+      const note = store.items().find((item) => item.key === draft.key);
+      if (note?.kind !== "note" || text === note.text) return;
+      if (empty) {
+        const entry = removalEntry([note]);
+        void edit(entry, store.hold(entry.redo), "The note could not be removed.");
+        return;
+      }
+      const box = boxFor(text);
+      const center = centerFrom(topLeftOf({ ...note, ...note.base }), box, note);
+      const moved = center.x !== note.x || center.y !== note.y;
+      const entry = patchEntry(
+        [
+          {
+            key: note.key,
+            text: note.text,
+            ...note.base,
+            ...(moved ? { x: note.x, y: note.y } : {}),
+          },
+        ],
+        [{ key: note.key, text, ...box, ...(moved ? center : {}) }],
+      );
+      void edit(entry, store.hold(entry.redo), "The note could not be saved.");
+    },
+    [draft, edit, store],
+  );
+
+  const recolor = useCallback(
+    (color: NoteColor) => {
+      setNoteColor(color);
+      if (store.gesture().kind !== "idle") return;
+      const selection = store.selection();
+      const notes = store
+        .items()
+        .flatMap((item) =>
+          item.kind === "note" && selection.has(item.key) && item.color !== color ? [item] : [],
+        );
+      if (notes.length === 0) return;
+      const entry = patchEntry(
+        notes.map(({ key, color }) => ({ key, color })),
+        notes.map(({ key }) => ({ key, color })),
+      );
+      void edit(entry, store.hold(entry.redo), "The color could not be saved.");
+    },
+    [edit, store],
+  );
+
   const actions: Record<Action, () => void> = {
+    addNote,
     remove: removeSelection,
     bringToFront: () => restack("front"),
     sendToBack: () => restack("back"),
@@ -297,13 +453,21 @@ export function CanvasView({
       const result = await urls({ refIds: refIds as Array<Id<"refs">>, role });
       return Result.isSuccess(result) ? result.success : [];
     };
-    return drive(store, host.current!, outlines.current!, sign, (drop) => onDrop.current(drop));
+    return drive(
+      store,
+      host.current!,
+      outlines.current!,
+      sign,
+      (drop) => onDrop.current(drop),
+      (key) => onEditNote.current(key),
+    );
   }, [store, urls]);
 
   return (
     <main className="relative flex-1 overflow-hidden">
       <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
       <div ref={outlines} className="pointer-events-none absolute inset-0" />
+      {draft ? <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} /> : null}
       <div
         data-testid="canvas-panel"
         className="absolute top-3 left-3 flex flex-col gap-1 rounded-md border bg-background p-2"
@@ -316,6 +480,7 @@ export function CanvasView({
           removeLabel={collectionId === undefined ? "Remove from canvas" : "Remove from collection"}
           actions={actions}
         />
+        <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
         {offCanvas > 0 ? (
           <div className="flex items-center gap-2">
             <p data-testid="off-canvas" data-count={offCanvas}>
@@ -386,6 +551,117 @@ function EditButtons({
   );
 }
 
+/** The one color the selected notes share, or "" when none is selected or they differ. */
+const selectedColor = (store: SceneStore) => {
+  const selection = store.selection();
+  const colors = new Set(
+    store
+      .items()
+      .flatMap((item) => (item.kind === "note" && selection.has(item.key) ? [item.color] : [])),
+  );
+  return colors.size === 1 ? [...colors][0]! : "";
+};
+
+function NoteButtons({
+  store,
+  color,
+  addNote,
+  recolor,
+}: {
+  store: SceneStore;
+  color: NoteColor;
+  addNote: () => void;
+  recolor: (color: NoteColor) => void;
+}) {
+  const shared = useSyncExternalStore(store.subscribe, () => selectedColor(store));
+  return (
+    <div className="flex gap-2">
+      <Button variant="outline" size="sm" onClick={addNote}>
+        Add note
+      </Button>
+      <NativeSelect
+        size="sm"
+        aria-label="Note color"
+        value={shared || color}
+        onChange={(event) => recolor(event.target.value as NoteColor)}
+      >
+        {noteColors.map((name) => (
+          <NativeSelectOption key={name} value={name}>
+            {name[0]!.toUpperCase() + name.slice(1)}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+    </div>
+  );
+}
+
+/**
+ * A textarea over a note, at its place, size, and turn, in its type and color. It grows with the
+ * text from the note's top-left corner. Leaving it or Mod+Enter saves, and Escape discards.
+ */
+function NoteEditor({
+  store,
+  draft,
+  done,
+}: {
+  store: SceneStore;
+  draft: Draft;
+  done: (text: string | null) => void;
+}) {
+  const { camera } = useSyncExternalStore(store.subscribe, store.summary);
+  const [text, setText] = useState(draft.before?.text ?? "");
+  const field = useRef<HTMLTextAreaElement>(null);
+  const finished = useRef(false);
+  const finish = (value: string | null) => {
+    if (finished.current) return;
+    finished.current = true;
+    done(value);
+  };
+  useEffect(() => {
+    const element = field.current!;
+    element.focus();
+    element.setSelectionRange(element.value.length, element.value.length);
+  }, []);
+  const box = boxFor(text === "" ? "Note" : text);
+  const unit = draft.scale * camera.zoom;
+  const corner = worldToScreen(camera, draft.corner);
+  return (
+    <textarea
+      ref={field}
+      aria-label="Note"
+      value={text}
+      placeholder="Note"
+      // The server refuses a longer note, and a refused save would lose what was typed.
+      maxLength={maxNoteText}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={() => finish(text)}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          finish(null);
+        } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          finish(text);
+        }
+      }}
+      className="absolute resize-none overflow-hidden bg-transparent outline outline-primary"
+      style={{
+        left: corner.x,
+        top: corner.y,
+        // A little room past the measured text, so the field does not wrap a line the note keeps whole.
+        width: (box.width + noteType.size / 4) * unit,
+        height: box.height * unit,
+        padding: noteType.padding * unit,
+        font: noteFont(noteType.size * unit),
+        lineHeight: `${noteType.lineHeight * unit}px`,
+        color: noteInk[draft.color],
+        transform: `rotate(${draft.rotation}rad)`,
+        transformOrigin: "0 0",
+      }}
+    />
+  );
+}
+
 function Readout({ store }: { store: SceneStore }) {
   const { items, selected, camera } = useSyncExternalStore(store.subscribe, store.summary);
   return (
@@ -397,11 +673,13 @@ function Readout({ store }: { store: SceneStore }) {
       data-camera-y={camera.y}
       data-selected={selected}
     >
-      {items} images, {Math.round(camera.zoom * 100)}%, at {Math.round(camera.x)},{" "}
+      {items} items, {Math.round(camera.zoom * 100)}%, at {Math.round(camera.x)},{" "}
       {Math.round(camera.y)}, {selected} selected
     </p>
   );
 }
+
+type Image = Extract<CanvasItem, { readonly kind: "image" }>;
 
 const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -414,9 +692,11 @@ function drive(
   outlines: HTMLDivElement,
   sign: Sign,
   save: (drop: Drop) => void,
+  editNote: (key: string) => void,
 ) {
   let renderer: Renderer | undefined;
   let textures: ReturnType<typeof createTextureLoader> | undefined;
+  let noteTextures: ReturnType<typeof createNoteTextures> | undefined;
   let frame = 0;
   let disposed = false;
   let spaceHeld = false;
@@ -427,7 +707,7 @@ function drive(
     if (!frame && !disposed) frame = requestAnimationFrame(draw);
   };
 
-  const textureFor = (item: CanvasItem, wanted: ImageRole): Need => {
+  const textureFor = (item: Image, wanted: ImageRole): Need => {
     const display = { refId: item.refId, role: "display" } as const;
     const thumbnail = { refId: item.refId, role: "thumbnail" } as const;
     if (wanted === "display" && textures!.has(display)) return display;
@@ -437,18 +717,24 @@ function drive(
 
   function draw() {
     frame = 0;
-    if (!renderer || !textures) return;
+    if (!renderer || !textures || !noteTextures) return;
     const camera = store.camera();
     const viewport = store.viewport();
     const items = store.items();
+    const images = items.flatMap((item) => (item.kind === "image" ? [item] : []));
+    noteTextures.update(
+      items.flatMap((item) => (item.kind === "note" ? [{ ...item, ...item.base }] : [])),
+    );
+    const editing = store.editing();
     const roles = new Map(
-      itemsInView(items, camera, viewport, loadMargin).map((item) => [
+      itemsInView(images, camera, viewport, loadMargin).map((item) => [
         item.key,
         imageRole(item, camera.zoom * devicePixelRatio),
       ]),
     );
     const byKey = new Map(items.map((item) => [item.key, item]));
-    const near = [...roles].map(([key, role]) => ({ refId: byKey.get(key)!.refId, role }));
+    const imageByKey = new Map(images.map((item) => [item.key, item]));
+    const near = [...roles].map(([key, role]) => ({ refId: imageByKey.get(key)!.refId, role }));
     textures.update([
       ...near.map(({ refId }) => ({ refId, role: "thumbnail" as const })),
       ...near.filter(({ role }) => role === "display"),
@@ -459,14 +745,15 @@ function drive(
     const displays: Array<string> = [];
     const changed: Array<SceneItem> = [];
     for (const item of items) {
-      const need = textureFor(item, roles.get(item.key) ?? "thumbnail");
-      if (visible.has(item.key) && textures.has(need)) {
+      const need =
+        item.kind === "image" ? textureFor(item, roles.get(item.key) ?? "thumbnail") : null;
+      if (need && visible.has(item.key) && textures.has(need)) {
         if (need.role === "display") displays.push(item.key);
         else thumbnails += 1;
       }
       const next: SceneItem = {
         key: item.key,
-        texture: textureKey(need),
+        texture: need ? textureKey(need) : item.key === editing ? "" : noteTextureKey(item.key),
         x: item.x,
         y: item.y,
         width: item.width,
@@ -503,6 +790,7 @@ function drive(
     }
     renderer = created;
     textures = createTextureLoader(created, sign, requestDraw);
+    noteTextures = createNoteTextures(created);
     requestDraw();
   });
   const unsubscribe = store.subscribe(requestDraw);
@@ -551,6 +839,10 @@ function drive(
   const onPointerUp = (event: PointerEvent) => {
     if (event.pointerId === pointerId) endGesture();
   };
+  const onDoubleClick = (event: MouseEvent) => {
+    const hit = topmostAt(store.items(), screenToWorld(store.camera(), at(event)));
+    if (hit?.kind === "note") editNote(hit.key);
+  };
   const onWheel = (event: WheelEvent) => {
     event.preventDefault();
     const perUnit = [1, 16, host.clientHeight][event.deltaMode] ?? 1;
@@ -584,6 +876,7 @@ function drive(
   host.addEventListener("pointerup", onPointerUp);
   host.addEventListener("pointercancel", onPointerUp);
   host.addEventListener("lostpointercapture", onPointerUp);
+  host.addEventListener("dblclick", onDoubleClick);
   host.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
@@ -600,6 +893,7 @@ function drive(
     host.removeEventListener("pointerup", onPointerUp);
     host.removeEventListener("pointercancel", onPointerUp);
     host.removeEventListener("lostpointercapture", onPointerUp);
+    host.removeEventListener("dblclick", onDoubleClick);
     host.removeEventListener("wheel", onWheel);
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);

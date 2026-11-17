@@ -28,6 +28,7 @@ import {
   toPage,
   until,
   waitForCanvas,
+  refOf,
 } from "./canvas-screen";
 
 const images = [
@@ -142,7 +143,7 @@ try {
   assert(
     afterDelete.rev === beforeDelete.rev + 1 &&
       find(afterDelete.items, red.key) === undefined &&
-      (await libraryOf(owner)).includes(red.refId),
+      (await libraryOf(owner)).includes(refOf(red)),
     `Delete removes the selected image with one apply call, rev ${beforeDelete.rev} to ${afterDelete.rev}: canvas.open no longer returns it, and the library's gallery still lists it`,
   );
 
@@ -515,7 +516,7 @@ try {
   const board = await owner.mutation(api.collections.create, { name: "Board" });
   await owner.mutation(api.collections.addRefs, {
     collectionId: board,
-    refIds: [red.refId, green.refId],
+    refIds: [refOf(red), refOf(green)],
   });
   await page.goto(`${appUrl}/c/${board}?view=canvas`);
   await waitForCanvas(page, 2);
@@ -540,8 +541,8 @@ try {
     "Delete on the collection's canvas",
   );
   assert(
-    !(await galleryOf(owner, board)).includes(red.refId) &&
-      (await libraryOf(owner)).includes(red.refId),
+    !(await galleryOf(owner, board)).includes(refOf(red)) &&
+      (await libraryOf(owner)).includes(refOf(red)),
     "on a collection's canvas Delete takes the image out of the collection, and it stays in the library",
   );
   await press(page, "ControlOrMeta+z");
@@ -552,7 +553,7 @@ try {
   );
   const boardBack = await owner.mutation(api.canvas.open, { collectionId: board });
   assert(
-    (await galleryOf(owner, board)).includes(red.refId) &&
+    (await galleryOf(owner, board)).includes(refOf(red)) &&
       samePlace(find(boardBack.items, red.key), redInBoard),
     `undo puts the image back in the collection and on its canvas, at the same position, scale, rotation, and z: ${JSON.stringify(placeOf(redInBoard))}`,
   );

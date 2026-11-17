@@ -7,6 +7,7 @@ export const keymap = [
   { hotkey: "Control+Y", action: "redo" },
   { hotkey: "Mod+A", action: "selectAll" },
   { hotkey: "Escape", action: "clearSelection" },
+  { hotkey: "N", action: "addNote" },
   { hotkey: "]", action: "bringToFront" },
   { hotkey: "[", action: "sendToBack" },
   // Some macOS layouts, German and French among them, type a bracket with Option held.

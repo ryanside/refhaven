@@ -36,5 +36,6 @@ export * from "./camera";
 export * from "./history";
 export * from "./hit";
 export * from "./layout";
+export * from "./note";
 export * from "./store";
 export * from "./transform";

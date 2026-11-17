@@ -21,6 +21,7 @@ const actionOf = (press: Press) => {
 };
 
 test.each([
+  ["the n key", "addNote", { key: "n", code: "KeyN" }],
   ["a US keyboard's ] key", "bringToFront", { key: "]", code: "BracketRight" }],
   ["a US keyboard's [ key", "sendToBack", { key: "[", code: "BracketLeft" }],
   [

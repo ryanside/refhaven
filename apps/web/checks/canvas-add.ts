@@ -13,6 +13,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
+import { refOf } from "./canvas-screen";
 
 type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
 
@@ -142,7 +143,7 @@ try {
       sinceOpened.rev === freshRev &&
       sinceOpened.items.length === 1 &&
       added.key === fresh &&
-      added.refId === fresh &&
+      refOf(added) === fresh &&
       added.x === 1234.5 &&
       added.y === -678 &&
       added.width === 800 &&
@@ -168,7 +169,7 @@ try {
     ],
   });
   const sinceFresh = await changesSince(freshRev);
-  const byRef = new Map(sinceFresh.items.map((item) => [item.refId as string, item]));
+  const byRef = new Map(sinceFresh.items.map((item) => [refOf(item), item]));
   const mixedRows = (await libraryRows()).filter((row) => row.rev === mixedRev);
   assert(
     mixedRev === freshRev + 1 &&
@@ -191,7 +192,7 @@ try {
   });
   const afterRemove = await owner.mutation(api.canvas.open, {});
   assert(
-    afterRemove.rev === removedRev && afterRemove.items.every((item) => item.refId !== b),
+    afterRemove.rev === removedRev && afterRemove.items.every((item) => refOf(item) !== b),
     `on the library's canvas open does not place a removed item's Ref again: ${afterRemove.items.length} items at rev ${afterRemove.rev}`,
   );
   const backRev = await owner.mutation(api.canvas.apply, {
@@ -260,7 +261,7 @@ try {
   await owner.mutation(api.canvas.apply, { canvasId, ops: [{ op: "remove", key: lowest.key }] });
   await owner.mutation(api.canvas.apply, {
     canvasId,
-    ops: [{ op: "add", refId: lowest.refId, x: lowest.x, y: lowest.y, z: lowest.z }],
+    ops: [{ op: "add", refId: refOf(lowest), x: lowest.x, y: lowest.y, z: lowest.z }],
   });
   const restored = (await owner.mutation(api.canvas.open, {})).items.find(
     (item) => item.key === lowest.key,

@@ -13,6 +13,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
+import { refOf } from "./canvas-screen";
 
 type Item = FunctionReturnType<typeof api.canvas.open>["items"][number];
 
@@ -93,7 +94,7 @@ try {
   assert(
     opened.items.length === 3 &&
       opened.items
-        .map((item) => item.refId)
+        .map((item) => refOf(item))
         .sort()
         .join() === [...savedRefIds].sort().join() &&
       sizes(opened.items).join() === "1200x800,300x300,400x1200",
@@ -172,7 +173,7 @@ try {
   assert(
     afterRemove.rev === removedRev &&
       afterRemove.items.length === 3 &&
-      afterRemove.items.every((item) => item.refId !== removed!.refId) &&
+      afterRemove.items.every((item) => refOf(item) !== refOf(removed!)) &&
       afterRemove.removed === 1,
     `open leaves the removed item out, does not place its Ref again, and counts ${afterRemove.removed} image off the canvas: ${afterRemove.items.length} items at rev ${afterRemove.rev}`,
   );
@@ -330,7 +331,7 @@ try {
   const settled = await other.mutation(api.canvas.open, {});
   assert(
     settled.items.length === 2 &&
-      new Set(settled.items.map((item) => item.refId)).size === 2 &&
+      new Set(settled.items.map((item) => refOf(item))).size === 2 &&
       (await rows("canvasItems")).filter((row) => row.canvasId === own.canvasId).length === 2,
     `two opens at once place each new image once: ${settled.items.length} items at rev ${settled.rev}`,
   );
