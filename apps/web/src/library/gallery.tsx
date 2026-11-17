@@ -49,26 +49,45 @@ export function SaveImages({ collectionId }: { collectionId?: Id<"collections"> 
   );
 
   useEffect(() => {
-    // A browser refuses a drop unless `dragover` was cancelled, and then opens the file instead.
+    // `dragstart` fires only for a drag that begins in this page, such as a card's own image.
+    // A browser can carry that image as a file, and dropping it back must not save it again.
+    let fromThisPage = false;
+    const startOwnDrag = () => {
+      fromThisPage = true;
+    };
+    const endOwnDrag = () => {
+      fromThisPage = false;
+    };
+    const takes = (event: DragEvent) => carriesFiles(event) && !fromThisPage;
+    // A browser performs a drop only when `dragover` was cancelled. During `dragover` it hides the
+    // files and shows only their type.
     const allowDrop = (event: DragEvent) => {
-      if (carriesFiles(event)) event.preventDefault();
+      if (takes(event)) event.preventDefault();
     };
     const saveDropped = (event: DragEvent) => {
-      if (!carriesFiles(event)) return;
+      if (!takes(event)) return;
       event.preventDefault();
       void saveAll(Array.from(event.dataTransfer!.files));
     };
-    // A paste with no file is text for whichever field has focus.
+    // A paste into a text field belongs to the field, even when it carries a picture of the text,
+    // as a copy from a spreadsheet does. A paste with no file is text.
     const savePasted = (event: ClipboardEvent) => {
       const files = Array.from(event.clipboardData?.files ?? []);
-      if (files.length === 0) return;
+      const intoField =
+        event.target instanceof Element &&
+        event.target.closest("input, textarea, [contenteditable]") !== null;
+      if (files.length === 0 || intoField) return;
       event.preventDefault();
       void saveAll(files);
     };
+    document.addEventListener("dragstart", startOwnDrag);
+    document.addEventListener("dragend", endOwnDrag);
     document.addEventListener("dragover", allowDrop);
     document.addEventListener("drop", saveDropped);
     document.addEventListener("paste", savePasted);
     return () => {
+      document.removeEventListener("dragstart", startOwnDrag);
+      document.removeEventListener("dragend", endOwnDrag);
       document.removeEventListener("dragover", allowDrop);
       document.removeEventListener("drop", saveDropped);
       document.removeEventListener("paste", savePasted);
