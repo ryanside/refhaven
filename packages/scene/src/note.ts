@@ -6,6 +6,9 @@ export const noteColors = ["black", "red", "orange", "green", "blue", "purple"] 
 
 export type NoteColor = (typeof noteColors)[number];
 
+/** The most characters a note's text holds. The server refuses more, and the editor stops there. */
+export const maxNoteText = 2000;
+
 /** A note's type at scale 1, in world units. A line wraps at `maxWidth`, padding included. */
 export const noteType = { size: 16, lineHeight: 22, padding: 6, maxWidth: 320 } as const;
 

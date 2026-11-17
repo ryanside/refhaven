@@ -540,6 +540,27 @@ try {
     "undo of an edit restores the old text and its box",
   );
 
+  // More text than a note may hold. The editor must stop at the limit, because the server refuses
+  // a longer note and a refused save would lose what was typed.
+  await page.getByRole("button", { name: "Add note" }).click();
+  await editor.waitFor();
+  await page.keyboard.insertText("w".repeat(2100));
+  const held = (await editor.inputValue()).length;
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await items(5);
+  const long = await until(
+    async () =>
+      (await snapshot()).items.find((item) => item.kind === "note" && item.text.startsWith("www")),
+    (found) => found !== undefined,
+    "the long note to save",
+  );
+  assert(
+    held === 2000 && long?.kind === "note" && long.text.length === 2000,
+    `the editor stops a note at 2,000 characters, and what it holds is saved: ${held} held`,
+  );
+  await page.keyboard.press("ControlOrMeta+z");
+  await items(4);
+
   calls = applied.length;
   await page.getByRole("button", { name: "Add note" }).click();
   await editor.waitFor();

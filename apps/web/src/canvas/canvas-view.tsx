@@ -6,35 +6,36 @@ import { Button } from "@refhaven/ui/components/button";
 import { NativeSelect, NativeSelectOption } from "@refhaven/ui/components/native-select";
 import { createPixiRenderer } from "@refhaven/renderer/pixi";
 import {
-  type Camera,
-  type CanvasItem,
-  type Drop,
-  type Entry,
-  type Handle,
-  type History,
-  type ImageRole,
-  type ItemOp,
-  type NoteAdd,
-  type NoteColor,
-  type Point,
-  type Rect,
-  type SceneItem,
-  type SceneStore,
   addEntry,
   callsOf,
+  type Camera,
+  type CanvasItem,
   centerFrom,
   createHistory,
   createSceneStore,
+  type Drop,
+  type Entry,
+  type Handle,
   handles,
+  type History,
+  type ImageRole,
   imageRole,
+  type ItemOp,
   itemsInView,
+  maxNoteText,
+  type NoteAdd,
+  type NoteColor,
   noteColors,
   noteEntry,
   noteType,
   patchEntry,
   placedEdge,
   placementGap,
+  type Point,
+  type Rect,
   removalEntry,
+  type SceneItem,
+  type SceneStore,
   screenToWorld,
   topLeftOf,
   topmostAt,
@@ -630,6 +631,8 @@ function NoteEditor({
       aria-label="Note"
       value={text}
       placeholder="Note"
+      // The server refuses a longer note, and a refused save would lose what was typed.
+      maxLength={maxNoteText}
       onChange={(event) => setText(event.target.value)}
       onBlur={() => finish(text)}
       onKeyDown={(event) => {

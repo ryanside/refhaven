@@ -1,4 +1,4 @@
-import { isZ, noteColors } from "@refhaven/scene";
+import { isZ, maxNoteText, noteColors } from "@refhaven/scene";
 import * as Schema from "effect/Schema";
 import { Id } from "./_generated/id";
 
@@ -20,7 +20,7 @@ export const ItemKey = Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLeng
 /** The fields of a note that an edit can change. `width` and `height` are its box at scale 1. */
 export const noteFields = {
   text: Schema.String.check(
-    Schema.isMaxLength(2000),
+    Schema.isMaxLength(maxNoteText),
     Schema.makeFilter((text: string) => text.trim() !== "", {
       expected: "text that is not only spaces",
     }),
