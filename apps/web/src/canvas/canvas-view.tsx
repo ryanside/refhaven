@@ -15,6 +15,7 @@ import {
   type SceneItem,
   type SceneStore,
   addEntry,
+  callsOf,
   createHistory,
   createSceneStore,
   imageRole,
@@ -65,6 +66,17 @@ const reached = (store: SceneStore, rev: number) =>
       if (store.rev() >= rev) done();
     });
     const timer = setTimeout(done, 5000);
+  });
+
+/** Resolves when no gesture is under way. */
+const idle = (store: SceneStore) =>
+  new Promise<void>((resolve) => {
+    if (store.gesture().kind === "idle") return resolve();
+    const stop = store.subscribe(() => {
+      if (store.gesture().kind !== "idle") return;
+      stop();
+      resolve();
+    });
   });
 
 /** The canvas of a set: the collection's, or the whole library's when `collectionId` is absent. */
@@ -132,19 +144,27 @@ export function CanvasView({
     latestBase.current = base;
   }, [base]);
 
-  /** Saves ops with one call, and settles the hold that shows their positions. */
+  /**
+   * Saves ops and settles the hold that shows their positions. An edit of more ops than one call
+   * takes is sent as several calls, one after the other, and stops at the first that fails.
+   */
   const send = useCallback(
     async (ops: ReadonlyArray<ItemOp>, save: number) => {
       const canvasId = latestBase.current?.canvasId;
-      const result = canvasId
-        ? await apply({ canvasId, ops: ops.map(toApplyOp) }).catch(() => null)
-        : null;
-      if (result && Result.isSuccess(result)) {
-        store.acknowledge(save, result.success);
-        return result.success;
+      let rev: number | null = null;
+      for (const call of canvasId ? callsOf(ops) : []) {
+        const result = await apply({ canvasId: canvasId!, ops: call.map(toApplyOp) }).catch(
+          () => null,
+        );
+        rev = result && Result.isSuccess(result) ? result.success : null;
+        if (rev === null) break;
       }
-      store.reject(save);
-      return null;
+      if (rev === null) {
+        store.reject(save);
+        return null;
+      }
+      store.acknowledge(save, rev);
+      return rev;
     },
     [apply, store],
   );
@@ -156,11 +176,13 @@ export function CanvasView({
   /** Runs `save` in turn. It resolves to the rev it wrote, or null when it wrote nothing. */
   const inOrder = useCallback(
     (save: () => Promise<number | null>) => {
-      queue.current = queue.current.then(async () => {
+      const turn = queue.current.then(async () => {
         const rev = await save();
         if (rev !== null) await reached(store, rev);
       });
-      return queue.current;
+      // A turn that fails must not stop the turns after it.
+      queue.current = turn.catch(() => undefined);
+      return turn;
     },
     [store],
   );
@@ -181,14 +203,18 @@ export function CanvasView({
     [history, inOrder, send],
   );
 
-  // A gesture holds the places its items had when it began. Undoing under it would leave those
-  // places stale, so history and removal wait for the pointer to let go.
+  // A gesture holds the places its items had when it began, and undoing under it would leave
+  // those places stale. So a key pressed during a drag does nothing. The entry leaves its stack
+  // when the key is pressed, like an edit joins it when it is made, so the two stay in the order
+  // they happened even while their saves wait their turn.
   const step = useCallback(
-    (direction: "undo" | "redo") =>
+    (direction: "undo" | "redo") => {
+      if (store.gesture().kind !== "idle") return;
+      const entry = direction === "undo" ? history.undo() : history.redo();
+      if (!entry) return;
       void inOrder(async () => {
-        if (store.gesture().kind !== "idle") return null;
-        const entry = direction === "undo" ? history.undo() : history.redo();
-        if (!entry) return null;
+        // A drag that began while this waited its turn ends first.
+        await idle(store);
         const ops = entry[direction];
         const rev = store.applies(ops) ? await send(ops, store.hold(ops)) : null;
         if (rev === null) {
@@ -196,7 +222,8 @@ export function CanvasView({
           setProblem(`That change could not be ${direction === "undo" ? "undone" : "redone"}.`);
         }
         return rev;
-      }),
+      });
+    },
     [history, inOrder, send, store],
   );
 
@@ -284,7 +311,11 @@ export function CanvasView({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void inOrder(() => takeSnapshot(true).then(() => null))}
+              onClick={() =>
+                void inOrder(() => takeSnapshot(true).then(() => null)).catch(() =>
+                  setProblem("The images could not be put back."),
+                )
+              }
             >
               Put them back
             </Button>
