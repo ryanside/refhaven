@@ -35,3 +35,13 @@ export const ownedRef = (refId: Id<"refs">) =>
     }
     return ref;
   });
+
+/** An owned Ref that is not in the trash. A Ref in the trash fails as a missing one does. */
+export const ownedLiveRef = (refId: Id<"refs">) =>
+  Effect.gen(function* () {
+    const ref = yield* ownedRef(refId);
+    if (!isLive(ref)) {
+      return yield* new RefNotFound();
+    }
+    return ref;
+  });

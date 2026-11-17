@@ -6,11 +6,10 @@ import databaseSchema from "./_generated/schema";
 import { DatabaseReader, DatabaseWriter } from "./_generated/services";
 import collections from "./collections.spec";
 import { galleryItem } from "./library.impl";
-import { RefNotFound } from "./library.spec";
 import { addMember, canvasOf, leaveCollection, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
-import { isLive, ownedRef } from "./ref";
+import { isLive, ownedLiveRef } from "./ref";
 
 const create = FunctionImpl.make(databaseSchema, collections, "create", ({ name }) =>
   Effect.gen(function* () {
@@ -51,13 +50,7 @@ const addRefs = FunctionImpl.make(
       yield* ownedCollection(collectionId);
       yield* Effect.forEach(
         refIds,
-        (refId) =>
-          Effect.gen(function* () {
-            if (!isLive(yield* ownedRef(refId))) {
-              return yield* new RefNotFound();
-            }
-            yield* addMember(collectionId, refId);
-          }),
+        (refId) => ownedLiveRef(refId).pipe(Effect.andThen(addMember(collectionId, refId))),
         { discard: true },
       );
       return null;
