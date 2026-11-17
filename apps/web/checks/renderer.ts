@@ -3,6 +3,7 @@ import { chromium } from "playwright";
 import { appUrl, assert } from "./browser";
 
 const color = [220, 40, 120, 255];
+const smallColor = [30, 160, 90, 255];
 const rendererModule = `/@fs${path.resolve(import.meta.dir, "../../../packages/renderer/src/pixi.ts")}`;
 
 const browser = await chromium.launch();
@@ -10,21 +11,33 @@ try {
   const page = await browser.newPage();
   await page.goto(appUrl);
   const pixels = await page.evaluate(
-    async ({ rendererModule, color }) => {
+    async ({ rendererModule, color, smallColor }) => {
       const { createPixiRenderer } = await import(rendererModule);
       const host = document.createElement("div");
       host.style.cssText = "width:400px;height:320px";
       document.body.appendChild(host);
       const renderer = await createPixiRenderer(host);
 
-      const image = document.createElement("canvas");
-      image.width = image.height = 256;
-      const context = image.getContext("2d")!;
-      context.fillStyle = `rgb(${color.slice(0, 3).join(",")})`;
-      context.fillRect(0, 0, 256, 256);
-      renderer.uploadTexture("local", await createImageBitmap(image));
+      const bitmapOf = async (rgba: number[], size: number) => {
+        const image = document.createElement("canvas");
+        image.width = image.height = size;
+        const context = image.getContext("2d")!;
+        context.fillStyle = `rgb(${rgba.slice(0, 3).join(",")})`;
+        context.fillRect(0, 0, size, size);
+        return createImageBitmap(image);
+      };
+      renderer.uploadTexture("local", await bitmapOf(color, 256));
       renderer.upsertItems([
-        { key: "item", texture: "local", x: 160, y: 160, scale: 1, rotation: 0, z: "a0" },
+        {
+          key: "item",
+          texture: "local",
+          x: 160,
+          y: 160,
+          width: 200,
+          height: 100,
+          rotation: 0,
+          z: "a0",
+        },
       ]);
 
       const canvas = host.querySelector("canvas")!;
@@ -44,25 +57,61 @@ try {
         return [...pixel];
       };
 
+      const edges = () => ({
+        insideRight: pixelAt(255, 160),
+        outsideRight: pixelAt(265, 160),
+        insideBottom: pixelAt(160, 205),
+        outsideBottom: pixelAt(160, 215),
+      });
+
       renderer.draw();
       const insideItem = pixelAt(160, 160);
       const outsideItem = pixelAt(380, 300);
+      const sizedByItem = edges();
+      renderer.uploadTexture("local", await bitmapOf(smallColor, 32));
+      renderer.draw();
+      const afterSmallTexture = { center: pixelAt(160, 160), ...edges() };
       renderer.setCamera({ x: 100, y: 0, zoom: 1 });
       renderer.draw();
       const insideItemAfterPan = pixelAt(60, 160);
-      return { insideItem, outsideItem, insideItemAfterPan, api: gl.getParameter(gl.VERSION) };
+      return {
+        insideItem,
+        outsideItem,
+        sizedByItem,
+        afterSmallTexture,
+        insideItemAfterPan,
+        api: gl.getParameter(gl.VERSION),
+      };
     },
-    { rendererModule, color },
+    { rendererModule, color, smallColor },
   );
 
   const same = (a: number[], b: number[]) => a.join() === b.join();
+  const clear = [0, 0, 0, 0];
   assert(
     same(pixels.insideItem, color),
     `a bitmap uploaded as a texture is drawn with its color on ${pixels.api}: ${pixels.insideItem}`,
   );
-  assert(same(pixels.outsideItem, [0, 0, 0, 0]), "the canvas is transparent outside the item");
+  assert(same(pixels.outsideItem, clear), "the canvas is transparent outside the item");
+  const coversItemSize = (
+    edges: Record<"insideRight" | "outsideRight" | "insideBottom" | "outsideBottom", number[]>,
+    fill: number[],
+  ) =>
+    same(edges.insideRight, fill) &&
+    same(edges.outsideRight, clear) &&
+    same(edges.insideBottom, fill) &&
+    same(edges.outsideBottom, clear);
   assert(
-    same(pixels.insideItemAfterPan, color),
+    coversItemSize(pixels.sizedByItem, color),
+    "a 256 px texture on a 200 by 100 item covers 200 by 100 screen pixels at 100%",
+  );
+  assert(
+    same(pixels.afterSmallTexture.center, smallColor) &&
+      coversItemSize(pixels.afterSmallTexture, smallColor),
+    "a 32 px texture uploaded under the same key covers the same 200 by 100 pixels",
+  );
+  assert(
+    same(pixels.insideItemAfterPan, smallColor),
     "the item moves 100 px left when the camera moves 100 world units right",
   );
 } finally {
