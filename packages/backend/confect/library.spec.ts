@@ -44,9 +44,6 @@ export const GalleryItem = Schema.Struct({
 /** An image in the trash, with the time it was deleted. */
 export const TrashedItem = Schema.Struct({ ...GalleryItem.fields, deletedAt: Schema.Number });
 
-/** The most images a filtered gallery shows. */
-export const filterLimit = 200;
-
 export const RefIds = Schema.Array(Id("refs")).check(Schema.isMaxLength(100));
 
 export class UploadNotFound extends Schema.TaggedError<UploadNotFound>()("UploadNotFound", {}) {}

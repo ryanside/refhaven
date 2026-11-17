@@ -19,12 +19,7 @@ import {
   variantKey,
   variantRoles,
 } from "./blob";
-import library, {
-  ImageTooLarge,
-  UnsupportedImage,
-  UploadNotFound,
-  filterLimit,
-} from "./library.spec";
+import library, { ImageTooLarge, UnsupportedImage, UploadNotFound } from "./library.spec";
 import { addMember, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
@@ -210,6 +205,9 @@ const list = FunctionImpl.make(databaseSchema, library, "list", ({ paginationOpt
     return { ...result, page: yield* Effect.forEach(result.page, galleryItem) };
   }).pipe(Effect.orDie),
 );
+
+/** The most images a filtered gallery shows. */
+const filterLimit = 200;
 
 // A search reads at most 1,024 results, so every kind of filter reads at most that many Refs.
 const scanLimit = 1024;
