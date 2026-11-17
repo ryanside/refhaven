@@ -39,26 +39,24 @@ export type ServerState = { readonly rev: number; readonly items: ReadonlyArray<
  * screen pixels, and the poses its items had at the press.
  */
 type Editing = {
+  readonly from: Point;
   readonly fromWorld: Point;
   readonly pointer: Point;
+  readonly moved: boolean;
   readonly origins: ReadonlyMap<string, Pose>;
 };
 
 /**
- * The pointer's one gesture. A press on an item starts a drag that has not `moved` yet. Releasing it
- * then is a click. `collapseTo` is the item a click selects alone, when the press kept a larger
- * selection so that the drag could move all of it. A press on a handle of the selection's frame
- * starts a resize about the opposite point, or a rotate about the frame's center.
+ * The pointer's one gesture. A press on an item starts a drag, and a press on a handle of the
+ * selection's frame starts a resize about the opposite point or a rotate about the frame's center.
+ * None has `moved` until the pointer travels past `dragThreshold`, and one released before that
+ * changes nothing. `collapseTo` is the item a click selects alone, when the press kept a larger
+ * selection so that the drag could move all of it.
  */
 export type Gesture =
   | { readonly kind: "idle" }
   | { readonly kind: "panning"; readonly last: Point }
-  | (Editing & {
-      readonly kind: "dragging";
-      readonly from: Point;
-      readonly moved: boolean;
-      readonly collapseTo: string | null;
-    })
+  | (Editing & { readonly kind: "dragging"; readonly collapseTo: string | null })
   | (Editing & { readonly kind: "resizing"; readonly handle: Handle; readonly frame: Rect })
   | (Editing & { readonly kind: "rotating"; readonly center: Point; readonly snap: boolean });
 
@@ -69,8 +67,20 @@ const savedFields = {
   rotating: ({ x, y, rotation }: Pose) => ({ x, y, rotation }),
 };
 
-const differs = (a: Partial<Pose>, b: Partial<Pose>) =>
-  (Object.keys(a) as Array<keyof Pose>).some((field) => a[field] !== b[field]);
+/**
+ * The fields of `to` that differ from `from`, with both values. A patch names only these, so a
+ * turn of one item about its own center does not write its place over another tab's move (C11).
+ * A place is one value: when either of `x` and `y` changed, both are named.
+ */
+const changedFields = (from: Partial<Pose>, to: Partial<Pose>) => {
+  const moved = to.x !== from.x || to.y !== from.y;
+  const fields = (Object.keys(to) as Array<keyof Pose>).filter((field) =>
+    field === "x" || field === "y" ? moved : to[field] !== from[field],
+  );
+  const only = (pose: Partial<Pose>) =>
+    Object.fromEntries(fields.map((field) => [field, pose[field]])) as Partial<Pose>;
+  return fields.length === 0 ? null : { from: only(from), to: only(to) };
+};
 
 const poseOf = ({ x, y, scale, rotation }: Pose): Pose => ({ x, y, scale, rotation });
 
@@ -107,7 +117,11 @@ export function createSceneStore() {
   let selection: ReadonlySet<string> = new Set();
   let saves = 0;
   const server = new Map<string, ServerItem>();
-  const pending = new Map<string, { fields: Partial<Pose>; save: number; rev: number | null }>();
+  // Each held field remembers the save that set it, so a save that fails takes back only its own.
+  type Held = { readonly value: number; readonly save: number; rev: number | null };
+  const pending = new Map<string, Map<keyof Pose, Held>>();
+  const heldPose = (key: string): Partial<Pose> =>
+    Object.fromEntries([...(pending.get(key) ?? [])].map(([field, { value }]) => [field, value]));
   const listeners = new Set<() => void>();
 
   let shown: ReadonlyArray<CanvasItem> | null = null;
@@ -128,11 +142,10 @@ export function createSceneStore() {
 
   /** The poses the gesture gives its items now, or null when it changes none. */
   const live = (): ReadonlyMap<string, Pose> | null => {
-    if (gesture.kind === "idle" || gesture.kind === "panning") return null;
+    if (gesture.kind === "idle" || gesture.kind === "panning" || !gesture.moved) return null;
     const to = screenToWorld(camera, gesture.pointer);
     switch (gesture.kind) {
       case "dragging": {
-        if (!gesture.moved) return null;
         const dx = to.x - gesture.fromWorld.x;
         const dy = to.y - gesture.fromWorld.y;
         return new Map(
@@ -160,7 +173,7 @@ export function createSceneStore() {
     if (shown) return shown;
     const now = live();
     shown = [...server.values()].map((item) =>
-      sized({ ...item, ...pending.get(item.key)?.fields, ...now?.get(item.key) }),
+      sized({ ...item, ...heldPose(item.key), ...now?.get(item.key) }),
     );
     return shown;
   };
@@ -168,8 +181,11 @@ export function createSceneStore() {
   const selected = () => items().filter((item) => selection.has(item.key));
 
   const settle = () => {
-    for (const [key, local] of pending) {
-      if ((local.rev !== null && local.rev <= rev) || !server.has(key)) pending.delete(key);
+    for (const [key, held] of pending) {
+      for (const [field, local] of held) {
+        if (local.rev !== null && local.rev <= rev) held.delete(field);
+      }
+      if (held.size === 0 || !server.has(key)) pending.delete(key);
     }
   };
 
@@ -204,7 +220,11 @@ export function createSceneStore() {
     const save = ++saves;
     for (const { key, ...fields } of posesOf(ops)) {
       if (!server.has(key)) continue;
-      pending.set(key, { fields: { ...pending.get(key)?.fields, ...fields }, save, rev: null });
+      const held = pending.get(key) ?? new Map<keyof Pose, Held>();
+      for (const [field, value] of Object.entries(fields) as Array<[keyof Pose, number]>) {
+        held.set(field, { value, save, rev: null });
+      }
+      pending.set(key, held);
     }
     changed();
     return save;
@@ -275,8 +295,10 @@ export function createSceneStore() {
 
     /** The save of a hold wrote `savedRev`. Its items show the server state from that rev on. */
     acknowledge(save: number, savedRev: number) {
-      for (const local of pending.values()) {
-        if (local.save === save) local.rev = savedRev;
+      for (const held of pending.values()) {
+        for (const local of held.values()) {
+          if (local.save === save) local.rev = savedRev;
+        }
       }
       settle();
       changed();
@@ -284,9 +306,12 @@ export function createSceneStore() {
 
     /** The save of a hold failed, so its items go back to the server state. */
     reject(save: number) {
-      for (const [key, local] of pending) {
-        if (local.save === save) pending.delete(key);
+      for (const held of pending.values()) {
+        for (const [field, local] of held) {
+          if (local.save === save) held.delete(field);
+        }
       }
+      settle();
       changed();
     },
 
@@ -356,8 +381,10 @@ export function createSceneStore() {
       const frame = frameOf(chosen);
       if (!frame) return;
       const editing = {
+        from: screen,
         fromWorld: screenToWorld(camera, screen),
         pointer: screen,
+        moved: false,
         origins: new Map(chosen.map((item) => [item.key, poseOf(item)])),
       };
       gesture =
@@ -373,18 +400,15 @@ export function createSceneStore() {
         camera = panBy(camera, { x: gesture.last.x - screen.x, y: gesture.last.y - screen.y });
         gesture = { kind: "panning", last: screen };
         changed();
-      } else if (gesture.kind === "dragging") {
+      } else if (gesture.kind !== "idle") {
         const moved =
           gesture.moved ||
           Math.hypot(screen.x - gesture.from.x, screen.y - gesture.from.y) > dragThreshold;
-        gesture = { ...gesture, pointer: screen, moved };
+        gesture =
+          gesture.kind === "rotating"
+            ? { ...gesture, pointer: screen, moved, snap }
+            : { ...gesture, pointer: screen, moved };
         if (moved) changed();
-      } else if (gesture.kind === "resizing") {
-        gesture = { ...gesture, pointer: screen };
-        changed();
-      } else if (gesture.kind === "rotating") {
-        gesture = { ...gesture, pointer: screen, snap };
-        changed();
       }
     },
 
@@ -398,13 +422,14 @@ export function createSceneStore() {
       gesture = { kind: "idle" };
       if (now && ended.kind !== "idle" && ended.kind !== "panning") {
         const pick = savedFields[ended.kind];
-        const edited = [...now].filter(([key, pose]) =>
-          differs(pick(pose), pick(ended.origins.get(key)!)),
-        );
+        const edited = [...now].flatMap(([key, pose]) => {
+          const fields = changedFields(pick(ended.origins.get(key)!), pick(pose));
+          return fields ? [{ key, ...fields }] : [];
+        });
         if (edited.length > 0) {
           const entry = patchEntry(
-            edited.map(([key]) => ({ key, ...pick(ended.origins.get(key)!) })),
-            edited.map(([key, pose]) => ({ key, ...pick(pose) })),
+            edited.map(({ key, from }) => ({ key, ...from })),
+            edited.map(({ key, to }) => ({ key, ...to })),
           );
           return { save: hold(entry.redo), entry };
         }

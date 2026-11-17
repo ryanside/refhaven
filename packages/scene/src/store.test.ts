@@ -473,3 +473,53 @@ test("a hold shows scale and rotation at once, and a later hold keeps the fields
   store.applyChanges({ rev: 4, items: [{ ...a, scale: 3 }] });
   expect(item(store, "a")).toMatchObject({ x: 0, y: 0, scale: 3, rotation: 0 });
 });
+
+test("a turn of one item about its own center saves only its rotation", () => {
+  const { store, screen } = setUp();
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.release();
+
+  store.grab("rotate", screen({ x: 0, y: -200 }));
+  store.move(screen({ x: 100, y: -200 }));
+  const drop = store.release()!;
+
+  // Its place did not change, so the patch must not name it. Another tab may have moved it.
+  const [redo] = drop.entry.redo;
+  expect(redo).toMatchObject({ op: "patch", key: "a" });
+  expect(Object.keys(redo?.op === "patch" ? redo.fields : {})).toEqual(["rotation"]);
+  expect(item(store, "a").rotation).toBeCloseTo(Math.atan2(100, 200), 9);
+  expect(drop.entry.undo).toEqual([{ op: "patch", key: "a", fields: { rotation: 0 } }]);
+});
+
+test("a press on a handle that moves less than the threshold saves nothing and changes nothing", () => {
+  const { store, screen } = setUp();
+  store.press(screen({ x: 0, y: 0 }), false);
+  store.release();
+  const grip = screen(handleAt(store.frame()!, "se"));
+
+  store.grab("se", grip);
+  store.move({ x: grip.x + 2, y: grip.y + 1 });
+
+  expect(item(store, "a")).toMatchObject({ x: 0, y: 0, scale: 0.5 });
+  expect(store.release()).toBeNull();
+});
+
+test("a save that fails takes back the fields it set, and leaves a later save's fields held", () => {
+  const { store } = setUp();
+  const resize = store.hold([{ op: "patch", key: "a", fields: { scale: 1 } }]);
+  store.hold([{ op: "patch", key: "a", fields: { rotation: 1 } }]);
+
+  store.reject(resize);
+
+  expect(item(store, "a")).toMatchObject({ scale: 0.5, rotation: 1 });
+});
+
+test("a later save of the same field takes it over, so the earlier save's failure leaves it", () => {
+  const { store } = setUp();
+  const first = store.hold([{ op: "patch", key: "a", fields: { x: 10, y: 10 } }]);
+  store.hold([{ op: "patch", key: "a", fields: { x: 20, y: 20 } }]);
+
+  store.reject(first);
+
+  expect(item(store, "a")).toMatchObject({ x: 20, y: 20 });
+});
