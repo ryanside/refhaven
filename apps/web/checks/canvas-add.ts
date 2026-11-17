@@ -1,6 +1,6 @@
 import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
-import { placedEdge } from "@refhaven/scene";
+import { placedEdge, zAbove } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
 import type { FunctionReturnType } from "convex/server";
 import type { Page } from "playwright";
@@ -153,11 +153,17 @@ try {
     `add places a Ref with no item at the given point, keyed by its Ref's ID, above every other item, with its longer edge at ${longerEdge(added)}, and changes reports it at rev ${opened.rev} to ${freshRev}`,
   );
 
+  // The patch lifts an item above every other one, in the same call as the adds. Each add must
+  // still land above it, whether it comes before the patch or after.
+  const [lifted] = zAbove(
+    [...opened.items, added].map((item) => item.z),
+    1,
+  );
   const mixedRev = await owner.mutation(api.canvas.apply, {
     canvasId,
     ops: [
       { op: "add", refId: f!, x: 0, y: 3000 },
-      { op: "patch", key: c!, fields: { x: 42 } },
+      { op: "patch", key: c!, fields: { x: 42, z: lifted! } },
       { op: "add", refId: g!, x: 500, y: 3000 },
     ],
   });
@@ -171,10 +177,12 @@ try {
       byRef.get(c!)?.x === 42 &&
       byRef.get(f!)?.y === 3000 &&
       byRef.get(g!)?.x === 500 &&
+      byRef.get(c!)?.z === lifted &&
+      lifted! < byRef.get(f!)!.z &&
       byRef.get(f!)!.z < byRef.get(g!)!.z &&
       onTop(byRef.get(f!)!, [...opened.items, added]) &&
       mixedRows.length === 3,
-    `one call with two adds and a patch raises rev once, ${freshRev} to ${mixedRev}, stamps the 3 items it wrote, and stacks the adds in order above every item`,
+    `one call with two adds and a patch raises rev once, ${freshRev} to ${mixedRev}, stamps the 3 items it wrote, and stacks the adds in order above every item, the one the patch lifted included`,
   );
 
   const removedRev = await owner.mutation(api.canvas.apply, {
