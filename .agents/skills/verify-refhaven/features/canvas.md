@@ -77,7 +77,8 @@ Preconditions:
 
 - Chromium sends mouse events at whole pixels. Round a computed point before you move the mouse to it, or the world point under the cursor drifts by a fraction of a pixel.
 - The readout changes before the next frame draws. Wait two animation frames before a screenshot or an outline count.
-- The panel with the view links and the readout sits over the canvas's top-left corner. A click there does not reach the canvas.
+- The panel with the readout sits over the canvas's top-left corner. A click there does not reach the canvas. The view links are in the bar above the canvas.
+- The sidebar takes 256 px of the page's width. `canvasViewport` in `apps/web/checks/canvas-screen.ts` is a page of 1656 by 900, which leaves the canvas 1400 wide. A narrower page cuts off items that a check places near the right edge.
 - `canvas.open` through the API is a mutation, and it places any saved image that has no item yet. Save every image before you open the canvas, or the page and the API see different items.
 - An image that has no 2048 px copy, because it is 2048 px or smaller, loads its original for the display role. Only an image over 2048 px requests `2048.webp`.
 - `canvas.open` and `canvas.changes` return group items, which have no place. `openCanvas` and `canvasChanges` in `apps/web/checks/canvas-screen.ts` return the placed items only.

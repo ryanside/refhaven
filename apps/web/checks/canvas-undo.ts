@@ -14,6 +14,7 @@ import {
   signInWithPasskey,
 } from "./browser";
 import {
+  canvasViewport,
   type Item,
   type Rgb,
   exposedPoint,
@@ -87,7 +88,7 @@ const selected = async (page: Page, count: number) =>
 const { browser, page } = await openPageWithPasskeyDevice();
 watchConsole(page);
 try {
-  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-undo-${Date.now().toString(36)}`);
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
@@ -566,7 +567,7 @@ try {
   // The undo must take back the first move, and the new edit must stay and empty redo.
   const slow = await page.context().newPage();
   watchConsole(slow);
-  await slow.setViewportSize({ width: 1400, height: 900 });
+  await slow.setViewportSize(canvasViewport);
   await slow.routeWebSocket(/convex\.cloud/, (socket) => {
     const server = socket.connectToServer();
     socket.onMessage((message) => server.send(message));

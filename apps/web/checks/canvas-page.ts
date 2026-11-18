@@ -11,6 +11,7 @@ import {
   signInWithPasskey,
 } from "./browser";
 import {
+  canvasViewport,
   type Item,
   type Rgb,
   clearOfPanel,
@@ -83,7 +84,7 @@ const changesSince = (owner: ConvexHttpClient, canvasId: Snapshot["canvasId"], r
 const { browser, page } = await openPageWithPasskeyDevice();
 watchConsole(page);
 try {
-  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-page-${Date.now().toString(36)}`);
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
@@ -356,7 +357,7 @@ try {
 
   const second = await page.context().newPage();
   watchConsole(second);
-  await second.setViewportSize({ width: 1400, height: 900 });
+  await second.setViewportSize(canvasViewport);
   await showCanvas(second, 3);
   const greenSaved = saved.find((item) => item.key === green.key)!;
   await drag(page, toPage(view, greenSaved), { x: -100, y: -50 });

@@ -236,7 +236,7 @@ try {
 
   const board = await owner.mutation(api.collections.create, { name: "Board" });
   await owner.mutation(api.collections.addRefs, { collectionId: board, refIds: [large] });
-  const boardLink = page.locator(`[data-collection-id="${board}"]`);
+  const boardLink = page.getByRole("main").locator(`[data-collection-id="${board}"]`);
   await boardLink.waitFor();
   assert(
     (await boardLink.textContent()) === "Board",

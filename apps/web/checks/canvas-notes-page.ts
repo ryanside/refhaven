@@ -13,6 +13,7 @@ import {
   signInWithPasskey,
 } from "./browser";
 import {
+  canvasViewport,
   type Item,
   type PageView,
   type Rect,
@@ -132,7 +133,7 @@ const opsOf = (calls: ReadonlyArray<ReadonlyArray<Op>>) =>
   );
 
 try {
-  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-notes-page-${Date.now().toString(36)}`);
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
@@ -179,7 +180,7 @@ try {
 
   const second = await page.context().newPage();
   watchConsole(second);
-  await second.setViewportSize({ width: 1400, height: 900 });
+  await second.setViewportSize(canvasViewport);
   await second.goto(canvasUrl);
   await waitForCanvas(second, 2);
   const secondView = await pageView(second);

@@ -5,6 +5,9 @@ import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { PNG } from "pngjs";
 import type { Page } from "playwright";
 
+/** A page wide enough for a canvas of 1400 by about 840 pixels, beside the sidebar and under the page's bar. */
+export const canvasViewport = { width: 1656, height: 900 };
+
 type Listed = FunctionReturnType<typeof api.canvas.open>["items"][number];
 
 /** An item with a place: an image or a note. */

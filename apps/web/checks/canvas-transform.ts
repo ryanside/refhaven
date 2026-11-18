@@ -19,6 +19,7 @@ import {
   signInWithPasskey,
 } from "./browser";
 import {
+  canvasViewport,
   type Item,
   type PageView,
   type Rgb,
@@ -149,7 +150,7 @@ const patchedFields = (calls: ReadonlyArray<ReadonlyArray<Op>>) =>
   calls.map((ops) => ops.map((op) => `${op.op} ${Object.keys(op.fields ?? {}).sort()}`).join("; "));
 
 try {
-  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-transform-${Date.now().toString(36)}`);
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
@@ -191,7 +192,7 @@ try {
 
   const second = await page.context().newPage();
   watchConsole(second);
-  await second.setViewportSize({ width: 1400, height: 900 });
+  await second.setViewportSize(canvasViewport);
   await second.goto(canvasUrl);
   await waitForCanvas(second, 2);
   const secondView = await pageView(second);

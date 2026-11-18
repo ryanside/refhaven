@@ -46,14 +46,7 @@ import {
 } from "@refhaven/scene";
 import { useHotkeys } from "@tanstack/react-hotkeys";
 import * as Result from "effect/Result";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type PlaceAt, SaveImages } from "@/library/save-images";
 import { type Action, keymap } from "./keymap";
 import { boxFor, createNoteTextures, noteFont, noteInk, noteTextureKey } from "./notes";
@@ -113,13 +106,7 @@ const idle = (store: SceneStore) =>
   });
 
 /** The canvas of a set: the collection's, or the whole library's when `collectionId` is absent. */
-export function CanvasView({
-  collectionId,
-  children,
-}: {
-  collectionId?: Id<"collections">;
-  children: ReactNode;
-}) {
+export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> }) {
   const [store] = useState(createSceneStore);
   const [history] = useState(createHistory);
   const host = useRef<HTMLDivElement>(null);
@@ -482,7 +469,7 @@ export function CanvasView({
   }, [store, urls]);
 
   return (
-    <main className="relative flex-1 overflow-hidden">
+    <div className="relative flex-1 overflow-hidden">
       <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
       <div ref={outlines} className="pointer-events-none absolute inset-0" />
       {draft ? <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} /> : null}
@@ -490,7 +477,6 @@ export function CanvasView({
         data-testid="canvas-panel"
         className="absolute top-3 left-3 flex flex-col gap-1 rounded-md border bg-background p-2"
       >
-        {children}
         <SaveImages collectionId={collectionId} placeAt={placeAt} />
         <EditButtons
           store={store}
@@ -523,7 +509,7 @@ export function CanvasView({
         <Readout store={store} />
         {problem ? <p role="alert">{problem}</p> : null}
       </div>
-    </main>
+    </div>
   );
 }
 

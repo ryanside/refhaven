@@ -13,6 +13,7 @@ import {
   signInWithPasskey,
 } from "./browser";
 import {
+  canvasViewport,
   type Item,
   type Rgb,
   near,
@@ -72,7 +73,7 @@ const centerOf = (box: { x: number; y: number; width: number; height: number }) 
 const { browser, page } = await openPageWithPasskeyDevice();
 watchConsole(page);
 try {
-  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-drop-${Date.now().toString(36)}`);
   const owner = await clientFor(page);
   await page.goto(libraryCanvas);
@@ -173,7 +174,7 @@ try {
 
   const second = await page.context().newPage();
   watchConsole(second);
-  await second.setViewportSize({ width: 1400, height: 900 });
+  await second.setViewportSize(canvasViewport);
   await second.goto(libraryCanvas);
   await waitForCanvas(second, 5);
   const purple = await image(page, "purple.png", [150, 40, 200], 200, 200);
@@ -205,7 +206,7 @@ try {
   // canvas is still empty when the file is dropped, and the snapshot then fits the camera.
   const late = await page.context().newPage();
   watchConsole(late);
-  await late.setViewportSize({ width: 1400, height: 900 });
+  await late.setViewportSize(canvasViewport);
   await late.routeWebSocket(/convex\.cloud/, (socket) => {
     const server = socket.connectToServer();
     socket.onMessage((message) => server.send(message));

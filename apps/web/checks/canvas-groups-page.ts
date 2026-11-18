@@ -12,6 +12,7 @@ import {
   signInWithPasskey,
 } from "./browser";
 import {
+  canvasViewport,
   type PageView,
   clearOfPanel,
   exposedPoint,
@@ -84,7 +85,7 @@ const outlined = async () =>
   ).sort();
 
 try {
-  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-groups-page-${Date.now().toString(36)}`);
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
@@ -149,7 +150,7 @@ try {
   await settle(page);
   const second = await page.context().newPage();
   watchConsole(second);
-  await second.setViewportSize({ width: 1400, height: 900 });
+  await second.setViewportSize(canvasViewport);
   await second.goto(canvasUrl);
   await second.locator('[data-testid="canvas"][data-shown-thumbnails="3"]').waitFor();
   await shown(second, 4);
