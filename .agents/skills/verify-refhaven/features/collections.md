@@ -1,10 +1,10 @@
 # Collections
 
-A collection is a named set of images in the library. On `/library` the user makes a collection, sees each one as a link, and adds an image to one from the image's card. `/c/{collectionId}` shows the collection's images in the same grid as the library, with a rename form and the same file picker. An image saved there goes into the library and into the collection. An image removed from a collection stays in the library and in its other collections. A collection also has its own canvas, and removing an image from that canvas takes it out of the collection. Each user sees only their own collections.
+A collection is a named set of images in the library. In the sidebar, on every page, the user makes a collection and sees each one as a link. On `/library` the user adds an image to one from the image's card. `/c/{collectionId}` shows the collection's images in the same grid as the library, with a rename form and the same file picker. An image saved there goes into the library and into the collection. An image removed from a collection stays in the library and in its other collections. A collection also has its own canvas, and removing an image from that canvas takes it out of the collection. Each user sees only their own collections.
 
 ## Sub-features
 
-- `collections-create` makes a collection from the `New collection` form and lists it on `/library`.
+- `collections-create` makes a collection from the `New collection` form in the sidebar and lists it there.
 - `collections-open` opens a collection's link to `/c/{collectionId}`, which shows its name and its images.
 - `collections-upload` saves a picked file on a collection's page into the library and into the collection.
 - `collections-add` adds a library image to a collection from the card's `Add to collection` list.
@@ -17,7 +17,7 @@ A collection is a named set of images in the library. On `/library` the user mak
 ## How to get to it (user POV)
 
 - Open `/library` and use the `Collections` section. Sign-in lands here.
-- Choose a collection's link on `/library` to open `/c/{collectionId}`.
+- Choose a collection's link in the sidebar to open `/c/{collectionId}`.
 - Choose `Gallery` or `Canvas` on a collection's page to switch its view.
 - Choose a card's `Add to collection` list on `/library`. It shows only when the user has a collection.
 
@@ -33,7 +33,7 @@ Preconditions:
 - **Upload.** On the collection's page, run `page.getByLabel("Add images").setInputFiles(...)`. The outcome line reads `saved.` A card with `data-ref-id` appears on the page and on `/library`.
 - **Add.** On `/library`, run `page.locator('[data-ref-id="<refId>"]').getByLabel("Add to collection").selectOption({ label: name })`. The page shows no confirmation. Wait for the membership with `verify.sh rows collectionRefs` or `collections.refs`, then open the collection to see the card.
 - **Remove.** On the collection's page, click the card's `Remove from collection` button. The card leaves that page and stays on `/library`.
-- **Rename.** On the collection's page, fill `page.getByLabel("Collection name")` and click `Rename`. The heading and the link on `/library` show the trimmed name.
+- **Rename.** On the collection's page, fill `page.getByLabel("Collection name")` and click `Rename`. The heading and the link in the sidebar show the trimmed name.
 - **Private.** A second user opening the first user's `/c/{collectionId}` sees `Collection not found.`
 - **Proof.** Screenshot `/library` with its collection links and a collection's page with images. Read `verify.sh rows collectionRefs`, filter it to the `collectionId`, and confirm one row per image in the collection.
 

@@ -9,6 +9,7 @@ import { NameForm } from "@/collections/name-form";
 import { FilteredGallery, GalleryFilters, isFiltered } from "@/library/filters";
 import { type CardAction, Gallery, galleryPage } from "@/library/gallery";
 import { SaveImages } from "@/library/save-images";
+import { PageHeader } from "@/page-header";
 import { ViewLinks, validateGallerySearch } from "@/view";
 
 export const Route = createFileRoute("/_app/c/$collectionId")({
@@ -32,13 +33,17 @@ function CollectionPage() {
 
 function Collection({ collectionId, name }: { collectionId: Id<"collections">; name: string }) {
   const { view = "gallery" } = Route.useSearch();
-  return view === "canvas" ? (
-    <CanvasView collectionId={collectionId}>
-      <h1 className="font-medium">{name}</h1>
-      <ViewLinks />
-    </CanvasView>
-  ) : (
-    <CollectionGallery collectionId={collectionId} name={name} />
+  return (
+    <>
+      <PageHeader title={name}>
+        <ViewLinks />
+      </PageHeader>
+      {view === "canvas" ? (
+        <CanvasView collectionId={collectionId} />
+      ) : (
+        <CollectionGallery collectionId={collectionId} name={name} />
+      )}
+    </>
   );
 }
 
@@ -64,9 +69,7 @@ function CollectionGallery({
   );
 
   return (
-    <main className="flex flex-col gap-4 p-6">
-      <h1 className="font-medium">{name}</h1>
-      <ViewLinks />
+    <div className="flex flex-col gap-4 p-6">
       <NameForm
         label="Collection name"
         submit="Rename"
@@ -83,7 +86,7 @@ function CollectionGallery({
       ) : (
         <Members collectionId={collectionId} action={action} />
       )}
-    </main>
+    </div>
   );
 }
 

@@ -1,5 +1,5 @@
 import { SearchQuery, TagName } from "@refhaven/backend/refFields";
-import { Link } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -36,16 +36,27 @@ export const validateGallerySearch = (
   };
 };
 
-/** Switches the current page between its gallery and its canvas. */
+const views = [
+  { view: "gallery", label: "Gallery" },
+  { view: "canvas", label: "Canvas" },
+] as const;
+
+/** Switches the current page between its gallery and its canvas, and marks the one it shows. */
 export function ViewLinks() {
+  const current = useSearch({ strict: false, select: (search) => search.view ?? "gallery" });
   return (
     <nav className="flex gap-3">
-      <Link to="." search={{ view: "gallery" }} className="underline">
-        Gallery
-      </Link>
-      <Link to="." search={{ view: "canvas" }} className="underline">
-        Canvas
-      </Link>
+      {views.map(({ view, label }) => (
+        <Link
+          key={view}
+          to="."
+          search={{ view }}
+          aria-current={view === current ? "page" : undefined}
+          className={view === current ? "font-medium" : "underline"}
+        >
+          {label}
+        </Link>
+      ))}
     </nav>
   );
 }

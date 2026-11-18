@@ -1,8 +1,25 @@
+import { QueryResult, useMutation, useQuery } from "@confect/react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import refs from "@refhaven/backend/refs";
 import { Button } from "@refhaven/ui/components/button";
-import { Link, Navigate, Outlet, createFileRoute } from "@tanstack/react-router";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+} from "@refhaven/ui/components/sidebar";
+import { Link, Navigate, Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
+import * as Result from "effect/Result";
 import { useEffect } from "react";
+import { NameForm } from "@/collections/name-form";
 
 export const Route = createFileRoute("/_app")({
   ssr: false,
@@ -29,9 +46,105 @@ function useRefuseStrayFileDrops() {
   }, []);
 }
 
+/** The way to every page: the library, the trash, and each collection. */
+function AppSidebar() {
+  const { pathname } = useLocation();
+  const { signOut } = useAuthActions();
+  const collections = useQuery(refs.public.collections.list, {});
+  const create = useMutation(refs.public.collections.create);
+  const owned = QueryResult.isSuccess(collections) ? collections.value : [];
+
+  return (
+    <Sidebar>
+      <SidebarHeader>
+        <Link to="/library" className="px-2 font-medium">
+          refhaven
+        </Link>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={pathname === "/library"} render={<Link to="/library" />}>
+                Library
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={pathname === "/trash"} render={<Link to="/trash" />}>
+                Trash
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+        <SidebarGroup className="gap-2">
+          <SidebarGroupLabel>Collections</SidebarGroupLabel>
+          <SidebarMenu>
+            {owned.map(({ collectionId, name }) => (
+              <SidebarMenuItem key={collectionId}>
+                <SidebarMenuButton
+                  isActive={pathname === `/c/${collectionId}`}
+                  render={
+                    <Link
+                      to="/c/$collectionId"
+                      params={{ collectionId }}
+                      data-collection-id={collectionId}
+                    />
+                  }
+                >
+                  {name}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+          <div className="px-2">
+            <NameForm
+              label="New collection"
+              submit="Create"
+              save={async (name) => {
+                const created = await create({ name });
+                return Result.isFailure(created) ? created.failure._tag : null;
+              }}
+            />
+          </div>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter>
+        <Account />
+        <Button variant="outline" size="sm" onClick={() => void signOut()}>
+          Sign out
+        </Button>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
+/** Who is signed in. The greeting and the user's ID are there for the checks, out of sight. */
+function Account() {
+  const me = useQuery(refs.public.users.whoAmI, { greeting: "Hello" });
+
+  return QueryResult.match(me, {
+    onLoading: () => <p className="px-2">Loading…</p>,
+    onFailure: (error) => (
+      <p role="alert" className="px-2">
+        {error._tag}
+      </p>
+    ),
+    onSuccess: ({ message, userId, username }) => (
+      <p className="px-2">
+        Signed in as <span data-testid="username">{username}</span>
+        <span className="sr-only" data-testid="message">
+          {message}
+        </span>
+        <span className="sr-only" data-testid="user-id">
+          {userId}
+        </span>
+      </p>
+    ),
+  });
+}
+
 function SignedInLayout() {
   const { isLoading, isAuthenticated } = useConvexAuth();
-  const { signOut } = useAuthActions();
   useRefuseStrayFileDrops();
 
   if (isLoading) {
@@ -42,16 +155,11 @@ function SignedInLayout() {
   }
 
   return (
-    <div className="flex min-h-svh flex-col text-sm">
-      <header className="flex items-center gap-4 border-b p-3">
-        <Link to="/library" className="font-medium">
-          refhaven
-        </Link>
-        <Button variant="outline" size="sm" className="ml-auto" onClick={() => void signOut()}>
-          Sign out
-        </Button>
-      </header>
-      <Outlet />
-    </div>
+    <SidebarProvider className="text-sm">
+      <AppSidebar />
+      <SidebarInset>
+        <Outlet />
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

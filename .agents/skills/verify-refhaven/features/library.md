@@ -17,7 +17,7 @@ The library lets a signed-in user save image files and see every saved image in 
 ## How to get to it (user POV)
 
 - Open `/library`. Sign-in lands here.
-- Choose the `refhaven` link in the header from any app page.
+- Choose the `Library` link, or the `refhaven` link above it, in the sidebar from any app page.
 - Choose `Open your library` on the landing page `/`.
 
 Images are added through the `Add images` file picker on `/library`, by dropping files anywhere on the page, or by pasting an image. A collection's page takes the same three and saves into the collection. The canvas view of the library and of a collection takes the same three and places each saved image on the canvas. `/trash` saves none. Every signed-in page refuses a dropped file it does not save, so the browser never opens it.

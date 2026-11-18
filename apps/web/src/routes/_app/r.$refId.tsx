@@ -13,6 +13,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { useId, useMemo, useState } from "react";
 import { useRefUrls } from "@/library/use-ref-urls";
+import { PageHeader } from "@/page-header";
 
 export const Route = createFileRoute("/_app/r/$refId")({
   component: RefPage,
@@ -59,121 +60,120 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
   const trashed = details.deletedAt !== null;
 
   return (
-    <main className="flex flex-col gap-4 p-6">
-      <h1 className="font-medium">{details.fileName}</h1>
-      <Link to="/library" className="underline">
-        Library
-      </Link>
-      <img
-        // Every image load is a CORS request, as in the gallery.
-        crossOrigin="anonymous"
-        src={display}
-        alt={details.fileName}
-        width={details.width}
-        height={details.height}
-        className="h-auto max-h-[70svh] w-auto max-w-full self-start object-contain"
-      />
-      {original ? (
-        <a href={original} target="_blank" rel="noreferrer noopener" className="underline">
-          Open the original
-        </a>
-      ) : null}
-      <dl>
-        <dt>Size</dt>
-        <dd>
-          {details.width} × {details.height} px, {Math.ceil(details.byteSize / 1024)} KB
-        </dd>
-        <dt>Type</dt>
-        <dd>{details.mimeType}</dd>
-        <dt>Saved</dt>
-        <dd>{new Date(details.savedAt).toLocaleString()}</dd>
-      </dl>
+    <>
+      <PageHeader title={details.fileName} />
+      <div className="flex flex-col gap-4 p-6">
+        <img
+          // Every image load is a CORS request, as in the gallery.
+          crossOrigin="anonymous"
+          src={display}
+          alt={details.fileName}
+          width={details.width}
+          height={details.height}
+          className="h-auto max-h-[70svh] w-auto max-w-full self-start object-contain"
+        />
+        {original ? (
+          <a href={original} target="_blank" rel="noreferrer noopener" className="underline">
+            Open the original
+          </a>
+        ) : null}
+        <dl>
+          <dt>Size</dt>
+          <dd>
+            {details.width} × {details.height} px, {Math.ceil(details.byteSize / 1024)} KB
+          </dd>
+          <dt>Type</dt>
+          <dd>{details.mimeType}</dd>
+          <dt>Saved</dt>
+          <dd>{new Date(details.savedAt).toLocaleString()}</dd>
+        </dl>
 
-      {trashed ? (
-        <>
-          <p>This image is in the trash.</p>
+        {trashed ? (
+          <>
+            <p>This image is in the trash.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => void restore({ refIds })}
+            >
+              Restore
+            </Button>
+          </>
+        ) : (
           <Button
             variant="outline"
             size="sm"
             className="self-start"
-            onClick={() => void restore({ refIds })}
+            onClick={() => void remove({ refIds })}
           >
-            Restore
+            Delete
           </Button>
-        </>
-      ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          className="self-start"
-          onClick={() => void remove({ refIds })}
-        >
-          Delete
-        </Button>
-      )}
+        )}
 
-      <fieldset disabled={trashed} className="flex flex-col gap-4">
-        <FieldForm
-          key={`name ${details.fileName}`}
-          label="Name"
-          initial={details.fileName}
-          parse={parseWith(FileName)}
-          refusal="A name is 1 to 255 characters."
-          save={async (fileName) => failureTag(await update({ refId, fileName }))}
-        />
-        <FieldForm
-          // JSON keeps an absent note apart from a note that reads "null".
-          key={`note ${JSON.stringify(details.note)}`}
-          label="Note"
-          initial={details.note ?? ""}
-          parse={parseClearable(Note)}
-          multiline
-          refusal="A note is at most 10,000 characters."
-          save={async (note) => failureTag(await update({ refId, note }))}
-        />
-        <section className="flex flex-col gap-2">
-          {details.sourceUrl ? (
-            <a
-              href={details.sourceUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="underline"
-              data-testid="source"
-            >
-              {details.sourceUrl}
-            </a>
-          ) : null}
+        <fieldset disabled={trashed} className="flex flex-col gap-4">
           <FieldForm
-            key={`source ${JSON.stringify(details.sourceUrl)}`}
-            label="Source"
-            initial={details.sourceUrl ?? ""}
-            parse={parseClearable(SourceUrl)}
-            refusal="A source is an http or https link of at most 2,048 characters."
-            save={async (sourceUrl) => failureTag(await update({ refId, sourceUrl }))}
+            key={`name ${details.fileName}`}
+            label="Name"
+            initial={details.fileName}
+            parse={parseWith(FileName)}
+            refusal="A name is 1 to 255 characters."
+            save={async (fileName) => failureTag(await update({ refId, fileName }))}
           />
-        </section>
-        <Tags refId={refId} tags={details.tags} />
-      </fieldset>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="font-medium">Collections</h2>
-        {details.collections.length === 0 ? <p>This image is in no collection.</p> : null}
-        <ul>
-          {details.collections.map(({ collectionId, name }) => (
-            <li key={collectionId}>
-              <Link
-                to="/c/$collectionId"
-                params={{ collectionId }}
-                data-collection-id={collectionId}
+          <FieldForm
+            // JSON keeps an absent note apart from a note that reads "null".
+            key={`note ${JSON.stringify(details.note)}`}
+            label="Note"
+            initial={details.note ?? ""}
+            parse={parseClearable(Note)}
+            multiline
+            refusal="A note is at most 10,000 characters."
+            save={async (note) => failureTag(await update({ refId, note }))}
+          />
+          <section className="flex flex-col gap-2">
+            {details.sourceUrl ? (
+              <a
+                href={details.sourceUrl}
+                target="_blank"
+                rel="noreferrer noopener"
                 className="underline"
+                data-testid="source"
               >
-                {name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </main>
+                {details.sourceUrl}
+              </a>
+            ) : null}
+            <FieldForm
+              key={`source ${JSON.stringify(details.sourceUrl)}`}
+              label="Source"
+              initial={details.sourceUrl ?? ""}
+              parse={parseClearable(SourceUrl)}
+              refusal="A source is an http or https link of at most 2,048 characters."
+              save={async (sourceUrl) => failureTag(await update({ refId, sourceUrl }))}
+            />
+          </section>
+          <Tags refId={refId} tags={details.tags} />
+        </fieldset>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">Collections</h2>
+          {details.collections.length === 0 ? <p>This image is in no collection.</p> : null}
+          <ul>
+            {details.collections.map(({ collectionId, name }) => (
+              <li key={collectionId}>
+                <Link
+                  to="/c/$collectionId"
+                  params={{ collectionId }}
+                  data-collection-id={collectionId}
+                  className="underline"
+                >
+                  {name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+    </>
   );
 }
 
