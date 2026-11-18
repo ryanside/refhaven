@@ -16,7 +16,7 @@ A collection is a named set of images in the library. In the sidebar, on every p
 
 ## How to get to it (user POV)
 
-- Open `/library` and use the `Collections` section. Sign-in lands here.
+- Use the `Collections` section of the sidebar, on any app page. Sign-in lands on `/library`.
 - Choose a collection's link in the sidebar to open `/c/{collectionId}`.
 - Choose `Gallery` or `Canvas` on a collection's page to switch its view.
 - Choose a card's `Add to collection` list on `/library`. It shows only when the user has a collection.

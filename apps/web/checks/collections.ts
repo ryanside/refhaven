@@ -378,6 +378,19 @@ try {
   await second.page.getByText("Collection not found.").waitFor();
   assert(true, "the first user's collection page shows the second user a not-found line");
 
+  // On a narrow window the sidebar is a sheet that only the title bar's button opens.
+  await second.page.setViewportSize({ width: 600, height: 800 });
+  const library = second.page.getByRole("link", { name: "Library", exact: true });
+  const hiddenAtFirst = !(await library.isVisible());
+  await second.page.getByRole("button", { name: "Toggle Sidebar" }).click();
+  await library.click();
+  await second.page.waitForURL(`${appUrl}/library`);
+  await library.waitFor({ state: "hidden" });
+  assert(
+    hiddenAtFirst,
+    "on a narrow window the not-found page still has the button that opens the sidebar, and following its Library link closes it",
+  );
+
   assertCleanConsole();
 } finally {
   await first.browser.close();

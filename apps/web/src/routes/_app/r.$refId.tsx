@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_app/r/$refId")({
   // before `ref.get` can answer with its own "not found".
   errorComponent: ({ error }) =>
     error instanceof Error && error.message.includes("ArgumentValidationError") ? (
-      <p className="p-6">Image not found.</p>
+      <NotFound />
     ) : (
       <ErrorComponent error={error} />
     ),
@@ -41,11 +41,26 @@ const parseClearable =
 const failureTag = (result: Result.Result<unknown, { readonly _tag: string }>) =>
   Result.isFailure(result) ? result.failure._tag : null;
 
+/** It keeps the title bar, which is the way to the sidebar. */
+function NotFound() {
+  return (
+    <>
+      <PageHeader title="Image" />
+      <p className="p-6">Image not found.</p>
+    </>
+  );
+}
+
 function RefPage() {
   const refId = Route.useParams().refId as Id<"refs">;
   return QueryResult.match(useQuery(refs.public.ref.get, { refId }), {
-    onLoading: () => <p className="p-6">Loading…</p>,
-    onFailure: () => <p className="p-6">Image not found.</p>,
+    onLoading: () => (
+      <>
+        <PageHeader title="Image" />
+        <p className="p-6">Loading…</p>
+      </>
+    ),
+    onFailure: () => <NotFound />,
     onSuccess: (details) => <RefDetails key={refId} refId={refId} details={details} />,
   });
 }

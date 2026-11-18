@@ -22,13 +22,23 @@ function CollectionPage() {
   const collections = useQuery(refs.public.collections.list, {});
 
   if (!QueryResult.isSuccess(collections)) {
-    return <p className="p-6">Loading…</p>;
+    return <Outside title="Collection">Loading…</Outside>;
   }
   const collection = collections.value.find((owned) => owned.collectionId === collectionId);
   if (!collection) {
-    return <p className="p-6">Collection not found.</p>;
+    return <Outside title="Collection">Collection not found.</Outside>;
   }
   return <Collection key={collectionId} collectionId={collectionId} name={collection.name} />;
+}
+
+/** A page with no collection to show. It keeps the title bar, which is the way to the sidebar. */
+function Outside({ title, children }: { title: string; children: string }) {
+  return (
+    <>
+      <PageHeader title={title} />
+      <p className="p-6">{children}</p>
+    </>
+  );
 }
 
 function Collection({ collectionId, name }: { collectionId: Id<"collections">; name: string }) {

@@ -14,6 +14,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  useSidebar,
 } from "@refhaven/ui/components/sidebar";
 import { Link, Navigate, Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
@@ -50,6 +51,9 @@ function useRefuseStrayFileDrops() {
 function AppSidebar() {
   const { pathname } = useLocation();
   const { signOut } = useAuthActions();
+  // On a narrow window the sidebar is a sheet over the page, which a followed link closes.
+  const { setOpenMobile } = useSidebar();
+  const close = () => setOpenMobile(false);
   const collections = useQuery(refs.public.collections.list, {});
   const create = useMutation(refs.public.collections.create);
   const owned = QueryResult.isSuccess(collections) ? collections.value : [];
@@ -57,26 +61,36 @@ function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <Link to="/library" className="px-2 font-medium">
-          refhaven
-        </Link>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton render={<Link to="/library" onClick={close} />}>
+              refhaven
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton isActive={pathname === "/library"} render={<Link to="/library" />}>
+              <SidebarMenuButton
+                isActive={pathname === "/library"}
+                render={<Link to="/library" onClick={close} />}
+              >
                 Library
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton isActive={pathname === "/trash"} render={<Link to="/trash" />}>
+              <SidebarMenuButton
+                isActive={pathname === "/trash"}
+                render={<Link to="/trash" onClick={close} />}
+              >
                 Trash
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
-        <SidebarGroup className="gap-2">
+        <SidebarGroup>
           <SidebarGroupLabel>Collections</SidebarGroupLabel>
           <SidebarMenu>
             {owned.map(({ collectionId, name }) => (
@@ -88,6 +102,7 @@ function AppSidebar() {
                       to="/c/$collectionId"
                       params={{ collectionId }}
                       data-collection-id={collectionId}
+                      onClick={close}
                     />
                   }
                 >
@@ -132,10 +147,10 @@ function Account() {
     onSuccess: ({ message, userId, username }) => (
       <p className="px-2">
         Signed in as <span data-testid="username">{username}</span>
-        <span className="sr-only" data-testid="message">
+        <span hidden data-testid="message">
           {message}
         </span>
-        <span className="sr-only" data-testid="user-id">
+        <span hidden data-testid="user-id">
           {userId}
         </span>
       </p>
