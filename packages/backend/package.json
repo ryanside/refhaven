@@ -16,7 +16,7 @@
     "dev": "convex dev --tail-logs",
     "dev:codegen": "confect dev",
     "codegen": "confect codegen",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "effect-tsgo tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@confect/cli": "10.6.0",
+    "@effect/tsgo": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -205,7 +205,7 @@ Known gaps in the upload path:
 | K3 | The license is AGPL-3.0. | Built |
 | K6 | Lint with Oxlint and format with Oxfmt. A lefthook pre-commit runs both on staged files. | Built |
 | K7 | Unit tests use Vitest and cover pure logic. The browser checks in `apps/web/checks` cover the function rules against the dev deployment. `convex-test` is not set up. | Built |
-| K5 | The Effect language service for TypeScript 7 is the `@effect/tsgo` package. It is not set up. | Planned |
+| K5 | The Effect language service for TypeScript 7 is the `@effect/tsgo` package. The backend's and the web app's `typecheck` run `effect-tsgo tsc`, its build of the same compiler, so `bun run typecheck` and CI fail on an Effect that is neither yielded nor assigned and on a `yield` without `*` in an Effect generator. Plain `tsc` accepts both, and the first is a call that silently does nothing. The plugin entry in `tsconfig.base.json` turns it on and keeps its suggestions out of the output. Nothing in `node_modules` is patched, so `convex dev` and an editor still run the stock compiler and show none of this. Each release supports a fixed list of TypeScript versions: before a TypeScript upgrade, move to a release that lists the new one. | Built |
 | I1 | The backend runs on Convex Cloud. Only a dev deployment exists. | Built |
 | I2 | The web app is hosted on Vercel and deployed by its Git deploys. The backend is deployed with `convex deploy`. | Planned |
 

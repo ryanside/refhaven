@@ -32,7 +32,7 @@ You need [Bun](https://bun.sh) 1.4 and a [Convex](https://www.convex.dev) accoun
 
 | Command | What it does |
 |---|---|
-| `bun run typecheck` | Type-checks every package. |
+| `bun run typecheck` | Type-checks every package. The backend and the web app use the Effect build of the compiler, which also fails on an Effect that was never run. |
 | `bun run lint` | Runs Oxlint. |
 | `bun run format` | Formats the code with Oxfmt. |
 | `bun run test` | Runs the unit tests. |
