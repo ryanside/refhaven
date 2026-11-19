@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { api } from "@refhaven/backend/api";
@@ -65,6 +66,10 @@ const stamp = Date.now().toString(36);
  * before only collections had one. No function makes such a row, so the check imports it.
  */
 const importLibraryCanvas = async (workspaceId: string) => {
+  // The import writes to the deployment directly, so it runs on a dev deployment or not at all.
+  if (!process.env.CONVEX_DEPLOYMENT?.startsWith("dev:")) {
+    throw new Error("FAIL CONVEX_DEPLOYMENT is not a dev deployment");
+  }
   const file = join(tmpdir(), `library-canvas-${stamp}.jsonl`);
   await Bun.write(file, `${JSON.stringify({ workspaceId, rev: 3 })}\n`);
   const run = Bun.spawn(["bunx", "convex", "import", "--table", "canvases", "--append", file], {
@@ -73,7 +78,9 @@ const importLibraryCanvas = async (workspaceId: string) => {
     stdout: "ignore",
     stderr: "pipe",
   });
-  if ((await run.exited) !== 0) {
+  const code = await run.exited;
+  await rm(file);
+  if (code !== 0) {
     throw new Error(`FAIL convex import: ${await new Response(run.stderr).text()}`);
   }
   const row = (await rows("canvases")).find(

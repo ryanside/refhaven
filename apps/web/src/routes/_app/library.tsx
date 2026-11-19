@@ -25,7 +25,9 @@ function Library() {
 }
 
 function LibraryGallery() {
-  const filters = Route.useSearch();
+  // The router keeps search keys it was not asked about, such as an old `view`. Only the filters go on.
+  const { q, tag } = Route.useSearch();
+  const filters = { ...(q === undefined ? {} : { q }), ...(tag === undefined ? {} : { tag }) };
   const collections = useQuery(refs.public.collections.list, {});
   const addRefs = useMutation(refs.public.collections.addRefs);
   const remove = useMutation(refs.public.library.remove);

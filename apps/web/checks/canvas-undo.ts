@@ -103,7 +103,7 @@ try {
   const saved = await (
     await clientFor(page)
   ).query(api.library.list, { paginationOpts: { numItems: 100, cursor: null } });
-  // Newest saved first, as the library's canvas placed them, so the layout puts red on top.
+  // A collection places its members in the order they were added. Newest saved first puts red on top.
   const main = await collectionCanvas(
     page,
     saved.page.map((item) => item.refId),
@@ -487,8 +487,7 @@ try {
   await click(page, toPage(await pageView(page), exposedPoint(redInBoard, inBoard.items)));
   await selected(page, 1);
   assert(
-    (await button("Remove from collection").count()) === 1 &&
-      (await button("Remove from canvas").count()) === 0,
+    (await button("Remove from collection").count()) === 1,
     "on a collection's canvas the button says Remove from collection",
   );
   await press(page, "Delete");

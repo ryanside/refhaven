@@ -40,7 +40,7 @@ Preconditions:
 - A new user, signed in with `signInWithPasskey`, with a collection that holds images. Make it with `collectionCanvas(page)` from `apps/web/checks/canvas-screen.ts`, which opens its gallery, and save the images there through the Library recipe, or add saved ones with `collections.addRefs`. Fill each image with one color, so its pixels on screen are known. Save one image over 2048 px to get a 2048 px copy.
 - A known viewport, for example `await page.setViewportSize({ width: 1400, height: 900 })`.
 
-- **Open.** Run `await page.goto("http://localhost:3000/c/<collectionId>")`. Wait for `[data-testid="canvas"][data-shown-thumbnails="N"]`, where N is the number of saved images that fit in the view.
+- **Open.** Run `await page.goto("http://localhost:3000/c/<collectionId>")`. Wait for `[data-testid="canvas"][data-shown-thumbnails="N"]`, where N is the number of the collection's images that fit in the view.
 - **Readout.** `page.getByTestId("canvas-readout")` carries `data-items`, `data-zoom` in percent, `data-camera-x` and `data-camera-y`, and `data-selected`. The camera is the world point at the canvas's top-left corner. An item at world point `p` is at `(p - camera) * zoom / 100` from the top-left of `page.getByTestId("canvas")`.
 - **Draw.** Take a screenshot and read it with `PNG.sync.read` from `pngjs`. The image's color fills the screen rectangle that follows from `canvas.open` through the API (`clientFor(page)`) and the readout.
 - **Pan.** Run `await page.mouse.move(x, y)` and `await page.mouse.wheel(80, 150)`. The camera moves by `80 / zoom` and `150 / zoom` world units.

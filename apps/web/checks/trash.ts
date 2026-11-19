@@ -122,25 +122,25 @@ try {
 
   const board = await owner.mutation(api.collections.create, { name: "Board" });
   await owner.mutation(api.collections.addRefs, { collectionId: board, refIds: [a, c] });
-  const library = await openCanvas(owner, { collectionId: main });
+  const mainCanvas = await openCanvas(owner, { collectionId: main });
   const collection = await openCanvas(owner, { collectionId: board });
   assert(
-    !find(library.items, d) && library.items.length === 3 && collection.items.length === 2,
-    `canvas.open places only live Refs: ${library.items.length} on one collection's canvas, ${collection.items.length} on the other's`,
+    !find(mainCanvas.items, d) && mainCanvas.items.length === 3 && collection.items.length === 2,
+    `canvas.open places only live Refs: ${mainCanvas.items.length} on one collection's canvas, ${collection.items.length} on the other's`,
   );
   await owner.mutation(api.canvas.apply, {
-    canvasId: library.canvasId,
+    canvasId: mainCanvas.canvasId,
     ops: [
       { op: "patch", key: a, fields: { x: 5555, y: -2222 } },
       { op: "remove", key: c },
     ],
   });
-  const libraryBefore = await openCanvas(owner, { collectionId: main });
+  const mainBefore = await openCanvas(owner, { collectionId: main });
   const collectionBefore = await openCanvas(owner, { collectionId: board });
-  const aOnLibrary = find(libraryBefore.items, a)!;
+  const aOnMain = find(mainBefore.items, a)!;
   const aOnCollection = find(collectionBefore.items, a)!;
   assert(
-    aOnLibrary.x === 5555 && aOnLibrary.y === -2222 && !find(libraryBefore.items, c),
+    aOnMain.x === 5555 && aOnMain.y === -2222 && !find(mainBefore.items, c),
     "before the delete, the image is moved on the first collection's canvas and a second image is removed from it",
   );
 
@@ -188,7 +188,7 @@ try {
     typeof deletedRow?.deletedAt === "number" &&
       !(await libraryOf(owner)).includes(a) &&
       (await trashOf(owner))[0] === a,
-    `remove gives the Ref's row a deletedAt, takes it out of library.list, and puts it first in library.trash: ${deletedRow?.deletedAt}`,
+    `remove gives the Ref's row a deletedAt, takes it out of mainCanvas.list, and puts it first in mainCanvas.trash: ${deletedRow?.deletedAt}`,
   );
   assert(
     !(await galleryOf(owner, board)).includes(a) &&
@@ -196,25 +196,25 @@ try {
     "the image leaves the collection's gallery, and its membership row is still there",
   );
 
-  const libraryGone = await canvasChanges(owner, {
-    canvasId: library.canvasId,
-    rev: libraryBefore.rev,
+  const mainGone = await canvasChanges(owner, {
+    canvasId: mainCanvas.canvasId,
+    rev: mainBefore.rev,
   });
   const collectionGone = await canvasChanges(owner, {
     canvasId: collection.canvasId,
     rev: collectionBefore.rev,
   });
   assert(
-    oneChange(libraryGone, libraryBefore.rev, a, deletedRow.deletedAt) &&
+    oneChange(mainGone, mainBefore.rev, a, deletedRow.deletedAt) &&
       oneChange(collectionGone, collectionBefore.rev, a, deletedRow.deletedAt),
-    `canvas.changes on both canvases reports the image's item with the delete's deletedAt, at a rev raised by one: ${libraryBefore.rev} to ${libraryGone.rev}, ${collectionBefore.rev} to ${collectionGone.rev}`,
+    `canvas.changes on both canvases reports the image's item with the delete's deletedAt, at a rev raised by one: ${mainBefore.rev} to ${mainGone.rev}, ${collectionBefore.rev} to ${collectionGone.rev}`,
   );
-  const libraryOpened = await openCanvas(owner, { collectionId: main });
+  const mainOpened = await openCanvas(owner, { collectionId: main });
   const collectionOpened = await openCanvas(owner, { collectionId: board });
   assert(
-    !find(libraryOpened.items, a) &&
+    !find(mainOpened.items, a) &&
       !find(collectionOpened.items, a) &&
-      libraryOpened.rev === libraryGone.rev &&
+      mainOpened.rev === mainGone.rev &&
       collectionOpened.rev === collectionGone.rev,
     "canvas.open returns neither item, and places nothing",
   );
@@ -222,7 +222,7 @@ try {
   await owner.mutation(api.library.remove, { refIds: [a] });
   assert(
     (await refRow(a))?.deletedAt === deletedRow.deletedAt &&
-      (await revOf(owner, library.canvasId)) === libraryGone.rev &&
+      (await revOf(owner, mainCanvas.canvasId)) === mainGone.rev &&
       (await revOf(owner, collection.canvasId)) === collectionGone.rev,
     "deleting again keeps the first deletedAt and raises no canvas's rev",
   );
@@ -237,7 +237,7 @@ try {
   const patchA = { op: "patch" as const, key: a, fields: { x: 1 } };
   assert(
     (await outcome(
-      owner.mutation(api.canvas.apply, { canvasId: library.canvasId, ops: [patchA] }),
+      owner.mutation(api.canvas.apply, { canvasId: mainCanvas.canvasId, ops: [patchA] }),
     )) === "ItemNotFound" &&
       (await outcome(
         owner.mutation(api.canvas.apply, {
@@ -245,7 +245,7 @@ try {
           ops: [{ op: "remove", key: a }],
         }),
       )) === "ItemNotFound" &&
-      (await revOf(owner, library.canvasId)) === libraryGone.rev &&
+      (await revOf(owner, mainCanvas.canvasId)) === mainGone.rev &&
       (await galleryOf(owner, board)).length === 1,
     "an item of a Ref in the trash cannot be patched or removed on either canvas: ItemNotFound, and nothing is written",
   );
@@ -298,20 +298,20 @@ try {
       !(await trashOf(owner)).includes(a),
     "restore takes the Ref out of the trash, back into the library and the collection",
   );
-  const libraryBack = await canvasChanges(owner, {
-    canvasId: library.canvasId,
-    rev: libraryGone.rev,
+  const mainBack = await canvasChanges(owner, {
+    canvasId: mainCanvas.canvasId,
+    rev: mainGone.rev,
   });
   const collectionBack = await canvasChanges(owner, {
     canvasId: collection.canvasId,
     rev: collectionGone.rev,
   });
   assert(
-    oneChange(libraryBack, libraryGone.rev, a, undefined) &&
+    oneChange(mainBack, mainGone.rev, a, undefined) &&
       oneChange(collectionBack, collectionGone.rev, a, undefined) &&
-      placeOf(libraryBack.items[0]) === placeOf(aOnLibrary) &&
+      placeOf(mainBack.items[0]) === placeOf(aOnMain) &&
       placeOf(collectionBack.items[0]) === placeOf(aOnCollection),
-    `canvas.changes on both canvases reports the item back, with no deletedAt and the key, position, scale, and z it had: ${placeOf(libraryBack.items[0])}`,
+    `canvas.changes on both canvases reports the item back, with no deletedAt and the key, position, scale, and z it had: ${placeOf(mainBack.items[0])}`,
   );
   assert(
     find((await openCanvas(owner, { collectionId: main })).items, a)?.x === 5555,
@@ -321,7 +321,7 @@ try {
   await owner.mutation(api.library.restore, { refIds: [a] });
   assert(
     (await refRow(a))?.deletedAt === undefined &&
-      (await revOf(owner, library.canvasId)) === libraryBack.rev &&
+      (await revOf(owner, mainCanvas.canvasId)) === mainBack.rev &&
       (await revOf(owner, collection.canvasId)) === collectionBack.rev,
     "restoring again changes nothing and raises no canvas's rev",
   );
