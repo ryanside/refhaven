@@ -26,7 +26,7 @@ You need [Bun](https://bun.sh) 1.4 and a [Convex](https://www.convex.dev) accoun
    bun dev
    ```
 
-`bun dev` starts three processes: the web app on http://localhost:3000, `convex dev`, and `confect dev`. The web app reads the Convex URL from `packages/backend/.env.local`.
+`bun dev` starts three processes: the web app on http://localhost:3000, `convex dev`, and `confect dev`. All three run under Bun, and a process list shows them as `node`. The web app reads the Convex URL from `packages/backend/.env.local`.
 
 ## Check your work
 
