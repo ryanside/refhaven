@@ -30,7 +30,7 @@
     "dev": "vite dev --port 3000 --strictPort",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p checks"
+    "typecheck": "effect-tsgo tsc --noEmit && effect-tsgo tsc --noEmit -p checks"
   },
   "dependencies": {
     "@confect/core": "10.6.0",
@@ -57,6 +57,7 @@
     "thumbhash": "0.1.1"
   },
   "devDependencies": {
+    "@effect/tsgo": "catalog:",
     "@tailwindcss/vite": "4.3.5",
     "@tanstack/react-router-devtools": "1.167.3",
     "@types/bun": "1.4.4",
