@@ -486,7 +486,7 @@ try {
       "trash:sweepBatch",
       JSON.stringify({ pretend: { workspaceId: workspace, now: atSweep } }),
     ),
-  ) as { sweeping: Array<{ keys: Array<string> }>; more: boolean };
+  ) as { sweeping: Array<{ orphanId: string; keys: Array<string> }>; more: boolean };
   const dueKeys = due.sweeping.flatMap(({ keys }) => keys);
   await save(page, [{ name: "k-during.png", buffer: kBuffer }]);
   const kDuring = (await refsByName(owner)).get("k-during.png")!;
@@ -523,6 +523,19 @@ try {
       (await servedExactly(owner, kDuring, kBuffer)) &&
       (await servedExactly(owner, s2, sBuffer)),
     "the sweep leaves the bytes saved again before it, the bytes saved again while it ran, and the Blob a live Ref shares, and each serves its original byte-exact",
+  );
+
+  // Two sweeps at once both read the same rows. The slower one's last step finds them deleted.
+  // `convexRun` throws when the call fails.
+  await convexRun(
+    "trash:sweepDone",
+    JSON.stringify({ orphanIds: due.sweeping.map(({ orphanId }) => orphanId) }),
+  );
+  assert(
+    due.sweeping.length === 6 &&
+      (await state()).orphansIn(workspace).length === 0 &&
+      (await servedExactly(owner, kDuring, kBuffer)),
+    "a sweep's last step for six rows that another sweep already deleted does not fail and changes nothing",
   );
 
   const again = { purged: await purgeAt(atSweep), swept: await sweepAt(atSweep) };
