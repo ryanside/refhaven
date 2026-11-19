@@ -14,7 +14,6 @@ import {
   canvasViewport,
   type Item,
   type Rgb,
-  clearOfPanel,
   exposedPoint,
   near,
   pageView,
@@ -346,9 +345,8 @@ try {
   view = await pageView(page);
   png = await screenshot(page, "05-reloaded.png");
   const saved = (await snapshotOf(owner)).items;
-  let clear = await clearOfPanel(page, view);
   for (const item of saved) {
-    const point = exposedPoint(item, saved, clear);
+    const point = exposedPoint(item, saved);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
       `after a reload the ${item.width}x${item.height} image is drawn at its saved position ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
@@ -367,8 +365,7 @@ try {
     "the move in the first page to save",
   );
   // The image's center stays inside its old rectangle, so it cannot show the move. These two
-  // points can: one the move newly covers, and one it leaves. The first sits below the image's
-  // middle, because the panel over the top-left corner covers the middle's height there.
+  // points can: one the move newly covers, and one it leaves.
   const { width: greenWidth, height: greenHeight } = worldSize(greenMoved);
   const middle = (greenMoved.x + greenSaved.x) / 2;
   const newlyCovered = { x: middle - greenWidth / 2, y: greenMoved.y + greenHeight / 4 };
@@ -460,10 +457,7 @@ try {
   view = await pageView(page);
   const beforeBlur = await snapshotOf(owner);
   const dragged = beforeBlur.items.find((item) => item.key === red.key)!;
-  const grab = toPage(
-    view,
-    exposedPoint(dragged, beforeBlur.items, await clearOfPanel(page, view)),
-  );
+  const grab = toPage(view, exposedPoint(dragged, beforeBlur.items));
   await page.mouse.move(grab.x, grab.y);
   await page.mouse.down();
   await page.mouse.move(grab.x + 40, grab.y + 20, { steps: 4 });
@@ -475,7 +469,7 @@ try {
   );
   await page.mouse.move(grab.x + 300, grab.y + 200, { steps: 4 });
   await page.mouse.up();
-  await click(page, toPage(view, exposedPoint(dropped, [dropped], await clearOfPanel(page, view))));
+  await click(page, toPage(view, exposedPoint(dropped, [dropped])));
   await until(
     () => readout(page),
     (r) => r.selected === 1,
@@ -580,9 +574,8 @@ try {
   view = await pageView(page);
   png = await screenshot(page, "10-library-after-collection.png");
   const libraryLayout = (await snapshotOf(owner)).items;
-  clear = await clearOfPanel(page, view);
   for (const item of libraryLayout) {
-    const point = exposedPoint(item, libraryLayout, clear);
+    const point = exposedPoint(item, libraryLayout);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
       `going from the collection's canvas to the library's shows the library's layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
@@ -596,14 +589,43 @@ try {
   view = await pageView(page);
   png = await screenshot(page, "11-collection-again.png");
   const collectionLayout = (await collectionSnapshot()).items;
-  clear = await clearOfPanel(page, view);
   for (const item of collectionLayout) {
-    const point = exposedPoint(item, collectionLayout, clear);
+    const point = exposedPoint(item, collectionLayout);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
       `going back to the collection's canvas shows its own layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
     );
   }
+
+  // More in the panel than the window is high, as after many saved files. The lines are added to
+  // the page by hand, because saving that many files is slow.
+  const boxBefore = view.box;
+  const tall = await page.evaluate(() => {
+    const panel = document.querySelector('[data-testid="canvas-panel"]')!;
+    const list = panel.querySelector('[role="status"]')!;
+    for (let line = 0; line < 80; line += 1) {
+      list.append(
+        Object.assign(document.createElement("li"), { textContent: `file-${line}.png: saved.` }),
+      );
+    }
+    const scroller = [...panel.querySelectorAll("*"), panel].find(
+      (element) => element.scrollHeight > element.clientHeight + 1,
+    );
+    return {
+      page: document.documentElement.scrollHeight - window.innerHeight,
+      content: list.getBoundingClientRect().height,
+      scrolls: scroller !== undefined && getComputedStyle(scroller).overflowY === "auto",
+    };
+  });
+  await settle(page);
+  const boxAfter = (await pageView(page)).box;
+  assert(
+    tall.content > canvasViewport.height &&
+      tall.page === 0 &&
+      tall.scrolls &&
+      JSON.stringify(boxAfter) === JSON.stringify(boxBefore),
+    `with ${Math.round(tall.content)} px of save results in the panel, the page does not scroll, the panel does, and the canvas keeps its box: ${JSON.stringify(boxAfter)}`,
+  );
 
   assertCleanConsole();
 } finally {

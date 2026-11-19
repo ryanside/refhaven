@@ -270,6 +270,19 @@ try {
     `on the canvas a paste into a text field is left to the field: ${intoField}`,
   );
 
+  const gray = await image(page, "gray.png", [120, 120, 120], 150, 150);
+  const itemsBefore = (await openCanvas(owner, {})).items.length;
+  view = await pageView(page);
+  const viewCenter = toWorld(view, centerOf(view.box));
+  const panelBox = (await page.getByTestId("canvas-panel").boundingBox())!;
+  await send(page, "drop", [gray.carried], '[data-testid="canvas-panel"]', centerOf(panelBox));
+  await waitForCanvas(page, itemsBefore + 1);
+  const grayItem = itemOf((await openCanvas(owner, {})).items, await refIdOf(owner, "gray.png"));
+  assert(
+    panelBox.x + panelBox.width <= view.box.x && at(grayItem, viewCenter),
+    `a file dropped on the canvas's panel, which is beside the canvas, lands at the center of the view, ${viewCenter.x.toFixed(1)}, ${viewCenter.y.toFixed(1)}`,
+  );
+
   assertCleanConsole();
 } finally {
   await browser.close();

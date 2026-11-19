@@ -14,7 +14,6 @@ import {
 import {
   canvasViewport,
   type PageView,
-  clearOfPanel,
   exposedPoint,
   type Rgb,
   openCanvas,
@@ -155,14 +154,14 @@ try {
   await second.locator('[data-testid="canvas"][data-shown-thumbnails="3"]').waitFor();
   await shown(second, 4);
 
-  /** A point of the item that no other item covers and that the panel does not cover. */
-  const pointOn = async (on: Page, view: PageView, key: string): Promise<Point> => {
+  /** A point of the item that no other item covers. */
+  const pointOn = async (view: PageView, key: string): Promise<Point> => {
     const { items, of } = await snapshot();
-    return round(toPage(view, exposedPoint(of(key), items, await clearOfPanel(on, view))));
+    return round(toPage(view, exposedPoint(of(key), items)));
   };
   const view = await pageView(page);
   const secondView = await pageView(second);
-  const on = (key: string) => pointOn(page, view, key);
+  const on = (key: string) => pointOn(view, key);
 
   const click = async (at: Point, shift = false) => {
     if (shift) await page.keyboard.down("Shift");
@@ -177,7 +176,7 @@ try {
     await page.mouse.up();
     await settle(page);
   };
-  /** Empty canvas below the row of images, clear of the panel. */
+  /** Empty canvas below the row of images. */
   const empty = round(toPage(view, { x: 550, y: 450 }));
   const clickEmpty = async () => {
     await click(empty);
@@ -250,7 +249,7 @@ try {
     `a click on empty canvas clears the selection, and then a click on one member selects both, with an outline on each and one frame around both at ${showRect(frameRect)}`,
   );
 
-  const secondGreen = await pointOn(second, secondView, green);
+  const secondGreen = await pointOn(secondView, green);
   await until(
     async () => {
       await second.mouse.click(secondGreen.x, secondGreen.y);

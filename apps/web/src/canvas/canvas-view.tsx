@@ -434,11 +434,17 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
   const placeAt = useCallback<PlaceAt>(
     (at) => {
       const box = host.current!.getBoundingClientRect();
-      const toWorld = () =>
-        screenToWorld(
-          store.camera(),
-          at ? { x: at.x - box.left, y: at.y - box.top } : { x: box.width / 2, y: box.height / 2 },
-        );
+      // A drop beside the canvas, as on its panel, starts at the center of the view, as a paste does.
+      const onCanvas =
+        at !== null &&
+        at.x >= box.left &&
+        at.x <= box.right &&
+        at.y >= box.top &&
+        at.y <= box.bottom;
+      const point = onCanvas
+        ? { x: at.x - box.left, y: at.y - box.top }
+        : { x: box.width / 2, y: box.height / 2 };
+      const toWorld = () => screenToWorld(store.camera(), point);
       // The first snapshot fits the camera to the items. A point read before that would end up
       // somewhere else on screen, so a drop that comes earlier is read when its first image is placed.
       let start = latestBase.current ? toWorld() : null;
@@ -469,45 +475,51 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
   }, [store, urls]);
 
   return (
-    <div className="relative flex-1 overflow-hidden">
-      <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
-      <div ref={outlines} className="pointer-events-none absolute inset-0" />
-      {draft ? <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} /> : null}
-      <div
-        data-testid="canvas-panel"
-        className="absolute top-3 left-3 flex flex-col gap-1 rounded-md border bg-background p-2"
-      >
-        <SaveImages collectionId={collectionId} placeAt={placeAt} />
-        <EditButtons
-          store={store}
-          history={history}
-          removeLabel={collectionId === undefined ? "Remove from canvas" : "Remove from collection"}
-          actions={actions}
-        />
-        <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
-        <GroupButtons store={store} actions={actions} />
-        {offCanvas > 0 ? (
-          <div className="flex items-center gap-2">
-            <p data-testid="off-canvas" data-count={offCanvas}>
-              {offCanvas === 1
-                ? "1 image of the library is not on this canvas."
-                : `${offCanvas} images of the library are not on this canvas.`}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void inOrder(() => takeSnapshot(true).then(() => null)).catch(() =>
-                  setProblem("The images could not be put back."),
-                )
-              }
-            >
-              Put them back
-            </Button>
-          </div>
+    <div className="flex min-h-0 flex-1">
+      {/* The content is laid over the column, so its height never adds to the page's. It scrolls. */}
+      <div data-testid="canvas-panel" className="relative w-80 shrink-0 border-r">
+        <div className="absolute inset-0 flex flex-col gap-2 overflow-y-auto p-3">
+          <SaveImages collectionId={collectionId} placeAt={placeAt} />
+          <EditButtons
+            store={store}
+            history={history}
+            removeLabel={
+              collectionId === undefined ? "Remove from canvas" : "Remove from collection"
+            }
+            actions={actions}
+          />
+          <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
+          <GroupButtons store={store} actions={actions} />
+          {offCanvas > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p data-testid="off-canvas" data-count={offCanvas}>
+                {offCanvas === 1
+                  ? "1 image of the library is not on this canvas."
+                  : `${offCanvas} images of the library are not on this canvas.`}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void inOrder(() => takeSnapshot(true).then(() => null)).catch(() =>
+                    setProblem("The images could not be put back."),
+                  )
+                }
+              >
+                Put them back
+              </Button>
+            </div>
+          ) : null}
+          <Readout store={store} />
+          {problem ? <p role="alert">{problem}</p> : null}
+        </div>
+      </div>
+      <div className="relative flex-1 overflow-hidden">
+        <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
+        <div ref={outlines} className="pointer-events-none absolute inset-0" />
+        {draft ? (
+          <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} />
         ) : null}
-        <Readout store={store} />
-        {problem ? <p role="alert">{problem}</p> : null}
       </div>
     </div>
   );
@@ -528,7 +540,7 @@ function EditButtons({
   const { canUndo, canRedo } = useSyncExternalStore(history.subscribe, history.summary);
   return (
     <>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.remove}>
           {removeLabel}
         </Button>
@@ -539,7 +551,7 @@ function EditButtons({
           Redo
         </Button>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -571,7 +583,7 @@ function GroupButtons({
     store.selected().some((item) => item.group),
   );
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" disabled={!canGroup} onClick={actions.group}>
         Group
       </Button>
@@ -606,7 +618,7 @@ function NoteButtons({
 }) {
   const shared = useSyncExternalStore(store.subscribe, () => selectedColor(store));
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" onClick={addNote}>
         Add note
       </Button>

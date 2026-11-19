@@ -576,17 +576,16 @@ try {
   await slow.goto(canvasUrl);
   const onLibrary = await snapshotOf(owner);
   await waitForCanvas(slow, onLibrary.items.length);
-  // Two images whose points are clear of the panel, which sits over the canvas's corner.
   const slowView = await pageView(slow);
-  const panel = (await slow.getByTestId("canvas-panel").boundingBox())!;
-  const clear = onLibrary.items
-    .map((item) => ({ item, at: toPage(slowView, exposedPoint(item, onLibrary.items)) }))
-    .filter(({ at }) => at.x > panel.x + panel.width + 20 || at.y > panel.y + panel.height + 20);
-  const [{ item: one, at: oneAt }, { item: other, at: otherAt }] = clear as [
-    (typeof clear)[number],
-    (typeof clear)[number],
+  const exposed = onLibrary.items.map((item) => ({
+    item,
+    at: toPage(slowView, exposedPoint(item, onLibrary.items)),
+  }));
+  const [{ item: one, at: oneAt }, { item: other, at: otherAt }] = exposed as [
+    (typeof exposed)[number],
+    (typeof exposed)[number],
   ];
-  // A click on each first, to be sure that both points are on their images and not under the panel.
+  // A click on each first, to be sure that both points are on their images.
   for (const at of [oneAt, otherAt]) {
     await click(slow, at);
     await until(
