@@ -469,13 +469,10 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
   }, [store, urls]);
 
   return (
-    <div className="relative flex-1 overflow-hidden">
-      <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
-      <div ref={outlines} className="pointer-events-none absolute inset-0" />
-      {draft ? <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} /> : null}
+    <div className="flex min-h-0 flex-1">
       <div
         data-testid="canvas-panel"
-        className="absolute top-3 left-3 flex flex-col gap-1 rounded-md border bg-background p-2"
+        className="flex w-80 shrink-0 flex-col gap-2 overflow-y-auto border-r p-3"
       >
         <SaveImages collectionId={collectionId} placeAt={placeAt} />
         <EditButtons
@@ -487,7 +484,7 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
         <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
         <GroupButtons store={store} actions={actions} />
         {offCanvas > 0 ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <p data-testid="off-canvas" data-count={offCanvas}>
               {offCanvas === 1
                 ? "1 image of the library is not on this canvas."
@@ -509,6 +506,13 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
         <Readout store={store} />
         {problem ? <p role="alert">{problem}</p> : null}
       </div>
+      <div className="relative flex-1 overflow-hidden">
+        <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
+        <div ref={outlines} className="pointer-events-none absolute inset-0" />
+        {draft ? (
+          <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -528,7 +532,7 @@ function EditButtons({
   const { canUndo, canRedo } = useSyncExternalStore(history.subscribe, history.summary);
   return (
     <>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.remove}>
           {removeLabel}
         </Button>
@@ -539,7 +543,7 @@ function EditButtons({
           Redo
         </Button>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -571,7 +575,7 @@ function GroupButtons({
     store.selected().some((item) => item.group),
   );
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" disabled={!canGroup} onClick={actions.group}>
         Group
       </Button>
@@ -606,7 +610,7 @@ function NoteButtons({
 }) {
   const shared = useSyncExternalStore(store.subscribe, () => selectedColor(store));
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" onClick={addNote}>
         Add note
       </Button>

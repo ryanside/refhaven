@@ -77,20 +77,20 @@ Preconditions:
 
 - Chromium sends mouse events at whole pixels. Round a computed point before you move the mouse to it, or the world point under the cursor drifts by a fraction of a pixel.
 - The readout changes before the next frame draws. Wait two animation frames before a screenshot or an outline count.
-- The panel with the readout sits over the canvas's top-left corner. A click there does not reach the canvas. The view links are in the bar above the canvas.
-- The sidebar takes 256 px of the page's width. `canvasViewport` in `apps/web/checks/canvas-screen.ts` is a page of 1656 by 900, which leaves the canvas 1400 wide. A narrower page cuts off items that a check places near the right edge.
+- The panel with the readout is a column 320 px wide, left of the canvas, with its own scroll. It covers no part of the canvas. The view links are in the bar above the canvas.
+- The sidebar takes 256 px of the page's width and the canvas's panel 320 px. `canvasViewport` in `apps/web/checks/canvas-screen.ts` is a page of 1976 by 900, which leaves the canvas 1400 wide. A narrower page cuts off items that a check places near the right edge.
 - `canvas.open` through the API is a mutation, and it places any saved image that has no item yet. Save every image before you open the canvas, or the page and the API see different items.
 - An image that has no 2048 px copy, because it is 2048 px or smaller, loads its original for the display role. Only an image over 2048 px requests `2048.webp`.
 - `canvas.open` and `canvas.changes` return group items, which have no place. `openCanvas` and `canvasChanges` in `apps/web/checks/canvas-screen.ts` return the placed items only.
 - An item without a loaded texture is not drawn. With more images in view than the thumbnail budget of 200, the rest stay empty.
 - `page.waitForURL` resolves before the new page renders. Wait for something on the new page, such as the collection's heading, before you use a control that both pages have, like `Add images`.
 - The canvas fits the camera to every item once, when the page opens, at no more than 100%. Reload to reset the camera.
-- The panel now holds `Add images`, the outcome list, and two rows of buttons, so it covers more of the top-left corner. Drop and click away from it.
+- The panel holds `Add images`, the outcome list, and the buttons. It grows downward and scrolls, so the canvas keeps its place and size when an outcome or a notice appears.
 - `data-shown-thumbnails="0"` shows before the first snapshot loads. An image is placed when its save ends, so a drop that early is still placed once the snapshot has loaded by then.
 - A selected image's outline is 2 px wide and covers its edges. Allow 3 px when you compare its drawn rectangle.
 - The count of images off the library's canvas comes from the snapshot. A removal on the page shows in it after a reload.
 - The note editor is the canvas page's one text field. Open it with `Add note` or a double click on a note, and find it with `page.getByLabel("Note")`. While it has focus no canvas shortcut fires: `n`, Backspace, and Mod+A edit the text. It stops at 2,000 characters.
-- Give a second page the same viewport as the first, or its view is fitted differently and the panel can cover the point you read.
+- Give a second page the same viewport as the first, or its view is fitted differently and a point you read is somewhere else.
 - A press near a selected image's corner, edge middle, or above its top edge lands on a handle and resizes or turns instead of selecting. Click other images away from those points.
 - A handle of a turned frame is a turned square, so its bounding box is larger than 10 px. Compare sizes between zooms at one rotation.
 - A drag that ends where it began saves nothing, and so does a press on a handle that does not move.
