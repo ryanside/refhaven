@@ -6,6 +6,7 @@ import type { Page } from "playwright";
 import {
   appUrl,
   assert,
+  clientFor,
   type Carried,
   consoleWatch,
   openPageWithPasskeyDevice,
@@ -86,8 +87,6 @@ watchConsole(page);
 try {
   await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-undo-${Date.now().toString(36)}`);
-  const main = await collectionCanvas(page);
-  const canvasUrl = `${main.url}?view=canvas`;
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
       images.map(async ({ name, color, width, height }) => ({
@@ -101,6 +100,15 @@ try {
     .locator('[role="status"] li[data-outcome="saved"]')
     .nth(2)
     .waitFor({ timeout: 60_000 });
+  const saved = await (
+    await clientFor(page)
+  ).query(api.library.list, { paginationOpts: { numItems: 100, cursor: null } });
+  // Newest saved first, as the library's canvas placed them, so the layout puts red on top.
+  const main = await collectionCanvas(
+    page,
+    saved.page.map((item) => item.refId),
+  );
+  const canvasUrl = `${main.url}?view=canvas`;
   const owner = main.client;
   await page.goto(canvasUrl);
   await waitForCanvas(page, 3);
