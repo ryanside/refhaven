@@ -13,8 +13,8 @@
     "./trash": "./confect/trash.ts"
   },
   "scripts": {
-    "dev": "convex dev --tail-logs",
-    "dev:codegen": "confect dev",
+    "dev": "bun --bun convex dev --tail-logs",
+    "dev:codegen": "bun --bun confect dev",
     "codegen": "confect codegen",
     "typecheck": "effect-tsgo tsc --noEmit",
     "test": "vitest run"
