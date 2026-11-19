@@ -7,8 +7,9 @@ import type { RefsDoc } from "./_generated/docs";
 import type { Id } from "./_generated/id";
 import refs from "./_generated/refs";
 import databaseSchema from "./_generated/schema";
-import { DatabaseReader, DatabaseWriter, MutationRunner } from "./_generated/services";
+import { DatabaseReader, DatabaseWriter, MutationRunner, QueryRunner } from "./_generated/services";
 import {
+  type Sha256,
   maxImageBytes,
   originalKey,
   servedKey,
@@ -20,7 +21,7 @@ import {
 } from "./blob";
 import library, { ImageTooLarge, UnsupportedImage, UploadNotFound } from "./library.spec";
 import { addMember, ownedCollection } from "./membership";
-import { storedBlob, takeBack } from "./orphan";
+import { pendingUpload, storedBlob } from "./orphan";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
 import { hashBoundUpload, r2 } from "./r2";
@@ -33,6 +34,18 @@ const variantUpload = (key: string) =>
     Effect.map(({ url }) => ({ url, headers: {} })),
   );
 
+/**
+ * The upload that new bytes go in by: the one already waiting for a save of them, or a new one.
+ * Its ID names the objects' keys.
+ */
+const openUpload = (workspaceId: Id<"workspaces">, sha256: Sha256) =>
+  Effect.gen(function* () {
+    const pending = yield* pendingUpload(workspaceId, sha256);
+    if (Option.isSome(pending)) return pending.value._id;
+    const writer = yield* DatabaseWriter;
+    return yield* writer.table("pendingUploads").insert({ workspaceId, sha256 }).pipe(Effect.orDie);
+  });
+
 const prepareUpload = FunctionImpl.make(
   databaseSchema,
   library,
@@ -40,21 +53,24 @@ const prepareUpload = FunctionImpl.make(
   ({ sha256, roles }) =>
     Effect.gen(function* () {
       const { workspaceId } = yield* CurrentWorkspace;
-      const stored = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
-      const original = stored
+      const blob = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
+      const stored = {
+        workspaceId,
+        sha256,
+        upload: blob ? blob.upload : yield* openUpload(workspaceId, sha256),
+      };
+      const original = blob
         ? []
         : [
             {
               role: "original" as const,
-              ...(yield* Effect.promise(() =>
-                hashBoundUpload(originalKey(workspaceId, sha256), sha256),
-              )),
+              ...(yield* Effect.promise(() => hashBoundUpload(originalKey(stored), sha256))),
             },
           ];
       const variants = yield* Effect.forEach(
-        variantRoles.filter((role) => roles.includes(role) && !stored?.variants?.[role]),
+        variantRoles.filter((role) => roles.includes(role) && !blob?.variants?.[role]),
         (role) =>
-          variantUpload(variantKey(workspaceId, sha256, role)).pipe(
+          variantUpload(variantKey(stored, role)).pipe(
             Effect.map((upload) => ({ role, ...upload })),
           ),
       );
@@ -94,31 +110,41 @@ const inspectUpload = (key: string) =>
     return { byteSize, mimeType };
   });
 
-const reclaim = FunctionImpl.make(databaseSchema, library, "takeBack", ({ sha256 }) =>
+/**
+ * The upload whose objects hold these bytes for the workspace: the Blob row's, or else the one
+ * waiting for a save. An empty answer is a Blob row from before uploads had IDs. Null when the
+ * workspace has neither row.
+ */
+const uploadOf = FunctionImpl.make(databaseSchema, library, "uploadOf", ({ sha256 }) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
-    return yield* takeBack(workspaceId, sha256);
+    const blob = yield* storedBlob(workspaceId, sha256);
+    if (Option.isSome(blob)) {
+      return blob.value.upload === undefined ? {} : { upload: blob.value.upload };
+    }
+    const pending = yield* pendingUpload(workspaceId, sha256);
+    return Option.isSome(pending) ? { upload: pending.value._id } : null;
   }),
 );
 
 /**
- * Takes the bytes back from the sweep, then looks at the objects, then records them. In that
- * order no sweep can begin to delete an object between the look and the record: it has not begun,
- * and it cannot begin for bytes with no orphan row. A new orphan row would be a week from its
- * sweep, and Convex ends this action after 30 minutes at most. What this does not cover is a
- * delete that a dead sweep left in flight, which `sweepLockMs` waits out.
+ * Finds the upload that holds the bytes, looks at its objects, then records them. `record` goes
+ * on only when the bytes are still held by that upload. So a purge between the look and the
+ * record fails the save, and no Blob row is ever written for objects that the sweep will delete.
  */
 const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...image }) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
+    const { runQuery } = yield* QueryRunner;
     const { runMutation } = yield* MutationRunner;
-    const free = yield* runMutation(refs.internal.library.takeBack, {
+    const held = yield* runQuery(refs.internal.library.uploadOf, {
       sha256: image.sha256,
     }).pipe(Effect.catchTags({ NotSignedIn: Effect.die, SchemaError: Effect.die }));
-    if (!free) {
+    if (held === null) {
       return yield* new UploadNotFound();
     }
-    const stored = yield* inspectUpload(originalKey(workspaceId, image.sha256));
+    const objects = { workspaceId, sha256: image.sha256, upload: held.upload };
+    const stored = yield* inspectUpload(originalKey(objects));
     const storedVariants = yield* Effect.forEach(
       variantRoles.flatMap((role) => {
         const size = variants[role];
@@ -126,9 +152,7 @@ const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...
       }),
       ({ role, size }) =>
         Effect.gen(function* () {
-          const { byteSize, mimeType } = yield* inspectUpload(
-            variantKey(workspaceId, image.sha256, role),
-          );
+          const { byteSize, mimeType } = yield* inspectUpload(variantKey(objects, role));
           if (mimeType !== "image/webp") {
             return yield* new UnsupportedImage();
           }
@@ -138,6 +162,7 @@ const save = FunctionImpl.make(databaseSchema, library, "save", ({ variants, ...
     return yield* runMutation(refs.internal.library.record, {
       ...image,
       ...stored,
+      ...held,
       variants: Object.fromEntries(storedVariants),
     }).pipe(Effect.catchTags({ NotSignedIn: Effect.die, SchemaError: Effect.die }));
   }),
@@ -147,7 +172,18 @@ const record = FunctionImpl.make(
   databaseSchema,
   library,
   "record",
-  ({ sha256, fileName, width, height, byteSize, mimeType, thumbHash, variants, collectionId }) =>
+  ({
+    sha256,
+    fileName,
+    width,
+    height,
+    byteSize,
+    mimeType,
+    thumbHash,
+    variants,
+    upload,
+    collectionId,
+  }) =>
     Effect.gen(function* () {
       if (collectionId !== undefined) {
         yield* ownedCollection(collectionId);
@@ -155,9 +191,16 @@ const record = FunctionImpl.make(
       const { workspaceId } = yield* CurrentWorkspace;
       const writer = yield* DatabaseWriter;
       const existing = Option.getOrUndefined(yield* storedBlob(workspaceId, sha256));
-      // The purge may have written an orphan row since `save` took the bytes back.
-      if (!existing && !(yield* takeBack(workspaceId, sha256))) {
+      const pending = Option.getOrUndefined(yield* pendingUpload(workspaceId, sha256));
+      // `save` looked at the objects of `upload`. They are these bytes' objects only while the
+      // Blob row names that upload, or, with no Blob row yet, while the upload still waits.
+      // Otherwise the purge deleted the Blob row since, and the sweep will delete those objects.
+      if (existing ? existing.upload !== upload : pending === undefined || pending._id !== upload) {
         return yield* new UploadNotFound();
+      }
+      // The Blob row takes the upload's ID, and the upload stops waiting.
+      if (!existing && pending) {
+        yield* writer.table("pendingUploads").delete(pending._id);
       }
       const blobId = existing
         ? existing._id
@@ -166,6 +209,7 @@ const record = FunctionImpl.make(
             .insert({
               workspaceId,
               sha256,
+              ...(upload === undefined ? {} : { upload }),
               byteSize,
               mimeType,
               width,
@@ -315,14 +359,13 @@ const trash = FunctionImpl.make(databaseSchema, library, "trash", ({ paginationO
 // the same signed URL after it expired. A Ref in the trash is signed too, for the trash page.
 const urls = FunctionImpl.make(databaseSchema, library, "urls", ({ refIds, role }) =>
   Effect.gen(function* () {
-    const { workspaceId } = yield* CurrentWorkspace;
     const reader = yield* DatabaseReader;
     return yield* Effect.forEach(refIds, (refId) =>
       Effect.gen(function* () {
         const ref = yield* ownedRef(refId);
         const blob = yield* reader.table("blobs").get(ref.blobs.original).pipe(Effect.orDie);
         const url = yield* Effect.promise(() =>
-          r2.getUrl(servedKey(workspaceId, blob, role), { expiresIn: signedUrlSeconds }),
+          r2.getUrl(servedKey(blob, role), { expiresIn: signedUrlSeconds }),
         );
         return { refId, url };
       }),
@@ -387,7 +430,7 @@ const restore = FunctionImpl.make(databaseSchema, library, "restore", ({ refIds 
 
 export default GroupImpl.make(databaseSchema, library).pipe(
   Layer.provide(prepareUpload),
-  Layer.provide(reclaim),
+  Layer.provide(uploadOf),
   Layer.provide(save),
   Layer.provide(record),
   Layer.provide(list),

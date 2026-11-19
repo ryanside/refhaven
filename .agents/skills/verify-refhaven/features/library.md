@@ -34,7 +34,7 @@ Preconditions:
 - **Save.** Pick files. Run `await page.getByLabel("Add images").setInputFiles([{ name: "red.png", mimeType: "image/png", buffer }])`. One `[role="status"] li` appears per file, with `data-outcome="saved"` and the text `red.png: saved.`
 - **Paste or drop.** Send the page a `drop` or `paste` event that carries files, with `send` from `apps/web/checks/browser.ts`. The page cancels the event, and one outcome line appears per file. An event that carries only text is not cancelled and saves nothing. A paste into a text field, and a drag that began on the page itself, save nothing either.
 - **Grid.** Run `await page.locator("[data-ref-id]").first().waitFor()`. Each card holds an `img` and the file name. The newest card is first. Wait until every image has loaded with `page.waitForFunction(() => [...document.querySelectorAll<HTMLImageElement>("[data-ref-id] img")].every((image) => image.complete && image.naturalWidth > 0))`.
-- **Variants.** Count the `PUT` requests to `*.r2.cloudflarestorage.com` with `page.on("request", ...)`. A 3000 by 2000 image sends three, to `/w/{workspaceId}/o/{sha256}`, `/w/{workspaceId}/v/{sha256}/512.webp`, and `/w/{workspaceId}/v/{sha256}/2048.webp`. A 300 px image sends one. The card's `img` has a `naturalWidth` of 512 for the large image and 300 for the small one.
+- **Variants.** Count the `PUT` requests to `*.r2.cloudflarestorage.com` with `page.on("request", ...)`. A 3000 by 2000 image sends three, to `/w/{workspaceId}/o/{sha256}/{uploadId}`, `/w/{workspaceId}/v/{sha256}/{uploadId}/512.webp`, and `/w/{workspaceId}/v/{sha256}/{uploadId}/2048.webp`, with one `{uploadId}` for all three. It is the `upload` of the image's Blob row. A 300 px image sends one. The card's `img` has a `naturalWidth` of 512 for the large image and 300 for the small one.
 - **Placeholder.** Abort `GET` requests to R2 with `page.route`, then reload. Each card's `img` has `style.backgroundImage` starting with `url("data:image/png;base64`. Once the image loads the style is empty.
 - **Duplicate.** Pick the same bytes again under another file name. The new outcome reads `saved. Your library already had this image, so its bytes were reused.` A new card appears. No `PUT` request goes to `*.r2.cloudflarestorage.com`. Count them with `page.on("request", ...)`.
 - **Reject.** Pick a text file named `note.png`. The outcome has `data-outcome="rejected"` and reads `not saved (UnsupportedImage)`. No card appears.
@@ -45,7 +45,7 @@ Preconditions:
 
 ## Gotchas
 
-- The `workspaceId` of the run is the second segment of the upload path, `/w/{workspaceId}/o/{sha256}`. Read it from the `PUT` request.
+- The `workspaceId` of the run is the second segment of the upload path, `/w/{workspaceId}/o/{sha256}/{uploadId}`. Read it from the `PUT` request.
 - The uploads of one image run at the same time, so their order varies. Match the paths as a set.
 - `library.urls` takes a `role` of `original`, `thumbnail`, or `display`. A role the Blob has no variant for serves the original.
 - An image saved before variants existed, or from a browser that cannot encode WebP, has no variants. It shows its original. Saving the same bytes again from a browser that can encode WebP uploads the missing variants, so that one duplicate does send `PUT` requests.

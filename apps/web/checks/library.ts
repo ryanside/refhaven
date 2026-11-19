@@ -66,16 +66,26 @@ try {
   );
 
   const workspaceId = uploads[0]!.split("/")[2];
+  /** The upload's ID, which ends the path of an original. */
+  const uploadIn = (hash: string) =>
+    uploads
+      .find((path) => path.includes(`/o/${hash}/`))
+      ?.split("/")
+      .at(-1);
+  const [largeUpload, smallUpload] = [uploadIn(sha256(large)), uploadIn(sha256(small))];
   const expectedUploads = [
-    `/w/${workspaceId}/o/${sha256(large)}`,
-    `/w/${workspaceId}/v/${sha256(large)}/512.webp`,
-    `/w/${workspaceId}/v/${sha256(large)}/2048.webp`,
-    `/w/${workspaceId}/o/${sha256(small)}`,
+    `/w/${workspaceId}/o/${sha256(large)}/${largeUpload}`,
+    `/w/${workspaceId}/v/${sha256(large)}/${largeUpload}/512.webp`,
+    `/w/${workspaceId}/v/${sha256(large)}/${largeUpload}/2048.webp`,
+    `/w/${workspaceId}/o/${sha256(small)}/${smallUpload}`,
   ];
   assert(
     uploads.length === expectedUploads.length &&
-      expectedUploads.every((path) => uploads.some((upload) => upload.endsWith(path))),
-    `the 3000 by 2000 image uploaded its original, 512.webp, and 2048.webp under w/{workspace}/v/{sha256}, and the 300 px image its original only: ${uploads.map((path) => path.replace(/[0-9a-f]{56}/, "…"))}`,
+      expectedUploads.every((path) => uploads.some((upload) => upload.endsWith(path))) &&
+      /^[0-9a-z]{32}$/.test(largeUpload ?? "") &&
+      /^[0-9a-z]{32}$/.test(smallUpload ?? "") &&
+      largeUpload !== smallUpload,
+    `the 3000 by 2000 image uploaded its original, 512.webp, and 2048.webp, each named by its hash and one upload ID, and the 300 px image its original only, under another upload ID: ${uploads.map((path) => path.replace(/[0-9a-f]{56}/, "…"))}`,
   );
 
   const naturalSize = (name: string) =>
@@ -156,7 +166,7 @@ try {
     `saving the same bytes again adds a Ref, uploads nothing, and says so: ${await outcomes(page).nth(0).textContent()}`,
   );
 
-  const ownRows = async (table: "refs" | "blobs") =>
+  const ownRows = async (table: "refs" | "blobs" | "pendingUploads") =>
     (await rows(table)).filter((row) => row.workspaceId === workspaceId);
   const originals = (await ownRows("refs")).map((ref) => ref.blobs.original);
   const blobs = await ownRows("blobs");
@@ -284,6 +294,20 @@ try {
     sha256: sha256(teal),
     roles: [],
   });
+  const [tealAgain] = await owner.mutation(api.library.prepareUpload, {
+    sha256: sha256(teal),
+    roles: [],
+  });
+  const waiting = async () =>
+    (await ownRows("pendingUploads")).filter((row) => row.sha256 === sha256(teal)).length;
+  assert(
+    new URL(tealAgain!.url).pathname === new URL(tealUpload!.url).pathname &&
+      new URL(tealUpload!.url).pathname.endsWith(
+        `/o/${sha256(teal)}/${(await ownRows("pendingUploads")).find((row) => row.sha256 === sha256(teal))!._id}`,
+      ) &&
+      (await waiting()) === 1,
+    "a second prepareUpload of bytes that no save has recorded offers the same key, named by the hash and the one upload row that waits",
+  );
   const wrongBytes = await put(tealUpload!, small);
   assert(
     wrongBytes === 400 &&
@@ -295,8 +319,8 @@ try {
   const rightBytes = await put(tealUpload!, teal);
   const tealRef = await owner.action(api.library.save, tealImage);
   assert(
-    rightBytes === 200 && tealRef.duplicate === false,
-    `R2 stores the bytes that match the hash, and the save records them: ${rightBytes}`,
+    rightBytes === 200 && tealRef.duplicate === false && (await waiting()) === 0,
+    `R2 stores the bytes that match the hash, the save records them, and no upload row waits any more: ${rightBytes}`,
   );
   const replaced = await put(tealUpload!, small);
   assert(

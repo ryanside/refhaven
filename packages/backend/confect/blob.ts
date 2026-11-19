@@ -18,7 +18,18 @@ export const maxImageBytes = 50 * 1024 * 1024;
 
 export const signedUrlSeconds = 60 * 60;
 
-export const originalKey = (workspaceId: string, sha256: Sha256) => `w/${workspaceId}/o/${sha256}`;
+/**
+ * Bytes in R2: the workspace, the hash, and the upload they came in by. Bytes saved before
+ * uploads had IDs have none, and their keys have the older form, without one.
+ */
+export type Stored = { workspaceId: string; sha256: Sha256; upload?: string | undefined };
+
+// The upload's ID is part of the key, and no two uploads share an ID. So bytes that were deleted
+// from R2 and are saved again get a new key, and a delete of the old key cannot reach them.
+const nameOf = ({ sha256, upload }: Stored) =>
+  upload === undefined ? sha256 : `${sha256}/${upload}`;
+
+export const originalKey = (stored: Stored) => `w/${stored.workspaceId}/o/${nameOf(stored)}`;
 
 /** The hash in base64, the form R2 takes it in when it checks an upload. */
 export const sha256Base64 = (sha256: Sha256) =>
@@ -39,9 +50,9 @@ export const variantRoles = VariantRole.literals;
 export const ImageRole = Schema.Literals(["original", ...variantRoles]);
 export type ImageRole = typeof ImageRole.Type;
 
-/** The variant's key is named by the original's hash, so every Ref that shares the Blob shares it. */
-export const variantKey = (workspaceId: string, sha256: Sha256, role: VariantRole) =>
-  `w/${workspaceId}/v/${sha256}/${variantSpecs[role].file}`;
+/** The variant's key is named as the original's is, so every Ref that shares the Blob shares it. */
+export const variantKey = (stored: Stored, role: VariantRole) =>
+  `w/${stored.workspaceId}/v/${nameOf(stored)}/${variantSpecs[role].file}`;
 
 type PixelSize = { width: number; height: number };
 
@@ -69,14 +80,8 @@ export const Variants = Schema.Struct({
 export type Variants = typeof Variants.Type;
 
 /** The object to serve for a role: its variant when the Blob has one, and the original otherwise. */
-export function servedKey(
-  workspaceId: string,
-  blob: { sha256: Sha256; variants?: Variants },
-  role: ImageRole,
-) {
-  return role !== "original" && blob.variants?.[role]
-    ? variantKey(workspaceId, blob.sha256, role)
-    : originalKey(workspaceId, blob.sha256);
+export function servedKey(blob: Stored & { variants?: Variants | undefined }, role: ImageRole) {
+  return role !== "original" && blob.variants?.[role] ? variantKey(blob, role) : originalKey(blob);
 }
 
 /** A ThumbHash in base64. A ThumbHash is at most 25 bytes. */

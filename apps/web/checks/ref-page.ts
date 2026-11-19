@@ -95,12 +95,14 @@ try {
   );
   const original = page.getByRole("link", { name: "Open the original" });
   const blobId = (await refRow(large))?.blobs.original;
-  const sha256 = (await rows("blobs")).find((row) => row._id === blobId)?.sha256;
+  const blob = (await rows("blobs")).find((row) => row._id === blobId);
   assert(
     (await page.getByText("3000 × 2000 px").count()) === 1 &&
       (await page.getByText("image/png", { exact: true }).count()) === 1 &&
       (await original.getAttribute("target")) === "_blank" &&
-      new URL((await original.getAttribute("href"))!).pathname.endsWith(`/o/${sha256}`),
+      new URL((await original.getAttribute("href"))!).pathname.endsWith(
+        `/o/${blob?.sha256}/${blob?.upload}`,
+      ),
     "the page shows the pixel size and the type, and a link that opens the original in a new tab",
   );
 

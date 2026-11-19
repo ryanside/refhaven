@@ -3,18 +3,18 @@ import * as Schema from "effect/Schema";
 import { Id } from "../_generated/id";
 import { Sha256, VariantRole } from "../blob";
 
-// One row is the objects of bytes whose last Blob row the purge deleted at `orphanedAt`. A save of
-// the same bytes deletes the row. A week later the sweep sets `sweepingAt`, deletes the objects
-// from R2, and deletes the row. While `sweepingAt` is set, no save of those bytes goes on.
+// One row is the objects of a Blob row that the purge deleted at `orphanedAt`: the same workspace,
+// hash, and upload, which name their keys. A week later the sweep deletes the objects from R2 and
+// then the row. No later save can get those keys, because a save of the same bytes is a new
+// upload with a new ID.
 export default Table.make(() =>
   Schema.Struct({
     workspaceId: Id("workspaces"),
     sha256: Sha256,
+    upload: Schema.optionalKey(Id("pendingUploads")),
     variants: Schema.Array(VariantRole),
     orphanedAt: Schema.Number,
-    sweepingAt: Schema.optionalKey(Schema.Number),
   }),
 )
-  .index("by_workspace_and_sha256", ["workspaceId", "sha256"])
   .index("by_workspace_and_orphanedAt", ["workspaceId", "orphanedAt"])
   .index("by_orphanedAt", ["orphanedAt"]);

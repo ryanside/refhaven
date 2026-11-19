@@ -10,7 +10,7 @@ import { DatabaseReader, DatabaseWriter, MutationRunner } from "./_generated/ser
 import { variantRoles } from "./blob";
 import { orphanKeys, storedBlob } from "./orphan";
 import { deleteObject } from "./r2";
-import { sweepLockMs, sweepMs, trashMs } from "./trash";
+import { sweepMs, trashMs } from "./trash";
 import trash from "./trash.spec";
 
 const batchSize = 50;
@@ -50,7 +50,7 @@ const pointersOf = (refId: Id<"refs">, limit: number) =>
 
 /**
  * Deletes a Ref that no row points at any more. When no other Ref points at its Blob, the Blob row
- * goes too, and an orphan row keeps its objects for the sweep.
+ * goes too, and an orphan row names its objects for the sweep.
  */
 const purgeRef = (ref: RefsDoc, now: number) =>
   Effect.gen(function* () {
@@ -68,6 +68,7 @@ const purgeRef = (ref: RefsDoc, now: number) =>
     yield* writer.table("orphans").insert({
       workspaceId: blob.workspaceId,
       sha256: blob.sha256,
+      ...(blob.upload === undefined ? {} : { upload: blob.upload }),
       variants: variantRoles.filter((role) => blob.variants?.[role]),
       orphanedAt: now,
     });
@@ -138,10 +139,11 @@ const purge = FunctionImpl.make(databaseSchema, trash, "purge", (args) =>
 );
 
 /**
- * Begins the sweep of the orphan rows a week old: sets `sweepingAt` on each and returns its
- * objects' keys. From then on no save of those bytes goes on, until `sweepDone` deletes the row.
- * A row that another sweep set less than `sweepLockMs` ago is left to that sweep. `more` says
- * whether to ask again.
+ * The orphan rows a week old, each with its objects' keys. `more` says whether to ask again once
+ * these are swept. A row whose upload a Blob row names is deleted here, and its objects stay. No
+ * save writes such a Blob row: the purge wrote the orphan row when it deleted the Blob row of that
+ * upload, and no later upload gets that ID. It is read all the same, because a wrong delete cannot
+ * be undone, and rows from before uploads had IDs share one set of keys per hash.
  */
 const sweepBatch = FunctionImpl.make(databaseSchema, trash, "sweepBatch", ({ pretend }) =>
   Effect.gen(function* () {
@@ -159,50 +161,44 @@ const sweepBatch = FunctionImpl.make(databaseSchema, trash, "sweepBatch", ({ pre
           .table("orphans")
           .index("by_orphanedAt", (q) => q.lt("orphanedAt", now - sweepMs))
           .take(batchSize);
-    const mine = due.filter(
-      ({ sweepingAt }) => sweepingAt === undefined || now - sweepingAt >= sweepLockMs,
-    );
-    const sweeping = yield* Effect.forEach(mine, (orphan) =>
+    const sweeping = yield* Effect.forEach(due, (orphan) =>
       Effect.gen(function* () {
-        // `record` deletes the orphan row when it inserts a Blob row, so the two never coexist.
-        // Read again all the same, because a wrong delete here cannot be undone.
-        if (Option.isSome(yield* storedBlob(orphan.workspaceId, orphan.sha256))) {
+        const blob = yield* storedBlob(orphan.workspaceId, orphan.sha256);
+        if (Option.isSome(blob) && blob.value.upload === orphan.upload) {
           yield* writer.table("orphans").delete(orphan._id);
           return [];
         }
-        yield* writer.table("orphans").patch(orphan._id, { sweepingAt: now });
         return [{ orphanId: orphan._id, keys: orphanKeys(orphan) }];
       }),
     );
-    return { sweeping: sweeping.flat(), more: due.length === batchSize && mine.length > 0 };
+    return { sweeping: sweeping.flat(), more: due.length === batchSize };
   }).pipe(Effect.orDie),
 );
 
+/** Deletes the orphan rows whose objects are gone. A row that another sweep deleted is skipped. */
 const sweepDone = FunctionImpl.make(databaseSchema, trash, "sweepDone", ({ orphanIds }) =>
   Effect.gen(function* () {
+    const reader = yield* DatabaseReader;
     const writer = yield* DatabaseWriter;
-    yield* Effect.forEach(orphanIds, (orphanId) => writer.table("orphans").delete(orphanId), {
-      discard: true,
-    });
+    yield* Effect.forEach(
+      orphanIds,
+      (orphanId) =>
+        Effect.gen(function* () {
+          const orphan = yield* Effect.option(reader.table("orphans").get(orphanId));
+          if (Option.isSome(orphan)) yield* writer.table("orphans").delete(orphanId);
+        }),
+      { discard: true },
+    );
     return null;
-  }).pipe(Effect.orDie),
+  }),
 );
 
-/**
- * A sweep begins no batch after this long, and leaves the rest to the next day's. Convex ends an
- * action after 30 minutes, and a sweep that it ends may leave a delete in flight.
- */
-const sweepRunMs = 10 * 60 * 1000;
-
-// Each batch's objects are deleted between the mutation that sets `sweepingAt` on its rows and
-// the one that deletes them, so a save never records bytes while this is deleting them. A delete
-// that fails, or whose answer never comes, ends the sweep with its rows still marked. A later
-// sweep finishes it after `sweepLockMs`, which is the wait for a delete this one left in flight.
-// A delete of an object that is already gone succeeds.
+// The objects go before their rows. A sweep that dies between the two leaves the rows, and the
+// next one deletes what is left: a delete of an object that is already gone succeeds. A delete
+// that reaches R2 late does no harm either, because no save ever gets a deleted object's key.
 const sweep = FunctionImpl.make(databaseSchema, trash, "sweep", (args) =>
   Effect.gen(function* () {
     const { runMutation } = yield* MutationRunner;
-    const until = Date.now() + sweepRunMs;
     let swept = 0;
     let deleted = 0;
     for (;;) {
@@ -216,7 +212,7 @@ const sweep = FunctionImpl.make(databaseSchema, trash, "sweep", (args) =>
       });
       swept += batch.sweeping.length;
       deleted += keys.length;
-      if (!batch.more || Date.now() > until) return { swept, deleted };
+      if (!batch.more) return { swept, deleted };
     }
   }).pipe(Effect.orDie),
 );

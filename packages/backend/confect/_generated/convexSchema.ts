@@ -7,6 +7,7 @@ import canvases from "./tables/canvases";
 import collectionRefs from "./tables/collectionRefs";
 import collections from "./tables/collections";
 import orphans from "./tables/orphans";
+import pendingUploads from "./tables/pendingUploads";
 import refs from "./tables/refs";
 import tags from "./tables/tags";
 import users from "./tables/users";
@@ -19,6 +20,7 @@ export default $defineSchema({
   collectionRefs: $Table.tableDefinition(collectionRefs),
   collections: $Table.tableDefinition(collections),
   orphans: $Table.tableDefinition(orphans),
+  pendingUploads: $Table.tableDefinition(pendingUploads),
   refs: $Table.tableDefinition(refs),
   tags: $Table.tableDefinition(tags),
   users: $Table.tableDefinition(users),

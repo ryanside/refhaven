@@ -60,6 +60,10 @@ const held = async (url: string) => {
   return status === 206;
 };
 
+/** Whether a signed URL is for the object with this key. */
+const signs = (url: string, key: string) =>
+  decodeURIComponent(new URL(url).pathname).endsWith(`/${key}`);
+
 const servedExactly = async (client: ConvexHttpClient, refId: Id<"refs">, bytes: Buffer) => {
   const [signed] = await client.mutation(api.library.urls, { refIds: [refId], role: "original" });
   return sha256(new Uint8Array(await (await fetch(signed!.url)).arrayBuffer())) === sha256(bytes);
@@ -69,13 +73,14 @@ type Row = Record<string, any>;
 
 /** The rows a check reads, newest first. The check's own rows are among the newest. */
 const state = async () => {
-  const [refs, tags, collectionRefs, canvasItems, blobs, orphans] = await Promise.all([
+  const [refs, tags, collectionRefs, canvasItems, blobs, orphans, uploads] = await Promise.all([
     rows("refs", 1000),
     rows("tags"),
     rows("collectionRefs"),
     rows("canvasItems", 1000),
     rows("blobs"),
     rows("orphans"),
+    rows("pendingUploads"),
   ]);
   const refRow = (refId: string): Row | undefined => refs.find((row) => row._id === refId);
   const pointing = (refId: string) => ({
@@ -93,6 +98,7 @@ const state = async () => {
     orphansOf: ofBytes(orphans),
     orphansIn: (workspaceId: string) => orphans.filter((row) => row.workspaceId === workspaceId),
     blobsIn: (workspaceId: string) => blobs.filter((row) => row.workspaceId === workspaceId),
+    uploadsIn: (workspaceId: string) => uploads.filter((row) => row.workspaceId === workspaceId),
   };
 };
 
@@ -167,8 +173,16 @@ try {
     bigBuffer,
   ].map((buffer) => sha256(buffer));
   const bigBlob = before.blobsOf(workspace, bigHash!)[0]!;
-  const kBlob = before.blobsOf(workspace, kHash!)[0]!;
   const qBlob = before.blobsOf(workspace, qHash!)[0]!;
+  const pBlob = before.blobsOf(workspace, pHash!)[0]!;
+  const rBlob = before.blobsOf(workspace, rHash!)[0]!;
+  assert(
+    before.blobsIn(workspace).length === 8 &&
+      new Set(before.blobsIn(workspace).map((row) => row.upload)).size === 8 &&
+      before.blobsIn(workspace).every((row) => typeof row.upload === "string") &&
+      before.uploadsIn(workspace).length === 0,
+    "each of the eight Blob rows has its own upload ID, and no upload still waits for a save",
+  );
   assert(
     before.pointing(p).tags === 1 &&
       before.pointing(p).memberships === 1 &&
@@ -353,8 +367,9 @@ try {
     afterPurge.blobsOf(workspace, pHash!).length === 0 &&
       pOrphan.length === 1 &&
       pOrphan[0]!.orphanedAt === atBoundary &&
+      pOrphan[0]!.upload === pBlob.upload &&
       JSON.stringify([...pOrphan[0]!.variants].sort()) === '["display","thumbnail"]',
-    "the purged image's Blob row is gone, and one orphan row holds its hash, its two variants, and the purge's time",
+    "the purged image's Blob row is gone, and one orphan row holds its hash, its upload, its two variants, and the purge's time",
   );
   assert(
     (await Promise.all(pObjects.map(held))).every(Boolean),
@@ -394,27 +409,46 @@ try {
   await save(page, [{ name: "r-again.png", buffer: rBuffer }]);
   const rAgain = (await refsByName(owner)).get("r-again.png")!;
   const savedAgain = await state();
+  const rAgainObject = await signed(owner, rAgain, "original");
+  const rOrphan = savedAgain.orphansOf(workspace, rHash!);
+  const rBlobAgain = savedAgain.blobsOf(workspace, rHash!);
   assert(
-    savedAgain.orphansOf(workspace, rHash!).length === 0 &&
-      savedAgain.blobsOf(workspace, rHash!).length === 1,
-    "saving the purged image's bytes again before the sweep deletes its orphan row",
+    rOrphan.length === 1 &&
+      rOrphan[0]!.upload === rBlob.upload &&
+      rBlobAgain.length === 1 &&
+      typeof rBlobAgain[0]!.upload === "string" &&
+      rBlobAgain[0]!.upload !== rBlob.upload &&
+      new URL(rAgainObject).pathname !== new URL(rObject!).pathname &&
+      (await held(rObject!)) &&
+      (await held(rAgainObject)),
+    "saving the purged image's bytes again before the sweep is a new upload under a new key, and the orphan row still names the old upload, whose object is still in R2",
   );
 
-  const qAgain = await owner.action(api.library.save, {
-    sha256: qHash!,
-    fileName: "q-again.png",
-    width: qBlob.width,
-    height: qBlob.height,
-    thumbHash: qBlob.thumbHash,
-    variants: {},
-  });
+  const acrossPurge = await outcome(
+    owner.action(api.library.save, {
+      sha256: qHash!,
+      fileName: "q-across.png",
+      width: qBlob.width,
+      height: qBlob.height,
+      thumbHash: qBlob.thumbHash,
+      variants: {},
+    }),
+  );
   const savedAcross = await state();
   assert(
     prepared.length === 0 &&
-      savedAcross.orphansOf(workspace, qHash!).length === 0 &&
-      savedAcross.blobsOf(workspace, qHash!).length === 1 &&
-      savedAcross.refRow(qAgain.refId)?.deletedAt === undefined,
-    "a save whose prepareUpload ran before the purge and whose save ran after it ends live, with a new Blob row and no orphan row",
+      acrossPurge === "UploadNotFound" &&
+      savedAcross.blobsOf(workspace, qHash!).length === 0 &&
+      savedAcross.orphansOf(workspace, qHash!).length === 1 &&
+      !(await refsByName(owner)).has("q-across.png"),
+    `a save whose prepareUpload ran before the purge, and so was offered no upload, fails after it with ${acrossPurge} and writes no Blob row and no Ref`,
+  );
+  await save(page, [{ name: "q-again.png", buffer: qBuffer }]);
+  const qAgain = (await refsByName(owner)).get("q-again.png")!;
+  assert(
+    (await state()).blobsOf(workspace, qHash!).length === 1 &&
+      (await servedExactly(owner, qAgain, qBuffer)),
+    "saving those bytes again through the page works, with a new upload",
   );
 
   const atLate = lastLate + 30 * day + 1000;
@@ -433,87 +467,78 @@ try {
     "of two Refs on one Blob, both in the trash, the Blob row goes with the second, and an orphan row is written",
   );
 
+  const purgedObjects = [...pObjects, kObject!, dObject!, bigObject!, rObject!, qObject!];
   const early6 = await sweepAt(atBoundary + 6 * day);
   const afterEarlySweep = await state();
   assert(
     early6.swept === 0 &&
       early6.deleted === 0 &&
-      afterEarlySweep.orphansIn(workspace).length === 4 &&
-      (await Promise.all([...pObjects, kObject!, dObject!, bigObject!].map(held))).every(Boolean),
-    `a sweep 6 days after the purge deletes nothing: ${JSON.stringify(early6)}, four orphan rows, and every object still in R2`,
+      afterEarlySweep.orphansIn(workspace).length === 6 &&
+      (await Promise.all(purgedObjects.map(held))).every(Boolean),
+    `a sweep 6 days after the purge deletes nothing: ${JSON.stringify(early6)}, six orphan rows, and every object still in R2`,
   );
 
-  // A sweep that has begun and has deleted nothing yet: its first mutation alone.
+  // A sweep that has read its rows and deleted nothing yet: its first step alone. An image saved then
+  // is a new upload, so the deletes that follow, however late they reach R2, are not of its key.
   const atSweep = atLate + 8 * day;
-  const begun = JSON.parse(
+  const due = JSON.parse(
     await convexRun(
       "trash:sweepBatch",
       JSON.stringify({ pretend: { workspaceId: workspace, now: atSweep } }),
     ),
-  ) as { sweeping: Array<{ keys: Array<string> }>; more: boolean };
-  const whileSweeping = await state();
+  ) as { sweeping: Array<{ orphanId: string; keys: Array<string> }>; more: boolean };
+  const dueKeys = due.sweeping.flatMap(({ keys }) => keys);
+  await save(page, [{ name: "k-during.png", buffer: kBuffer }]);
+  const kDuring = (await refsByName(owner)).get("k-during.png")!;
+  const kDuringObject = await signed(owner, kDuring, "original");
   assert(
-    begun.sweeping.length === 4 &&
-      begun.sweeping.flatMap(({ keys }) => keys).length === 6 &&
-      !begun.more &&
-      whileSweeping.orphansIn(workspace).length === 4 &&
-      whileSweeping.orphansIn(workspace).every((row) => row.sweepingAt === atSweep) &&
-      (await Promise.all([...pObjects, kObject!, dObject!, bigObject!].map(held))).every(Boolean),
-    "a sweep 8 days after the purges begins by marking the four orphan rows, with every object still in R2",
+    due.sweeping.length === 6 &&
+      dueKeys.length === 8 &&
+      !due.more &&
+      purgedObjects.every((object) => dueKeys.some((key) => signs(object, key))) &&
+      (await Promise.all(purgedObjects.map(held))).every(Boolean),
+    "a sweep 8 days after the purges is due the six orphan rows and the eight objects of the purged Blobs, all still in R2",
   );
-  const duringSweep = await outcome(
-    owner.action(api.library.save, {
-      sha256: kHash!,
-      fileName: "k-during.png",
-      width: kBlob.width,
-      height: kBlob.height,
-      thumbHash: kBlob.thumbHash,
-      variants: {},
-    }),
-  );
-  const offered = await owner.mutation(api.library.prepareUpload, { sha256: kHash!, roles: [] });
-  const afterRefusal = await state();
   assert(
-    duringSweep === "UploadNotFound" &&
-      afterRefusal.blobsOf(workspace, kHash!).length === 0 &&
-      afterRefusal.orphansOf(workspace, kHash!)[0]?.sweepingAt === atSweep &&
-      offered.length === 1 &&
-      !(await refsByName(owner)).has("k-during.png"),
-    `a save of bytes that the sweep has begun to delete, while R2 still holds them, fails with ${duringSweep} and writes no Blob row and no Ref, and prepareUpload leaves the orphan row`,
-  );
-  const tooSoon = await sweepAt(atSweep + 12 * hour - minute);
-  assert(
-    tooSoon.swept === 0 &&
-      tooSoon.deleted === 0 &&
-      (await state()).orphansIn(workspace).length === 4 &&
-      (await Promise.all([...pObjects, kObject!, dObject!, bigObject!].map(held))).every(Boolean),
-    `a second sweep a minute under 12 hours after the first began leaves its rows and its objects alone: ${JSON.stringify(tooSoon)}`,
+    !dueKeys.some((key) => signs(kDuringObject, key)) &&
+      !dueKeys.some((key) => signs(rAgainObject, key)) &&
+      (await state()).orphansOf(workspace, kHash!).length === 1,
+    "an image saved again after the sweep read its rows is saved, with a key that is not among the sweep's, and its bytes' orphan row stays for the sweep",
   );
 
-  const atTakeover = atSweep + 12 * hour;
-  const swept = await sweepAt(atTakeover);
+  const swept = await sweepAt(atSweep);
   const afterSweep = await state();
   assert(
-    swept.swept === 4 && swept.deleted === 6 && afterSweep.orphansIn(workspace).length === 0,
-    `a sweep 12 hours after the first began finishes its work: it takes the four orphan rows and deletes six objects: ${JSON.stringify(swept)}`,
+    swept.swept === 6 && swept.deleted === 8 && afterSweep.orphansIn(workspace).length === 0,
+    `the sweep takes the six orphan rows and deletes eight objects: ${JSON.stringify(swept)}`,
   );
   assert(
-    (await Promise.all([...pObjects, kObject!, dObject!, bigObject!].map(held))).every(
-      (kept) => !kept,
-    ),
+    (await Promise.all(purgedObjects.map(held))).every((kept) => !kept),
     "R2 no longer holds the wide image's original, thumbnail, or display copy, nor the originals of the other purged Blobs",
   );
   assert(
-    (await held(rObject!)) &&
-      (await held(qObject!)) &&
-      (await held(sObject!)) &&
+    (await held(sObject!)) &&
       (await servedExactly(owner, rAgain, rBuffer)) &&
-      (await servedExactly(owner, qAgain.refId, qBuffer)) &&
+      (await servedExactly(owner, qAgain, qBuffer)) &&
+      (await servedExactly(owner, kDuring, kBuffer)) &&
       (await servedExactly(owner, s2, sBuffer)),
-    "the sweep leaves the bytes saved again before it, the bytes saved across the purge, and the Blob a live Ref shares, and each serves its original byte-exact",
+    "the sweep leaves the bytes saved again before it, the bytes saved again while it ran, and the Blob a live Ref shares, and each serves its original byte-exact",
   );
 
-  const again = { purged: await purgeAt(atTakeover), swept: await sweepAt(atTakeover) };
+  // Two sweeps at once both read the same rows. The slower one's last step finds them deleted.
+  // `convexRun` throws when the call fails.
+  await convexRun(
+    "trash:sweepDone",
+    JSON.stringify({ orphanIds: due.sweeping.map(({ orphanId }) => orphanId) }),
+  );
+  assert(
+    due.sweeping.length === 6 &&
+      (await state()).orphansIn(workspace).length === 0 &&
+      (await servedExactly(owner, kDuring, kBuffer)),
+    "a sweep's last step for six rows that another sweep already deleted does not fail and changes nothing",
+  );
+
+  const again = { purged: await purgeAt(atSweep), swept: await sweepAt(atSweep) };
   const afterAgain = await state();
   assert(
     again.purged === 0 &&
@@ -526,29 +551,29 @@ try {
     `running the purge and the sweep again changes nothing: ${JSON.stringify(again)}`,
   );
 
-  await save(page, [{ name: "k-again.png", buffer: kBuffer }]);
-  const kAgain = (await refsByName(owner)).get("k-again.png")!;
-  const afterKAgain = await state();
+  await save(page, [{ name: "d-again.png", buffer: dBuffer }]);
+  const dAgain = (await refsByName(owner)).get("d-again.png")!;
+  const afterDAgain = await state();
   assert(
-    afterKAgain.blobsOf(workspace, kHash!).length === 1 &&
-      afterKAgain.orphansOf(workspace, kHash!).length === 0 &&
-      (await servedExactly(owner, kAgain, kBuffer)),
+    afterDAgain.blobsOf(workspace, dHash!).length === 1 &&
+      afterDAgain.orphansOf(workspace, dHash!).length === 0 &&
+      afterDAgain.uploadsIn(workspace).length === 0 &&
+      (await servedExactly(owner, dAgain, dBuffer)),
     "after the sweep, the page saves the swept bytes again with a new upload, and the image serves its original byte-exact",
   );
 
-  const theirOrphan = afterKAgain.orphansIn(foreignWorkspace);
+  const theirOrphan = afterDAgain.orphansIn(foreignWorkspace);
   assert(
-    typeof afterKAgain.refRow(f)?.deletedAt === "number" &&
-      afterKAgain.blobsOf(foreignWorkspace, sha256(fBuffer)).length === 1 &&
+    typeof afterDAgain.refRow(f)?.deletedAt === "number" &&
+      afterDAgain.blobsOf(foreignWorkspace, sha256(fBuffer)).length === 1 &&
       (await held(fObject!)),
     "the second user's Ref, deleted before every pretend time above, keeps its row, its Blob, and its object in R2",
   );
   assert(
     theirOrphan.length === 1 &&
-      theirOrphan[0]!.sweepingAt === undefined &&
       theirOrphan[0]!.orphanedAt + 7 * day < atSweep &&
       (await held(gObject!)),
-    "the second user's orphan row, a week old at the first user's sweeps, is still there and unmarked, and its object is still in R2",
+    "the second user's orphan row, a week old at the first user's sweeps, is still there, and its object is still in R2",
   );
 
   // More rows than one purge mutation deletes: an image with 520 tags, and 50 Refs in 6
@@ -561,7 +586,7 @@ try {
     });
   }
   const hHash = sha256(hBuffer);
-  const hBlob = afterKAgain.blobsOf(foreignWorkspace, hHash)[0]!;
+  const hBlob = afterDAgain.blobsOf(foreignWorkspace, hHash)[0]!;
   const hCopies = await Promise.all(
     Array.from({ length: 49 }, (_, index) =>
       intruder.action(api.library.save, {
