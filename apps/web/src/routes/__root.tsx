@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { ConvexReactClient } from "convex/react";
 
 import appCss from "@refhaven/ui/globals.css?url";
+import { ThemeProvider } from "@/theme-provider";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -27,12 +28,14 @@ export const Route = createRootRouteWithContext<{
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
       <body>
-        {children}
+        <ThemeProvider defaultTheme="system" storageKey="theme">
+          {children}
+        </ThemeProvider>
         <Scripts />
       </body>
     </html>

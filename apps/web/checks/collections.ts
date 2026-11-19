@@ -391,6 +391,58 @@ try {
     "on a narrow window the not-found page still has the button that opens the sidebar, and following its Library link closes it",
   );
 
+  // The theme. A page with nothing stored follows the system, which is light here.
+  const themed = second.page;
+  const theme = () =>
+    themed.evaluate(() => ({
+      dark: document.documentElement.classList.contains("dark"),
+      stored: localStorage.getItem("theme"),
+      background: getComputedStyle(document.body).backgroundColor,
+    }));
+  const isDark = (dark: boolean) =>
+    themed.waitForFunction(
+      (wanted) => document.documentElement.classList.contains("dark") === wanted,
+      dark,
+    );
+  const choose = async (name: string) => {
+    await themed.getByRole("button", { name: "Theme" }).click();
+    await themed.getByRole("menuitem", { name, exact: true }).click();
+  };
+  const atFirst = await theme();
+  await choose("Dark");
+  await isDark(true);
+  const chosenDark = await theme();
+  assert(
+    !atFirst.dark &&
+      atFirst.stored === null &&
+      chosenDark.stored === "dark" &&
+      chosenDark.background !== atFirst.background,
+    `a page with no stored theme is light like the system, and choosing Dark stores it and changes the page's background from ${atFirst.background} to ${chosenDark.background}`,
+  );
+  // With the app's own scripts held back, only the script in the page's HTML can set the theme.
+  const held = await themed.context().newPage();
+  await held.route(
+    (url) => url.origin === appUrl && /^\/(src|@|node_modules)/.test(url.pathname),
+    (route) => route.abort(),
+  );
+  await held.goto(`${appUrl}/sign-in`, { waitUntil: "domcontentloaded" });
+  const beforeApp = await held.evaluate(() => document.documentElement.classList.contains("dark"));
+  await held.close();
+  assert(
+    beforeApp,
+    "a reload is dark before the app's scripts run, so a dark page does not flash light first",
+  );
+  await choose("System");
+  await isDark(false);
+  await themed.emulateMedia({ colorScheme: "dark" });
+  await isDark(true);
+  await themed.emulateMedia({ colorScheme: "light" });
+  await isDark(false);
+  assert(
+    (await theme()).stored === "system",
+    "choosing System follows the system: dark when it turns dark, and light again when it turns light",
+  );
+
   assertCleanConsole();
 } finally {
   await first.browser.close();

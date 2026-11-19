@@ -697,7 +697,7 @@ function NoteEditor({
         padding: noteType.padding * unit,
         font: noteFont(noteType.size * unit),
         lineHeight: `${noteType.lineHeight * unit}px`,
-        color: noteInk[draft.color],
+        color: noteInk(draft.color),
         transform: `rotate(${draft.rotation}rad)`,
         transformOrigin: "0 0",
       }}
@@ -837,6 +837,9 @@ function drive(
     requestDraw();
   });
   const unsubscribe = store.subscribe(requestDraw);
+  // The theme is a class on the root element. A note's ink depends on it.
+  const theme = new MutationObserver(requestDraw);
+  theme.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
   const resize = new ResizeObserver(() =>
     store.setViewport({ width: host.clientWidth, height: host.clientHeight }),
@@ -929,6 +932,7 @@ function drive(
     disposed = true;
     cancelAnimationFrame(frame);
     unsubscribe();
+    theme.disconnect();
     resize.disconnect();
     host.removeEventListener("pointerdown", onPointerDown);
     outlines.removeEventListener("pointerdown", onPointerDown);

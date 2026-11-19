@@ -33,10 +33,12 @@ import {
 } from "./canvas-screen";
 
 /** The colors the page draws the note color names in. */
-const ink = { black: [28, 25, 23], blue: [37, 99, 235], red: [220, 38, 38] } satisfies Record<
-  string,
-  Rgb
->;
+const ink = {
+  black: [28, 25, 23],
+  blackOnDark: [250, 250, 249],
+  blue: [37, 99, 235],
+  red: [220, 38, 38],
+} satisfies Record<string, Rgb>;
 const images = { yellow: [220, 200, 40], teal: [40, 170, 170] } satisfies Record<string, Rgb>;
 
 const canvasUrl = `${appUrl}/library?view=canvas`;
@@ -230,6 +232,31 @@ try {
   const key = first!.key;
   await items(3, second);
   assert(true, "the second page shows the new note without a reload");
+
+  // On the dark page the canvas is dark, and black text would not show there.
+  const chooseTheme = async (name: string) => {
+    await page.getByRole("button", { name: "Theme" }).click();
+    await page.getByRole("menuitem", { name, exact: true }).click();
+  };
+  await chooseTheme("Dark");
+  const lightOnDark = await until(
+    () => inkOn(page, view, first!, ink.blackOnDark),
+    (count) => count > 20,
+    "the black note's text to turn near white on the dark page",
+  );
+  const blackOnDark = await inkOn(page, view, first!, ink.black);
+  await screenshot(page, "01-note-on-dark.png");
+  await chooseTheme("Light");
+  const blackAgain = await until(
+    () => inkOn(page, view, first!, ink.black),
+    (count) => count > 20,
+    "the note's text to turn black again on the light page",
+  );
+  // A few pixels on the edge of light text pass through the black ink's color, so some are counted.
+  assert(
+    lightOnDark > 20 && blackAgain > 20 && blackOnDark < blackAgain / 4,
+    `on the dark page a black note is drawn near white, ${lightOnDark} pixels with ${blackOnDark} near black on its edges, and black again on the light page, ${blackAgain} pixels`,
+  );
 
   let note = first!;
   const noteCenter = () => at(note);
