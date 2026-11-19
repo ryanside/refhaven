@@ -50,19 +50,33 @@ const sha256 = Schema.decodeUnknownSync(Sha256)(
   "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
 );
 
-test("an original's object key sits under its workspace and is named by its hash", () => {
-  expect(originalKey("ws1", sha256)).toBe(
-    "w/ws1/o/9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-  );
+const upload = { workspaceId: "ws1", sha256, upload: "up1" };
+const old = { workspaceId: "ws1", sha256 };
+
+test("an original's object key sits under its workspace and is named by its hash and its upload", () => {
+  expect(originalKey(upload)).toBe(`w/ws1/o/${sha256}/up1`);
+});
+
+test("a second upload of the same bytes gets other keys", () => {
+  const again = { ...upload, upload: "up2" };
+
+  expect(originalKey(again)).not.toBe(originalKey(upload));
+  expect(variantKey(again, "thumbnail")).not.toBe(variantKey(upload, "thumbnail"));
+});
+
+test("bytes saved before uploads had IDs keep their keys, named by the hash alone", () => {
+  expect(originalKey(old)).toBe(`w/ws1/o/${sha256}`);
+  expect(variantKey(old, "thumbnail")).toBe(`w/ws1/v/${sha256}/512.webp`);
+  expect(variantKey(old, "display")).toBe(`w/ws1/v/${sha256}/2048.webp`);
 });
 
 test("a hash converts to the base64 form R2 checks an upload against", () => {
   expect(sha256Base64(sha256)).toBe("n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg=");
 });
 
-test("a variant's object key is named by the original's hash and the role's file", () => {
-  expect(variantKey("ws1", sha256, "thumbnail")).toBe(`w/ws1/v/${sha256}/512.webp`);
-  expect(variantKey("ws1", sha256, "display")).toBe(`w/ws1/v/${sha256}/2048.webp`);
+test("a variant's object key is named by the original's hash, its upload, and the role's file", () => {
+  expect(variantKey(upload, "thumbnail")).toBe(`w/ws1/v/${sha256}/up1/512.webp`);
+  expect(variantKey(upload, "display")).toBe(`w/ws1/v/${sha256}/up1/2048.webp`);
 });
 
 test.each([
@@ -90,10 +104,11 @@ test.each([
 
 test("a role is served from its variant when the Blob has one, and from the original otherwise", () => {
   const variant = { byteSize: 1, width: 512, height: 341 };
-  const withThumbnail = { sha256, variants: { thumbnail: variant } };
+  const withThumbnail = { ...upload, variants: { thumbnail: variant } };
 
-  expect(servedKey("ws1", withThumbnail, "thumbnail")).toBe(variantKey("ws1", sha256, "thumbnail"));
-  expect(servedKey("ws1", withThumbnail, "display")).toBe(originalKey("ws1", sha256));
-  expect(servedKey("ws1", withThumbnail, "original")).toBe(originalKey("ws1", sha256));
-  expect(servedKey("ws1", { sha256 }, "thumbnail")).toBe(originalKey("ws1", sha256));
+  expect(servedKey(withThumbnail, "thumbnail")).toBe(variantKey(upload, "thumbnail"));
+  expect(servedKey(withThumbnail, "display")).toBe(originalKey(upload));
+  expect(servedKey(withThumbnail, "original")).toBe(originalKey(upload));
+  expect(servedKey(upload, "thumbnail")).toBe(originalKey(upload));
+  expect(servedKey(old, "thumbnail")).toBe(originalKey(old));
 });

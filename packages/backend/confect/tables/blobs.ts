@@ -7,6 +7,9 @@ export default Table.make(() =>
   Schema.Struct({
     workspaceId: Id("workspaces"),
     sha256: Sha256,
+    // The upload the objects came in by, which names their keys. A Blob saved before uploads had
+    // IDs has none.
+    upload: Schema.optionalKey(Id("pendingUploads")),
     byteSize: Schema.Int,
     mimeType: ImageMimeType,
     width: Schema.Int,
