@@ -97,6 +97,7 @@ Preconditions:
 - A marquee must start on empty canvas. A press on an image starts a drag, and a press on a handle a resize or a turn.
 - An image lies on top of another by its `z`, not by the order it was saved in. Set `z` through the API with a patch to know which image is on top.
 - A selected note's outline and the frame are drawn in a near-black color on the note's edges. Read a note's text pixels a few pixels inside its rectangle.
+- A page is light unless a theme is chosen, because headless Chromium's system is light. Every color here is for the light page. On the dark page the outline and the frame are near white, and a `black` note is drawn near white, `#fafaf9`.
 - A note's text has antialiased edges. Count the pixels near its color inside its rectangle, rather than reading one point.
 - The readout counts items, notes included, and `data-shown-thumbnails` counts images only.
 - A new note's scale is one over the zoom when it was added, so its type shows at 16 px.

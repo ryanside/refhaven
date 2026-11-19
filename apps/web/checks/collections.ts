@@ -419,18 +419,22 @@ try {
       chosenDark.background !== atFirst.background,
     `a page with no stored theme is light like the system, and choosing Dark stores it and changes the page's background from ${atFirst.background} to ${chosenDark.background}`,
   );
-  // With the app's own scripts held back, only the script in the page's HTML can set the theme.
-  const held = await themed.context().newPage();
-  await held.route(
-    (url) => url.origin === appUrl && /^\/(src|@|node_modules)/.test(url.pathname),
-    (route) => route.abort(),
-  );
-  await held.goto(`${appUrl}/sign-in`, { waitUntil: "domcontentloaded" });
-  const beforeApp = await held.evaluate(() => document.documentElement.classList.contains("dark"));
-  await held.close();
+  /** Whether a new page is dark with the app's own scripts held back, so that only the script in its HTML ran. */
+  const darkBeforeApp = async (system: "light" | "dark") => {
+    const held = await themed.context().newPage();
+    await held.emulateMedia({ colorScheme: system });
+    await held.route(
+      (url) => url.origin === appUrl && /^\/(src|@|node_modules)/.test(url.pathname),
+      (route) => route.abort(),
+    );
+    await held.goto(`${appUrl}/sign-in`, { waitUntil: "domcontentloaded" });
+    const dark = await held.evaluate(() => document.documentElement.classList.contains("dark"));
+    await held.close();
+    return dark;
+  };
   assert(
-    beforeApp,
-    "a reload is dark before the app's scripts run, so a dark page does not flash light first",
+    await darkBeforeApp("light"),
+    "with Dark stored, a page is dark before the app's scripts run, so it does not flash light first",
   );
   await choose("System");
   await isDark(false);
@@ -441,6 +445,11 @@ try {
   assert(
     (await theme()).stored === "system",
     "choosing System follows the system: dark when it turns dark, and light again when it turns light",
+  );
+  const systemBeforeApp = [await darkBeforeApp("dark"), await darkBeforeApp("light")];
+  assert(
+    systemBeforeApp.join() === "true,false",
+    `with System stored, a page is dark before the app's scripts run on a dark system and light on a light one: ${systemBeforeApp}`,
   );
 
   assertCleanConsole();
