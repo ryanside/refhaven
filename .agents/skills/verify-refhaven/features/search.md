@@ -16,11 +16,11 @@ The library's gallery and each collection's gallery have a field labelled `Searc
 
 ## How to get to it (user POV)
 
-- Type in `Search` or choose a tag in `Tag` on `/library` or on `/c/{collectionId}`.
-- Open `/library?q=<text>&tag=<name>` or `/c/{collectionId}?q=<text>&tag=<name>` directly. A tag in any case, such as `?tag=Mood`, filters by its lowercase form.
+- Type in `Search` or choose a tag in `Tag` on `/library` or on a collection's gallery, `/c/{collectionId}?view=gallery`.
+- Open `/library?q=<text>&tag=<name>` or `/c/{collectionId}?view=gallery&q=<text>&tag=<name>` directly. A tag in any case, such as `?tag=Mood`, filters by its lowercase form.
 - Click a tag on an image's page at `/r/{refId}`.
 
-The canvas view shows neither control and ignores the filters.
+A collection's canvas shows neither control and ignores the filters. `/library` has no canvas. It ignores a `view` in its URL and leaves it there.
 
 ## Driving it with Playwright
 

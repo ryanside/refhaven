@@ -16,7 +16,7 @@ Each image has its own page at `/r/{refId}`. It shows the image large as its 204
 
 ## How to get to it (user POV)
 
-- Click the image on a card on `/library`, on `/c/{collectionId}`, or on `/trash`.
+- Click the image on a card on `/library`, on a collection's gallery at `/c/{collectionId}?view=gallery`, or on `/trash`.
 - Open `/r/{refId}` directly.
 - Choose the `Library` link on the page to go back, or a collection's link to open it.
 
@@ -31,7 +31,7 @@ Preconditions:
 - **Image.** Wait until `page.locator("main img")` is `complete` with a `naturalWidth`. Its `naturalWidth` is 2048 and its `currentSrc` ends in `/2048.webp`. `page.getByText("3000 × 2000 px")` and `page.getByText("image/png", { exact: true })` show. `page.getByRole("link", { name: "Open the original" })` has `target="_blank"`.
 - **Fields.** Fill `page.getByLabel("Name", { exact: true })`, `getByLabel("Note", { exact: true })`, or `getByLabel("Source", { exact: true })`, and click the button `Save name`, `Save note`, or `Save source`. The saved source shows as `page.getByTestId("source")`, with the source as its `href`. A refused value shows `page.getByRole("alert")` with the rule, such as `A name is 1 to 255 characters.`
 - **Tags.** Fill `page.getByLabel("Add a tag")` and click the button `Add`. Each tag is an element with `data-tag="<name>"`, in the order added. Remove one with `page.getByRole("button", { name: "Remove the tag <name>" })`. The suggestions are the `<option>` elements of the field's `<datalist>`.
-- **Collections.** Each collection is a link with `data-collection-id`. Clicking it opens `/c/{collectionId}`.
+- **Collections.** Each collection is a link with `data-collection-id`. Clicking it opens `/c/{collectionId}`, the collection's canvas.
 - **Trash.** Click the button `Delete`. The page shows `This image is in the trash.` and the button `Restore`. Click `Restore` to bring it back.
 - **Private.** Open the first user's `/r/{refId}` in a second user's page. It shows `Image not found.` Call `ref.get`, `ref.update`, `ref.addTags`, and `ref.removeTags` from the second user's `clientFor(page)`. Each fails with `RefNotFound`.
 - **Proof.** Screenshot the page with a note, a source, two tags, and a collection. Read `verify.sh rows refs` for `fileName`, `note`, and `sourceUrl`, and `verify.sh rows tags` for the tag rows. A cleared note or source has no field in the row.
