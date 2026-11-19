@@ -294,8 +294,10 @@ try {
     owner.mutation(api.canvas.open, {} as FunctionArgs<typeof api.canvas.open>),
   );
   assert(
-    noCollection.startsWith("refused") && (await ownCanvases()) === canvasesBefore,
-    `an open with no collection is ${noCollection}, and makes no canvas`,
+    noCollection.startsWith("refused (ArgumentValidationError") &&
+      noCollection.includes("`collectionId`") &&
+      (await ownCanvases()) === canvasesBefore,
+    `the argument schema refuses an open with no collection, and it makes no canvas: ${noCollection}`,
   );
 } finally {
   await first.browser.close();
