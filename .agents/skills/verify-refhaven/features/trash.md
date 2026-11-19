@@ -10,7 +10,7 @@ Each card in the library's grid has a `Delete` button. A deleted image goes to t
 - `trash-everywhere` takes a deleted image out of every collection's grid and every canvas, also in a page that is already open.
 - `trash-restore` brings an image back with the card's `Restore` button on `/trash`, to the library, its collections, and its place on each canvas.
 - `trash-days-left` says on `/trash` that images are deleted for good 30 days after they were deleted, and shows `30 days left` on a card deleted today.
-- `trash-purge` deletes an image 30 days in the trash with every row that points at it, and its objects in R2 a week later unless the same bytes are saved again. A save of bytes that the sweep is deleting fails with `UploadNotFound`.
+- `trash-purge` deletes an image 30 days in the trash with every row that points at it, and its objects in R2 a week later. The same bytes saved again in between are a new upload under new keys, which the sweep leaves. A save that the purge lands inside fails with `UploadNotFound`, and saving again works.
 - `trash-private` refuses another user's image to `library.remove` and `library.restore` with `RefNotFound`.
 
 ## How to get to it (user POV)
