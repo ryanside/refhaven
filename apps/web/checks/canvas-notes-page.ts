@@ -1,13 +1,11 @@
 import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
 import { type Point, boundsOf } from "@refhaven/scene";
-import type { ConvexHttpClient } from "convex/browser";
 import type { PNG } from "pngjs";
 import type { Page } from "playwright";
 import {
   appUrl,
   assert,
-  clientFor,
   consoleWatch,
   openPageWithPasskeyDevice,
   signInWithPasskey,
@@ -29,7 +27,7 @@ import {
   toPage,
   until,
   waitForCanvas,
-  openCanvas,
+  collectionCanvas,
 } from "./canvas-screen";
 
 /** The colors the page draws the note color names in. */
@@ -41,7 +39,6 @@ const ink = {
 } satisfies Record<string, Rgb>;
 const images = { yellow: [220, 200, 40], teal: [40, 170, 170] } satisfies Record<string, Rgb>;
 
-const canvasUrl = `${appUrl}/library?view=canvas`;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 type Op = { op: string; key?: string; fields?: Record<string, unknown>; text?: string };
@@ -137,6 +134,8 @@ const opsOf = (calls: ReadonlyArray<ReadonlyArray<Op>>) =>
 try {
   await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-notes-page-${Date.now().toString(36)}`);
+  const main = await collectionCanvas(page);
+  const canvasUrl = `${main.url}?view=canvas`;
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
       (Object.entries(images) as Array<[keyof typeof images, Rgb]>).map(async ([name, color]) => ({
@@ -158,8 +157,8 @@ try {
   const yellowRef = await refIdOf("yellow");
   const tealRef = await refIdOf("teal");
 
-  const owner: ConvexHttpClient = await clientFor(page);
-  const snapshot = () => openCanvas(owner, {});
+  const owner = main.client;
+  const snapshot = main.open;
   const placed = await snapshot();
   const { canvasId } = placed;
   const imageKey = (refId: string) =>
@@ -611,19 +610,14 @@ try {
     "a note committed with only spaces is removed",
   );
 
-  const board = await owner.mutation(api.collections.create, { name: "Board" });
-  await owner.mutation(api.collections.addRefs, {
-    collectionId: board,
-    refIds: [yellowRef, tealRef],
-  });
   await second.goto(`${appUrl}/library`);
   await second.locator("[data-ref-id]").nth(1).waitFor();
   const libraryCards = await second.locator("[data-ref-id]").count();
   const libraryText = await second.locator("body").innerText();
-  await second.goto(`${appUrl}/c/${board}`);
+  await second.goto(`${main.url}?view=gallery`);
   await second.locator("[data-ref-id]").nth(1).waitFor();
-  const boardCards = await second.locator("[data-ref-id]").count();
-  const boardText = await second.locator("body").innerText();
+  const collectionCards = await second.locator("[data-ref-id]").count();
+  const collectionText = await second.locator("body").innerText();
   const found = await Promise.all(
     ["red", "label", "zebra"].map(
       async (q) => (await owner.query(api.library.filter, { q })).items.length,
@@ -631,11 +625,11 @@ try {
   );
   assert(
     libraryCards === 2 &&
-      boardCards === 2 &&
+      collectionCards === 2 &&
       !libraryText.includes("red label") &&
-      !boardText.includes("red label") &&
+      !collectionText.includes("red label") &&
       found.every((count) => count === 0),
-    `a note on the library's canvas is not in the library's gallery (${libraryCards} cards), a collection (${boardCards}), or search (${found.join(", ")} results)`,
+    `a note on a collection's canvas is not in the library's gallery (${libraryCards} cards), the collection's gallery (${collectionCards}), or search (${found.join(", ")} results)`,
   );
 
   assertCleanConsole();

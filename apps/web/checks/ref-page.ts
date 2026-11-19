@@ -256,9 +256,13 @@ try {
   await boardLink.click();
   await page.waitForURL(`${appUrl}/c/${board}`);
   await page.getByRole("heading", { name: "Board" }).waitFor();
+  await page.getByRole("link", { name: "Gallery" }).click();
   await card(page, large).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${large}`);
-  assert(true, "the collection's link opens /c/{collectionId}, and its card links back here");
+  assert(
+    true,
+    "the collection's link opens /c/{collectionId}, and the card on its gallery links back here",
+  );
 
   // The page renews its session while it runs, and a client takes the token it holds now.
   owner = await clientFor(page);

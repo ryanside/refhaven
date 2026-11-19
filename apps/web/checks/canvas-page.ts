@@ -5,7 +5,6 @@ import type { Page, Route } from "playwright";
 import {
   appUrl,
   assert,
-  clientFor,
   consoleWatch,
   openPageWithPasskeyDevice,
   signInWithPasskey,
@@ -35,6 +34,7 @@ import {
   refOf,
   openCanvas,
   canvasChanges,
+  collectionCanvas,
 } from "./canvas-screen";
 
 type Snapshot = Awaited<ReturnType<typeof openCanvas>>;
@@ -45,13 +45,7 @@ const images = [
   { name: "green.png", color: [40, 170, 70], width: 3000, height: 2000 },
 ] as const;
 
-const canvasUrl = `${appUrl}/library?view=canvas`;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
-
-const showCanvas = async (page: Page, count: number) => {
-  await page.goto(canvasUrl);
-  await waitForCanvas(page, count);
-};
 
 const colorOf = (item: Item, refs: ReadonlyMap<string, Rgb>) => refs.get(refOf(item))!;
 
@@ -75,8 +69,6 @@ const ctrlWheel = async (page: Page, at: Point, deltaY: number) => {
   await page.keyboard.up("Control");
 };
 
-const snapshotOf = (owner: ConvexHttpClient) => openCanvas(owner, {});
-
 const changesSince = (owner: ConvexHttpClient, canvasId: Snapshot["canvasId"], rev: number) =>
   canvasChanges(owner, { canvasId, rev });
 
@@ -85,6 +77,12 @@ watchConsole(page);
 try {
   await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-page-${Date.now().toString(36)}`);
+  const main = await collectionCanvas(page);
+  const canvasUrl = `${main.url}?view=canvas`;
+  const showCanvas = async (page: Page, count: number) => {
+    await page.goto(canvasUrl);
+    await waitForCanvas(page, count);
+  };
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
       images.map(async ({ name, color, width, height }) => ({
@@ -109,8 +107,8 @@ try {
   await page.getByRole("link", { name: "Canvas" }).click();
   await page.waitForURL(canvasUrl);
   await showCanvas(page, 3);
-  const owner = await clientFor(page);
-  const opened = await snapshotOf(owner);
+  const owner = main.client;
+  const opened = await main.open();
   const { canvasId } = opened;
   const [red, blue, green] = refIds.map((refId) =>
     opened.items.find((item) => refOf(item) === refId)!,
@@ -249,10 +247,10 @@ try {
     "a click on empty canvas clears the selection",
   );
 
-  const before = await snapshotOf(owner);
+  const before = await main.open();
   await drag(page, toPage(view, red), { x: 120, y: 60 });
   await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev === before.rev + 1,
     "the drag to save",
   );
@@ -263,7 +261,7 @@ try {
       movedRed.key === red.key &&
       Math.abs(movedRed.x - (red.x + 120 / view.camera.zoom)) < 1e-6 &&
       Math.abs(movedRed.y - (red.y + 60 / view.camera.zoom)) < 1e-6 &&
-      (await snapshotOf(owner)).items.find((item) => item.key === red.key)!.x === movedRed.x,
+      (await main.open()).items.find((item) => item.key === red.key)!.x === movedRed.x,
     `dragging one image by 120, 60 px saves only it, moved ${(movedRed.x - red.x).toFixed(2)}, ${(movedRed.y - red.y).toFixed(2)} world units, and canvas.open returns the new position`,
   );
 
@@ -274,10 +272,10 @@ try {
     (r) => r.selected === 2,
     "two images to be selected",
   );
-  const beforePair = await snapshotOf(owner);
+  const beforePair = await main.open();
   await drag(page, toPage(view, blue), { x: -80, y: 100 });
   await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > beforePair.rev,
     "the pair drag to save",
   );
@@ -295,7 +293,7 @@ try {
     `dragging with two images selected moves both by ${shift.x.toFixed(2)}, ${shift.y.toFixed(2)} world units in one apply call: rev ${beforePair.rev} to ${pair.rev}`,
   );
 
-  const beforeClick = await snapshotOf(owner);
+  const beforeClick = await main.open();
   await click(page, toPage(view, green));
   await until(
     () => readout(page),
@@ -307,7 +305,7 @@ try {
   const onto = toPage(view, overlapTarget);
   await drag(page, redNow, { x: onto.x - redNow.x, y: onto.y - redNow.y });
   await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > beforeClick.rev,
     "the overlap drag to save",
   );
@@ -319,7 +317,7 @@ try {
     `a click that does not move saves nothing: the next save raised rev from ${beforeClick.rev} to ${afterClick.rev} and wrote only the dragged image`,
   );
 
-  const overlapping = (await snapshotOf(owner)).items;
+  const overlapping = (await main.open()).items;
   const inBoth = { x: overlapTarget.x - 50, y: overlapTarget.y };
   const expectedTop = topmostAt(sized(overlapping), inBoth)!;
   const covered = sized(overlapping).filter(
@@ -344,7 +342,7 @@ try {
   await showCanvas(page, 3);
   view = await pageView(page);
   png = await screenshot(page, "05-reloaded.png");
-  const saved = (await snapshotOf(owner)).items;
+  const saved = (await main.open()).items;
   for (const item of saved) {
     const point = exposedPoint(item, saved);
     assert(
@@ -360,7 +358,7 @@ try {
   const greenSaved = saved.find((item) => item.key === green.key)!;
   await drag(page, toPage(view, greenSaved), { x: -100, y: -50 });
   const greenMoved = await until(
-    async () => (await snapshotOf(owner)).items.find((item) => item.key === green.key)!,
+    async () => (await main.open()).items.find((item) => item.key === green.key)!,
     (item) => item.x !== greenSaved.x,
     "the move in the first page to save",
   );
@@ -455,7 +453,7 @@ try {
 
   await showCanvas(page, 3);
   view = await pageView(page);
-  const beforeBlur = await snapshotOf(owner);
+  const beforeBlur = await main.open();
   const dragged = beforeBlur.items.find((item) => item.key === red.key)!;
   const grab = toPage(view, exposedPoint(dragged, beforeBlur.items));
   await page.mouse.move(grab.x, grab.y);
@@ -463,7 +461,7 @@ try {
   await page.mouse.move(grab.x + 40, grab.y + 20, { steps: 4 });
   await page.evaluate(() => window.dispatchEvent(new Event("blur")));
   const dropped = await until(
-    async () => (await snapshotOf(owner)).items.find((item) => item.key === red.key)!,
+    async () => (await main.open()).items.find((item) => item.key === red.key)!,
     (item) => item.x !== dragged.x,
     "the drag that a blur interrupted to save",
   );
@@ -475,7 +473,7 @@ try {
     (r) => r.selected === 1,
     "a click after the interrupted drag to select",
   );
-  const afterBlur = await snapshotOf(owner);
+  const afterBlur = await main.open();
   const settled = afterBlur.items.find((item) => item.key === red.key)!;
   assert(
     Math.abs(dropped.x - dragged.x - 40 / view.camera.zoom) < 0.01 &&
@@ -496,6 +494,9 @@ try {
   await page.locator(`[data-collection-id="${board}"]`).click();
   await page.waitForURL(`${appUrl}/c/${board}`);
   await page.getByRole("heading", { name: "Board" }).waitFor();
+  await page.getByRole("link", { name: "Gallery" }).click();
+  await page.waitForURL(`${appUrl}/c/${board}?view=gallery`);
+  await page.locator("[data-ref-id]").nth(1).waitFor();
   await page.getByLabel("Add images").setInputFiles([
     {
       name: yellow.name,
@@ -544,7 +545,7 @@ try {
     "the image that is not in the collection is not drawn on its canvas",
   );
 
-  const libraryBeforeDrag = await snapshotOf(owner);
+  const mainBeforeDrag = await main.open();
   const redThere = inCollection.items.find((item) => item.key === red.key)!;
   await drag(page, toPage(view, redThere), { x: 100, y: 40 });
   await until(
@@ -553,32 +554,32 @@ try {
     "the drag on the collection's canvas to save",
   );
   const collectionMove = await changesSince(owner, inCollection.canvasId, inCollection.rev);
-  const libraryAfterDrag = await snapshotOf(owner);
-  const redInLibrary = libraryBeforeDrag.items.find((item) => item.key === red.key)!;
+  const mainAfterDrag = await main.open();
+  const redInMain = mainBeforeDrag.items.find((item) => item.key === red.key)!;
   assert(
     collectionMove.items.length === 1 &&
       collectionMove.items[0]!.key === red.key &&
       Math.abs(collectionMove.items[0]!.x - (redThere.x + 100 / view.camera.zoom)) < 1e-6 &&
       Math.abs(collectionMove.items[0]!.y - (redThere.y + 40 / view.camera.zoom)) < 1e-6 &&
-      libraryAfterDrag.rev === libraryBeforeDrag.rev &&
-      libraryAfterDrag.items.find((item) => item.key === red.key)!.x === redInLibrary.x &&
-      libraryAfterDrag.items.find((item) => item.key === red.key)!.y === redInLibrary.y,
-    "a drag on the collection's canvas is saved to that canvas and not to the library's",
+      mainAfterDrag.rev === mainBeforeDrag.rev &&
+      mainAfterDrag.items.find((item) => item.key === red.key)!.x === redInMain.x &&
+      mainAfterDrag.items.find((item) => item.key === red.key)!.y === redInMain.y,
+    "a drag on the second collection's canvas is saved to that canvas and not to the first one's",
   );
 
   await page.getByRole("link", { name: "refhaven" }).click();
   await page.waitForURL(`${appUrl}/library`);
-  await page.getByRole("link", { name: "Canvas" }).click();
-  await page.waitForURL(canvasUrl);
-  await waitForCanvas(page, 4);
+  await page.locator(`[data-collection-id="${main.collectionId}"]`).click();
+  await page.waitForURL(main.url);
+  await waitForCanvas(page, 3);
   view = await pageView(page);
-  png = await screenshot(page, "10-library-after-collection.png");
-  const libraryLayout = (await snapshotOf(owner)).items;
-  for (const item of libraryLayout) {
-    const point = exposedPoint(item, libraryLayout);
+  png = await screenshot(page, "10-first-collection-after-second.png");
+  const mainLayout = (await main.open()).items;
+  for (const item of mainLayout) {
+    const point = exposedPoint(item, mainLayout);
     assert(
       near(pixelAt(png, toPage(view, point)), colorOf(item, refColors)),
-      `going from the collection's canvas to the library's shows the library's layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
+      `going from the second collection's canvas to the first one's shows the first one's layout: the ${item.width}x${item.height} image is at ${item.x.toFixed(1)}, ${item.y.toFixed(1)}`,
     );
   }
 

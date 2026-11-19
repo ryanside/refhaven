@@ -1,22 +1,13 @@
 import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
 import type { Point } from "@refhaven/scene";
-import type { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
-import {
-  appUrl,
-  assert,
-  clientFor,
-  consoleWatch,
-  openPageWithPasskeyDevice,
-  signInWithPasskey,
-} from "./browser";
+import { assert, consoleWatch, openPageWithPasskeyDevice, signInWithPasskey } from "./browser";
 import {
   canvasViewport,
   type PageView,
   exposedPoint,
   type Rgb,
-  openCanvas,
   pageView,
   readout,
   rectOnPage,
@@ -27,6 +18,7 @@ import {
   solidPng,
   toPage,
   until,
+  collectionCanvas,
 } from "./canvas-screen";
 
 const images = {
@@ -35,7 +27,6 @@ const images = {
   blue: [40, 80, 210],
 } satisfies Record<string, Rgb>;
 
-const canvasUrl = `${appUrl}/library?view=canvas`;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 type Op = { op: string; key?: string; fields?: Record<string, unknown> };
@@ -86,6 +77,8 @@ const outlined = async () =>
 try {
   await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-groups-page-${Date.now().toString(36)}`);
+  const main = await collectionCanvas(page);
+  const canvasUrl = `${main.url}?view=canvas`;
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
       (Object.entries(images) as Array<[keyof typeof images, Rgb]>).map(async ([name, color]) => ({
@@ -106,8 +99,8 @@ try {
       .getAttribute("data-ref-id")) as Id<"refs">;
   const [redRef, greenRef, blueRef] = await Promise.all(["red", "green", "blue"].map(refIdOf));
 
-  const owner: ConvexHttpClient = await clientFor(page);
-  const placed = await openCanvas(owner);
+  const owner = main.client;
+  const placed = await main.open();
   const { canvasId } = placed;
   const keyOf = (refId: string) =>
     placed.items.find((item) => item.kind === "image" && item.refId === refId)!.key;
@@ -134,11 +127,11 @@ try {
     ],
   });
   const snapshot = async () => {
-    const items = (await openCanvas(owner)).items;
+    const items = (await main.open()).items;
     return { items, of: (key: string) => items.find((item) => item.key === key)! };
   };
   const groupsNow = async () =>
-    (await owner.mutation(api.canvas.open, {})).items
+    (await owner.mutation(api.canvas.open, { collectionId: main.collectionId })).items
       .flatMap((item) => (item.kind === "group" ? [item.key] : []))
       .sort();
 

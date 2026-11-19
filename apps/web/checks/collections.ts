@@ -99,8 +99,22 @@ try {
   await moodLink.click();
   await page.waitForURL(`${appUrl}/c/${moodId}`);
   await page.getByRole("heading", { name: "Mood" }).waitFor();
-  assert(true, `the collection's link opens /c/${moodId}, which shows its name`);
+  await page.getByTestId("canvas").waitFor();
+  const viewLinks = page.locator("header nav").getByRole("link");
+  assert(
+    (await viewLinks.allTextContents()).join() === "Canvas,Gallery" &&
+      (await viewLinks.first().getAttribute("aria-current")) === "page" &&
+      (await page.getByText("Nothing saved yet.").count()) === 0,
+    `the collection's link opens /c/${moodId}, which shows its name and its canvas, with the Canvas link first and marked as the current view`,
+  );
+  await page.getByRole("link", { name: "Gallery" }).click();
+  await page.waitForURL(`${appUrl}/c/${moodId}?view=gallery`);
   await page.getByText("Nothing saved yet.").waitFor();
+  assert(
+    (await page.getByTestId("canvas").count()) === 0 &&
+      (await viewLinks.last().getAttribute("aria-current")) === "page",
+    "the Gallery link opens ?view=gallery, which shows the collection's gallery and no canvas",
+  );
   assert((await cards(page).count()) === 0, "a new collection shows no images");
 
   await save(page, "uploaded.png", await pngOf(page, "rgb(30, 30, 200)", 400));
@@ -130,7 +144,7 @@ try {
     async () => (await members(moodId)).includes(libraryRefId),
     "choosing a collection on a card adds the image to it",
   );
-  await page.goto(`${appUrl}/c/${moodId}`);
+  await page.goto(`${appUrl}/c/${moodId}?view=gallery`);
   await card(page, libraryRefId).waitFor();
   assert(
     (await shownRefIds(page)).join() === [libraryRefId, uploadedRefId].sort().join(),
@@ -166,7 +180,7 @@ try {
     async () => (await members(sketchId)).includes(libraryRefId),
     "choosing a second collection on a card adds the image to it",
   );
-  await page.goto(`${appUrl}/c/${sketchId}`);
+  await page.goto(`${appUrl}/c/${sketchId}?view=gallery`);
   await card(page, libraryRefId).waitFor();
   assert(
     (await shownRefIds(page)).join() === libraryRefId &&
@@ -174,7 +188,7 @@ try {
     `an image added to a second collection shows in both: ${await shownRefIds(page)}`,
   );
 
-  await page.goto(`${appUrl}/c/${moodId}`);
+  await page.goto(`${appUrl}/c/${moodId}?view=gallery`);
   await card(page, libraryRefId).waitFor();
   await card(page, libraryRefId).getByRole("button", { name: "Remove from collection" }).click();
   await card(page, libraryRefId).waitFor({ state: "detached" });
@@ -226,7 +240,7 @@ try {
   );
   await owner.mutation(api.collections.removeRefs, inMood([libraryRefId]));
 
-  await page.goto(`${appUrl}/c/${moodId}`);
+  await page.goto(`${appUrl}/c/${moodId}?view=gallery`);
   await page.getByLabel("Collection name").fill("  Mood board ");
   await page.getByRole("button", { name: "Rename" }).click();
   await page.getByRole("heading", { name: "Mood board" }).waitFor();

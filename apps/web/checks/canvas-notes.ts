@@ -12,7 +12,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
-import { type Item, refOf, openCanvas, canvasChanges } from "./canvas-screen";
+import { type Item, refOf, openCanvas, canvasChanges, collectionCanvas } from "./canvas-screen";
 
 const stamp = Date.now().toString(36);
 const cards = (page: Page) => page.locator("[data-ref-id]");
@@ -76,21 +76,22 @@ const second = await openPageWithPasskeyDevice();
 try {
   const { page } = first;
   await signInWithPasskey(page, `check-canvas-notes-a-${stamp}`);
+  const main = await collectionCanvas(page);
   const [kept, trashed] = (await save(page, [
     { name: "kept.png", buffer: await pngOf(page, "rgb(200, 30, 30)", 400, 300) },
     { name: "trashed.png", buffer: await pngOf(page, "rgb(30, 30, 200)", 300, 300) },
   ])) as [Id<"refs">, Id<"refs">];
-  const owner = await clientFor(page);
-  const opened = await openCanvas(owner, {});
+  const owner = main.client;
+  const opened = await main.open();
   const { canvasId } = opened;
   const changesSince = (rev: number) => canvasChanges(owner, { canvasId, rev });
-  const revNow = async () => (await openCanvas(owner, {})).rev;
+  const revNow = async () => (await main.open()).rev;
 
   const added = await owner.mutation(api.canvas.apply, {
     canvasId,
     ops: [note("note-a"), note("note-b", { x: 400, color: "red", text: "second" })],
   });
-  const reopened = await openCanvas(owner, {});
+  const reopened = await main.open();
   const sinceOpen = await changesSince(opened.rev);
   const noteA = reopened.items.find((item) => item.key === "note-a");
   const expected = { ...note("note-a"), kind: "note" };
@@ -253,7 +254,7 @@ try {
     "removing a note on a collection's canvas removes no membership and changes no collection",
   );
 
-  const notesBefore = (await openCanvas(owner, {})).items.filter((item) => item.kind === "note");
+  const notesBefore = (await main.open()).items.filter((item) => item.kind === "note");
   const noteRows = async () =>
     JSON.stringify(
       (await rows("canvasItems"))
@@ -262,9 +263,9 @@ try {
     );
   const noteRowsBefore = await noteRows();
   await owner.mutation(api.library.remove, { refIds: [trashed] });
-  const whileTrashed = await openCanvas(owner, {});
+  const whileTrashed = await main.open();
   await owner.mutation(api.library.restore, { refIds: [trashed] });
-  const restored = await openCanvas(owner, {});
+  const restored = await main.open();
   const notesOf = (items: ReadonlyArray<Item>) =>
     items
       .filter((item) => item.kind === "note")
@@ -284,16 +285,15 @@ try {
   const [later] = (await save(page, [
     { name: "later.png", buffer: await pngOf(page, "rgb(30, 160, 30)", 500, 250) },
   ])) as [Id<"refs">];
-  const grown = await openCanvas(owner, {});
+  const grown = await main.open();
   const placed = grown.items.find((item) => item.kind === "image" && item.refId === later);
   const layout = boundsOf(grown.items.filter((item) => item !== placed))!;
   assert(
     grown.placed === 1 &&
       placed !== undefined &&
       boundsOf([placed])!.left > layout.right &&
-      notesOf(grown.items) === notesOf(notesBefore) &&
-      grown.removed === 0,
-    `open on a canvas with notes places a new image to the right of the layout, notes included, and counts no image off it: left ${boundsOf([placed!])?.left} > ${layout.right}`,
+      notesOf(grown.items) === notesOf(notesBefore),
+    `open on a canvas with notes places a new image to the right of the layout, notes included: left ${boundsOf([placed!])?.left} > ${layout.right}`,
   );
 
   await signInWithPasskey(second.page, `check-canvas-notes-b-${stamp}`);

@@ -273,7 +273,7 @@ try {
     "a tag typed into the URL as Seascape filters by seascape",
   );
 
-  await page.goto(`${appUrl}/c/${board}`);
+  await page.goto(`${appUrl}/c/${board}?view=gallery`);
   await showsFor(page, null, null, "desert-dune.png,quay-night.png");
   await tagSelect(page).selectOption("seascape");
   await showsFor(page, null, "seascape", "quay-night.png");
@@ -351,11 +351,20 @@ try {
   await showsFor(page, "pier", null, "pier-morning.png");
   assert(true, "an image deleted from a filtered gallery is not found, and after a restore it is");
 
-  await page.goto(`${appUrl}/library?q=pier&view=canvas`);
+  await page.goto(`${appUrl}/c/${board}?q=pier`);
   await page.locator("canvas").waitFor();
   assert(
     (await searchField(page).count()) === 0 && (await tagSelect(page).count()) === 0,
-    "the canvas view shows neither filter",
+    "a collection's canvas, which its page opens with no view, shows neither filter",
+  );
+
+  await page.goto(`${appUrl}/library?q=pier&view=canvas`);
+  await showsFor(page, "pier", null, "pier-morning.png");
+  assert(
+    (await page.getByTestId("canvas").count()) === 0 &&
+      (await page.getByRole("link", { name: "Canvas" }).count()) === 0 &&
+      (await page.getByRole("link", { name: "Gallery" }).count()) === 0,
+    "/library has no view links, and with view=canvas in its URL it shows the filtered gallery and no canvas",
   );
 
   owner = await clientFor(page);

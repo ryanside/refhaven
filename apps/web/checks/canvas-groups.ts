@@ -11,6 +11,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
+import { collectionCanvas } from "./canvas-screen";
 
 type Listed = FunctionReturnType<typeof api.canvas.open>["items"][number];
 
@@ -54,13 +55,14 @@ const second = await openPageWithPasskeyDevice();
 try {
   const { page } = first;
   await signInWithPasskey(page, `check-canvas-groups-a-${stamp}`);
+  const main = await collectionCanvas(page);
   const [a, b, c] = (await save(page, ["a.png", "b.png", "c.png"])) as [
     Id<"refs">,
     Id<"refs">,
     Id<"refs">,
   ];
-  const owner = await clientFor(page);
-  const open = () => owner.mutation(api.canvas.open, {});
+  const owner = main.client;
+  const open = () => owner.mutation(api.canvas.open, { collectionId: main.collectionId });
   const opened = await open();
   const { canvasId } = opened;
   const changesSince = (rev: number) => owner.query(api.canvas.changes, { canvasId, rev });
@@ -103,14 +105,15 @@ try {
     `removing one member at rev ${removedMember} writes only it, and leaves the group and the other member's parent`,
   );
 
-  const putBack = await owner.mutation(api.canvas.open, { placeRemoved: true });
+  await owner.mutation(api.collections.addRefs, { collectionId: main.collectionId, refIds: [a] });
+  const putBack = await open();
   const afterPutBack = await open();
   await apply([{ op: "remove", key: a }]);
   assert(
     putBack.placed === 1 &&
       parentOf(putBack.items, a) === "g1" &&
       parentOf(afterPutBack.items, a) === "g1",
-    "an open that puts a removed member back returns it with its parent, as the next open does",
+    "an open that puts a removed member back, once it is in the collection again, returns it with its parent, as the next open does",
   );
 
   await owner.mutation(api.library.remove, { refIds: [b] });
@@ -244,9 +247,8 @@ try {
   assert(
     grown.placed === 1 &&
       grown.items.some((item) => item.kind === "image" && item.refId === later) &&
-      groupsOf(grown.items).join() === "g1,g2" &&
-      grown.removed === 1,
-    `open on a canvas with groups places a new image and counts the one removed image off it: placed ${grown.placed}, removed ${grown.removed}`,
+      groupsOf(grown.items).join() === "g1,g2",
+    `open on a canvas with groups places a new image: placed ${grown.placed}`,
   );
 
   await signInWithPasskey(second.page, `check-canvas-groups-b-${stamp}`);

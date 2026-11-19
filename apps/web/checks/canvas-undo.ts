@@ -1,13 +1,12 @@
 import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
-import { type Point, boundsOf } from "@refhaven/scene";
+import type { Point } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
 import {
   appUrl,
   assert,
   type Carried,
-  clientFor,
   consoleWatch,
   openPageWithPasskeyDevice,
   send,
@@ -32,6 +31,7 @@ import {
   refOf,
   openCanvas,
   canvasChanges,
+  collectionCanvas,
 } from "./canvas-screen";
 
 const images = [
@@ -40,11 +40,7 @@ const images = [
   { name: "green.png", color: [40, 170, 70], width: 300, height: 400 },
 ] as const;
 
-const canvasUrl = `${appUrl}/library?view=canvas`;
-const evidence = process.env.EVIDENCE;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
-
-const snapshotOf = (owner: ConvexHttpClient) => openCanvas(owner, {});
 
 const libraryOf = async (owner: ConvexHttpClient) =>
   (
@@ -90,6 +86,8 @@ watchConsole(page);
 try {
   await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-undo-${Date.now().toString(36)}`);
+  const main = await collectionCanvas(page);
+  const canvasUrl = `${main.url}?view=canvas`;
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
       images.map(async ({ name, color, width, height }) => ({
@@ -103,10 +101,10 @@ try {
     .locator('[role="status"] li[data-outcome="saved"]')
     .nth(2)
     .waitFor({ timeout: 60_000 });
-  const owner = await clientFor(page);
+  const owner = main.client;
   await page.goto(canvasUrl);
   await waitForCanvas(page, 3);
-  const opened = await snapshotOf(owner);
+  const opened = await main.open();
   const refIdOf = async (name: string) =>
     (
       await owner.query(api.library.list, { paginationOpts: { numItems: 100, cursor: null } })
@@ -118,7 +116,7 @@ try {
     [red, blue, green].map((item, index) => [item.key, images[index]!.color as Rgb]),
   );
   const pointOf = async (item: Item) =>
-    toPage(await pageView(page), exposedPoint(item, (await snapshotOf(owner)).items));
+    toPage(await pageView(page), exposedPoint(item, (await main.open()).items));
   const drawnAt = async (item: Item, name?: string) => {
     await waitForCanvas(page, (await readout(page)).items);
     const expected = rectOnPage(await pageView(page), item);
@@ -135,14 +133,14 @@ try {
 
   await click(page, await pointOf(red));
   await selected(page, 1);
-  const beforeDelete = await snapshotOf(owner);
+  const beforeDelete = await main.open();
   await press(page, "Delete");
   await until(
     () => readout(page),
     (r) => r.items === 2 && r.selected === 0,
     "Delete to remove the image",
   );
-  const afterDelete = await snapshotOf(owner);
+  const afterDelete = await main.open();
   assert(
     afterDelete.rev === beforeDelete.rev + 1 &&
       find(afterDelete.items, red.key) === undefined &&
@@ -156,7 +154,7 @@ try {
     (r) => r.items === 3,
     "Mod+Z to bring the image back",
   );
-  const afterUndo = await snapshotOf(owner);
+  const afterUndo = await main.open();
   const back = await drawnAt(find(afterUndo.items, red.key)!, "01-removal-undone.png");
   assert(
     afterUndo.rev === afterDelete.rev + 1 &&
@@ -172,8 +170,7 @@ try {
     "Mod+Shift+Z to remove it again",
   );
   assert(
-    find((await snapshotOf(owner)).items, red.key) === undefined &&
-      (await button("Redo").isDisabled()),
+    find((await main.open()).items, red.key) === undefined && (await button("Redo").isDisabled()),
     "Mod+Shift+Z removes the image again, and leaves nothing to redo",
   );
   await button("Undo").click();
@@ -183,19 +180,19 @@ try {
     "the Undo button to bring the image back",
   );
   assert(
-    samePlace(find((await snapshotOf(owner)).items, red.key), red),
+    samePlace(find((await main.open()).items, red.key), red),
     "the Undo button brings it back where it was",
   );
 
   await drag(page, await pointOf(red), { x: 90, y: 50 });
   const moved = await until(
-    async () => find((await snapshotOf(owner)).items, red.key)!,
+    async () => find((await main.open()).items, red.key)!,
     (item) => item.x !== red.x,
     "the drag to save",
   );
   await press(page, "ControlOrMeta+z");
   const unmoved = await until(
-    async () => find((await snapshotOf(owner)).items, red.key)!,
+    async () => find((await main.open()).items, red.key)!,
     (item) => item.x === red.x,
     "Mod+Z to undo the move",
   );
@@ -206,7 +203,7 @@ try {
   );
   await press(page, "Control+y");
   const redone = await until(
-    async () => find((await snapshotOf(owner)).items, red.key)!,
+    async () => find((await main.open()).items, red.key)!,
     (item) => item.x === moved.x,
     "Ctrl+Y to redo the move",
   );
@@ -216,7 +213,7 @@ try {
     `Ctrl+Y redoes it: the image is at ${moved.x.toFixed(1)}, ${moved.y.toFixed(1)} again, drawn at ${showRect(redoneOnPage.found)}`,
   );
 
-  const pairBefore = await snapshotOf(owner);
+  const pairBefore = await main.open();
   await click(page, await pointOf(redone));
   await page.keyboard.down("Shift");
   await click(page, await pointOf(blue));
@@ -224,13 +221,13 @@ try {
   await selected(page, 2);
   await drag(page, await pointOf(blue), { x: -60, y: 70 });
   const pairMoved = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev === pairBefore.rev + 1,
     "the pair drag to save",
   );
   await press(page, "ControlOrMeta+z");
   const pairUndone = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev === pairMoved.rev + 1,
     "Mod+Z to undo the pair",
   );
@@ -247,16 +244,16 @@ try {
   const greenBefore = find(pairUndone.items, green.key)!;
   await drag(page, await pointOf(green), { x: 70, y: -40 });
   await until(
-    async () => find((await snapshotOf(owner)).items, green.key)!,
+    async () => find((await main.open()).items, green.key)!,
     (item) => item.x !== greenBefore.x,
     "the green drag to save",
   );
   assert(await button("Redo").isDisabled(), "a new edit after an undo disables Redo");
 
-  const blueBefore = find((await snapshotOf(owner)).items, blue.key)!;
+  const blueBefore = find((await main.open()).items, blue.key)!;
   await drag(page, await pointOf(blue), { x: 0, y: 80 });
   await until(
-    async () => find((await snapshotOf(owner)).items, blue.key)!,
+    async () => find((await main.open()).items, blue.key)!,
     (item) => item.y !== blueBefore.y,
     "the blue drag to save",
   );
@@ -269,10 +266,10 @@ try {
     (r) => r.items === 2,
     "the page to hear of the removal from another call",
   );
-  const beforeFailedUndo = await snapshotOf(owner);
+  const beforeFailedUndo = await main.open();
   await press(page, "ControlOrMeta+z");
   await page.getByText("That change could not be undone.").waitFor();
-  const afterFailedUndo = await snapshotOf(owner);
+  const afterFailedUndo = await main.open();
   assert(
     afterFailedUndo.rev === beforeFailedUndo.rev &&
       JSON.stringify(afterFailedUndo.items) === JSON.stringify(beforeFailedUndo.items),
@@ -280,7 +277,7 @@ try {
   );
   await press(page, "ControlOrMeta+z");
   const greenUndone = await until(
-    async () => find((await snapshotOf(owner)).items, green.key)!,
+    async () => find((await main.open()).items, green.key)!,
     (item) => item.x === greenBefore.x,
     "the next undo to undo the green drag",
   );
@@ -297,7 +294,7 @@ try {
   });
   await click(page, await pointOf(greenUndone));
   await selected(page, 1);
-  const beforeTyping = await snapshotOf(owner);
+  const beforeTyping = await main.open();
   const field = page.getByLabel("Probe");
   await field.focus();
   await field.press("End");
@@ -314,7 +311,7 @@ try {
       afterSelectAll === "x" &&
       typedReadout.items === 2 &&
       typedReadout.selected === 1 &&
-      (await snapshotOf(owner)).rev === beforeTyping.rev,
+      (await main.open()).rev === beforeTyping.rev,
     `with a text field focused, Backspace and Mod+A edit the text ("${afterBackspace}", then "${afterSelectAll}"), and no shortcut touches the canvas: ${typedReadout.items} images, ${typedReadout.selected} selected, no apply call`,
   );
   await page.evaluate(() => document.querySelector('input[aria-label="Probe"]')!.remove());
@@ -328,63 +325,12 @@ try {
     `Mod+A selects every item (${all.selected} of ${all.items}), and Escape clears the selection (${none.selected})`,
   );
 
+  await owner.mutation(api.collections.addRefs, {
+    collectionId: main.collectionId,
+    refIds: [refOf(blue)],
+  });
   await page.reload();
-  await waitForCanvas(page, 2);
-  const offCanvas = page.getByTestId("off-canvas");
-  const offText = await offCanvas.textContent();
-  if (evidence) {
-    await page.getByTestId("canvas-panel").screenshot({ path: `${evidence}/03-panel.png` });
-  }
-  assert(
-    (await offCanvas.getAttribute("data-count")) === "1" &&
-      offText === "1 image of the library is not on this canvas.",
-    `after a reload the library's canvas says: ${offText}`,
-  );
-  const beforePutBack = await snapshotOf(owner);
-  await button("Put them back").click();
-  await until(
-    () => readout(page),
-    (r) => r.items === 3,
-    "Put them back to place the image",
-  );
-  const putBack = await snapshotOf(owner);
-  const blueBack = find(putBack.items, blue.key);
-  const layout = boundsOf(beforePutBack.items)!;
-  assert(
-    putBack.rev === beforePutBack.rev + 1 &&
-      blueBack !== undefined &&
-      boundsOf([blueBack])!.left > layout.right &&
-      (await offCanvas.count()) === 0,
-    `Put them back places the image to the right of the layout, its left edge ${boundsOf([blueBack!])?.left.toFixed(1)} > ${layout.right.toFixed(1)}, and the line goes away`,
-  );
-  const again = await openCanvas(owner, { placeRemoved: true });
-  assert(
-    again.rev === putBack.rev && again.removed === 0,
-    `a second ask to put them back finds nothing to place: rev stays ${putBack.rev}`,
-  );
-  assert(
-    (await button("Undo").isEnabled()) && (await button("Redo").isDisabled()),
-    "putting images back is an edit: Undo is enabled after it",
-  );
-  await press(page, "ControlOrMeta+z");
-  await until(
-    () => readout(page),
-    (r) => r.items === 2,
-    "Mod+Z to undo the put back",
-  );
-  const putBackUndone = await snapshotOf(owner);
-  await press(page, "ControlOrMeta+Shift+z");
-  await until(
-    () => readout(page),
-    (r) => r.items === 3,
-    "Mod+Shift+Z to redo the put back",
-  );
-  assert(
-    find(putBackUndone.items, blue.key) === undefined &&
-      putBackUndone.removed === 1 &&
-      samePlace(find((await snapshotOf(owner)).items, blue.key), blueBack),
-    "undo takes the image that was put back off the canvas again, and redo puts it back at the same place",
-  );
+  await waitForCanvas(page, 3);
 
   const dropColor: Rgb = [220, 200, 40];
   const dropped: Carried = {
@@ -403,7 +349,7 @@ try {
     "the dropped image to land",
   );
   const yellow = await refIdOf("yellow.png");
-  const yellowDropped = find((await snapshotOf(owner)).items, yellow);
+  const yellowDropped = find((await main.open()).items, yellow);
   await press(page, "ControlOrMeta+z");
   await until(
     () => readout(page),
@@ -411,7 +357,7 @@ try {
     "Mod+Z to undo the drop",
   );
   assert(
-    find((await snapshotOf(owner)).items, yellow) === undefined &&
+    find((await main.open()).items, yellow) === undefined &&
       (await libraryOf(owner)).includes(yellow),
     "an image dropped on the canvas and then undone leaves the canvas and stays in the library",
   );
@@ -421,7 +367,7 @@ try {
     (r) => r.items === 4,
     "Mod+Shift+Z to redo the drop",
   );
-  const yellowRedone = find((await snapshotOf(owner)).items, yellow);
+  const yellowRedone = find((await main.open()).items, yellow);
   assert(
     yellowRedone?.x === yellowDropped?.x && yellowRedone?.y === yellowDropped?.y,
     "redo puts the dropped image back on the canvas at the point it was dropped",
@@ -441,7 +387,7 @@ try {
   await page.locator('[role="status"] li', { hasText: "teal.png" }).waitFor();
   await press(page, "ControlOrMeta+z");
   const teal = await until(
-    async () => find((await snapshotOf(owner)).items, await refIdOf("teal.png")),
+    async () => find((await main.open()).items, await refIdOf("teal.png")),
     (item) => item === undefined,
     "the undo pressed right after the drop to take the image off again",
   );
@@ -455,14 +401,14 @@ try {
 
   // Two edits, then two undos with no wait between them. The second must not be judged against
   // a canvas that the first has not changed yet.
-  const greenStart = find((await snapshotOf(owner)).items, green.key)!;
+  const greenStart = find((await main.open()).items, green.key)!;
   await drag(page, await pointOf(greenStart), { x: 0, y: 70 });
   await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (snapshot) => find(snapshot.items, green.key)?.y !== greenStart.y,
     "the green drag to save",
   );
-  await click(page, await pointOf(find((await snapshotOf(owner)).items, green.key)!));
+  await click(page, await pointOf(find((await main.open()).items, green.key)!));
   await selected(page, 1);
   await press(page, "Delete");
   await until(
@@ -473,7 +419,7 @@ try {
   await press(page, "ControlOrMeta+z");
   await press(page, "ControlOrMeta+z");
   const greenTwiceUndone = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (snapshot) => samePlace(find(snapshot.items, green.key), greenStart),
     "two quick undos to bring the green image back to where it was before its move",
   );
@@ -488,7 +434,7 @@ try {
   await drag(page, await pointOf(greenStart), { x: 60, y: 0 });
   const greenOnce = (
     await until(
-      () => snapshotOf(owner),
+      () => main.open(),
       (snapshot) => find(snapshot.items, green.key)?.x !== greenStart.x,
       "the first green drag to save",
     )
@@ -500,14 +446,14 @@ try {
   await press(page, "ControlOrMeta+z");
   await page.mouse.up();
   await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (snapshot) => find(snapshot.items, green.key)?.x !== greenOnce.x,
     "the second green drag to save",
   );
   await press(page, "ControlOrMeta+z");
   await press(page, "ControlOrMeta+z");
   const greenBack = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (snapshot) => samePlace(find(snapshot.items, green.key), greenStart),
     "two undos to take back both green drags",
   );
@@ -574,12 +520,12 @@ try {
     server.onMessage((message) => setTimeout(() => socket.send(message), 1200));
   });
   await slow.goto(canvasUrl);
-  const onLibrary = await snapshotOf(owner);
-  await waitForCanvas(slow, onLibrary.items.length);
+  const onMain = await main.open();
+  await waitForCanvas(slow, onMain.items.length);
   const slowView = await pageView(slow);
-  const exposed = onLibrary.items.map((item) => ({
+  const exposed = onMain.items.map((item) => ({
     item,
-    at: toPage(slowView, exposedPoint(item, onLibrary.items)),
+    at: toPage(slowView, exposedPoint(item, onMain.items)),
   }));
   const [{ item: one, at: oneAt }, { item: other, at: otherAt }] = exposed as [
     (typeof exposed)[number],
@@ -599,12 +545,12 @@ try {
   await drag(slow, otherAt, { x: 0, y: 60 });
   // Three saves: the first move, its undo, and the second move.
   const overlapped = await until(
-    () => snapshotOf(owner),
-    (snapshot) => snapshot.rev === onLibrary.rev + 3,
+    () => main.open(),
+    (snapshot) => snapshot.rev === onMain.rev + 3,
     "the first move, its undo, and the second move to be saved",
   );
   const written = (
-    await canvasChanges(owner, { canvasId: onLibrary.canvasId, rev: onLibrary.rev })
+    await canvasChanges(owner, { canvasId: onMain.canvasId, rev: onMain.rev })
   ).items.map((item) => item.key);
   await until(
     () => slow.getByRole("button", { name: "Undo", exact: true }).isEnabled(),
@@ -620,7 +566,7 @@ try {
   );
   await press(slow, "ControlOrMeta+z");
   const bothBack = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (snapshot) => samePlace(find(snapshot.items, other.key), other),
     "the next undo to take back the second move",
   );

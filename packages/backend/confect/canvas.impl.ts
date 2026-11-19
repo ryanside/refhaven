@@ -27,8 +27,11 @@ import { patchable } from "./canvasItem";
 import { addMember, canvasOf, leaveCollection, ownedCollection } from "./membership";
 import RequireWorkspace from "./middleware/RequireWorkspace.impl";
 import { CurrentWorkspace } from "./middleware/RequireWorkspace.spec";
-import { isLive, liveRefs, ownedLiveRef } from "./ref";
+import { isLive, ownedLiveRef } from "./ref";
 
+type CollectionCanvas = CanvasesDoc & { readonly collectionId: Id<"collections"> };
+
+/** A canvas row with no collection is a library's from before, and fails like a missing canvas. */
 const ownedCanvas = (canvasId: Id<"canvases">) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
@@ -37,10 +40,11 @@ const ownedCanvas = (canvasId: Id<"canvases">) =>
       .table("canvases")
       .get(canvasId)
       .pipe(Effect.mapError(() => new CanvasNotFound()));
-    if (found.workspaceId !== workspaceId) {
+    const { collectionId } = found;
+    if (found.workspaceId !== workspaceId || collectionId === undefined) {
       return yield* new CanvasNotFound();
     }
-    return found;
+    return { ...found, collectionId } satisfies CollectionCanvas;
   });
 
 const toItem = ({ _id, _creationTime, workspaceId, canvasId, rev, ...item }: CanvasItemsDoc) =>
@@ -92,54 +96,36 @@ const imageItem = (placed: Size & Placement & { readonly refId: Id<"refs"> }, z:
 });
 
 /**
- * Opens or makes the canvas of a set, and places each Ref of the set that has no item. On the
- * library's canvas a Ref whose item was removed stays off it, unless `placeRemoved` asks for it,
- * and `removed` counts the Refs that stay off.
+ * Opens or makes the canvas of a collection, and places each member that has no shown item. A
+ * removed item means its Ref left the collection, so a member with one was added again, and its
+ * item comes back.
  */
-const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: boolean) =>
+const openCanvas = (collectionId: Id<"collections">) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
     const reader = yield* DatabaseReader;
     const writer = yield* DatabaseWriter;
     const existing = Option.getOrUndefined(yield* canvasOf(collectionId));
     const { _id: canvasId, rev: openedRev } = existing ?? {
-      _id: yield* writer
-        .table("canvases")
-        .insert(
-          collectionId === undefined
-            ? { workspaceId, rev: 0 }
-            : { workspaceId, collectionId, rev: 0 },
-        ),
+      _id: yield* writer.table("canvases").insert({ workspaceId, collectionId, rev: 0 }),
       rev: 0,
     };
     const items = yield* itemsOf(canvasId);
-    const live = (
-      collectionId === undefined
-        ? yield* (yield* liveRefs).collect()
-        : yield* Effect.forEach(
-            yield* reader
-              .table("collectionRefs")
-              .index("by_collection", (q) => q.eq("collectionId", collectionId))
-              .collect(),
-            (member) => reader.table("refs").get(member.refId),
-          )
-    ).filter(isLive);
+    const live = (yield* Effect.forEach(
+      yield* reader
+        .table("collectionRefs")
+        .index("by_collection", (q) => q.eq("collectionId", collectionId))
+        .collect(),
+      (member) => reader.table("refs").get(member.refId),
+    )).filter(isLive);
     const liveIds = new Set(live.map((ref) => ref._id));
     const shown = items.filter(
       (item) => item.deletedAt === undefined && (item.kind !== "image" || liveIds.has(item.refId)),
     );
-    const refsOf = (list: ReadonlyArray<CanvasItemsDoc>) =>
-      new Set(list.flatMap((item) => (item.kind === "image" ? [item.refId] : [])));
-
-    // On the library's canvas a removed item still counts as placed, so a Ref removed from it is
-    // not placed again. On a collection's canvas removal means leaving the collection, so a member
-    // with a removed item was added again, and its item comes back.
-    const placedRefs = refsOf(collectionId === undefined && !placeRemoved ? items : shown);
-    const shownRefs = refsOf(shown);
-    const unplaced = live.filter((ref) => !placedRefs.has(ref._id));
-    const removed = live.filter((ref) => !shownRefs.has(ref._id)).length - unplaced.length;
+    const shownRefs = new Set(shown.flatMap((item) => (item.kind === "image" ? [item.refId] : [])));
+    const unplaced = live.filter((ref) => !shownRefs.has(ref._id));
     if (unplaced.length === 0) {
-      return { canvasId, rev: openedRev, items: shown.map(toItem), placed: 0, removed };
+      return { canvasId, rev: openedRev, items: shown.map(toItem), placed: 0 };
     }
 
     const sizes = yield* Effect.forEach(unplaced, sizeOf);
@@ -177,21 +163,14 @@ const openSet = (collectionId: Id<"collections"> | undefined, placeRemoved: bool
       rev,
       items: [...shown.map(toItem), ...added.map(({ item }) => item)],
       placed: added.length,
-      removed,
     };
   }).pipe(Effect.orDie);
 
-const open = FunctionImpl.make(
-  databaseSchema,
-  canvas,
-  "open",
-  ({ collectionId, placeRemoved = false }) =>
-    Effect.gen(function* () {
-      if (collectionId !== undefined) {
-        yield* ownedCollection(collectionId);
-      }
-      return yield* openSet(collectionId, placeRemoved);
-    }),
+const open = FunctionImpl.make(databaseSchema, canvas, "open", ({ collectionId }) =>
+  Effect.gen(function* () {
+    yield* ownedCollection(collectionId);
+    return yield* openCanvas(collectionId);
+  }),
 );
 
 // An item of a Ref in the trash goes out as removed, at the time of the delete. Trashing and
@@ -217,11 +196,10 @@ const changes = FunctionImpl.make(databaseSchema, canvas, "changes", ({ canvasId
 
 /**
  * Puts a Ref on a canvas at a point and on top: inserts its item, brings a removed one back, or
- * moves a live one. On a collection's canvas the Ref also joins the collection, because that
- * canvas shows only members.
+ * moves a live one. The Ref also joins the collection, because the canvas shows only members.
  */
 const place = (
-  found: CanvasesDoc,
+  found: CollectionCanvas,
   rev: number,
   { refId, x, y }: { readonly refId: Id<"refs">; readonly x: number; readonly y: number },
   z: string,
@@ -231,9 +209,7 @@ const place = (
     const reader = yield* DatabaseReader;
     const writer = yield* DatabaseWriter;
     const ref = yield* ownedLiveRef(refId);
-    if (found.collectionId !== undefined) {
-      yield* addMember(found.collectionId, refId);
-    }
+    yield* addMember(found.collectionId, refId);
     const existing = yield* reader
       .table("canvasItems")
       .index("by_canvas_and_key", (q) => q.eq("canvasId", found._id).eq("key", refId))
@@ -397,7 +373,7 @@ const apply = FunctionImpl.make(databaseSchema, canvas, "apply", ({ canvasId, op
           }
           // Removing a group writes its row only. Its members stay, each with its `parent`.
           if (op.op === "remove") {
-            if (item.kind === "image" && found.collectionId !== undefined) {
+            if (item.kind === "image") {
               return yield* leaveCollection(found.collectionId, [item.refId], { canvasId, rev });
             }
             return yield* writer

@@ -1,10 +1,12 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { api } from "@refhaven/backend/api";
+import type { Id } from "@refhaven/backend/id";
 import { type Box, boundsOf } from "@refhaven/scene";
 import { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
 import {
   assert,
-  clientFor,
   convexUrl,
   openPageWithPasskeyDevice,
   outcome,
@@ -12,7 +14,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
-import { refOf, openCanvas, canvasChanges, type Item } from "./canvas-screen";
+import { refOf, openCanvas, canvasChanges, collectionCanvas, type Item } from "./canvas-screen";
 
 const boxOf = (item: Item) => boundsOf([item])!;
 const overlaps = (a: Box, b: Box) =>
@@ -58,11 +60,28 @@ const save = async (page: Page, files: Array<{ name: string; buffer: Buffer }>) 
 
 const stamp = Date.now().toString(36);
 
-const anonymous = new ConvexHttpClient(convexUrl());
-assert(
-  (await outcome(openCanvas(anonymous, {}))) === "NotSignedIn",
-  "opening a canvas without a session fails with NotSignedIn",
-);
+/**
+ * Writes a canvas row with no collection into a workspace, the shape of a library's canvas from
+ * before only collections had one. No function makes such a row, so the check imports it.
+ */
+const importLibraryCanvas = async (workspaceId: string) => {
+  const file = join(tmpdir(), `library-canvas-${stamp}.jsonl`);
+  await Bun.write(file, `${JSON.stringify({ workspaceId, rev: 3 })}\n`);
+  const run = Bun.spawn(["bunx", "convex", "import", "--table", "canvases", "--append", file], {
+    cwd: `${import.meta.dir}/../../../packages/backend`,
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  if ((await run.exited) !== 0) {
+    throw new Error(`FAIL convex import: ${await new Response(run.stderr).text()}`);
+  }
+  const row = (await rows("canvases")).find(
+    (canvas) => canvas.workspaceId === workspaceId && canvas.collectionId === undefined,
+  );
+  if (!row) throw new Error("FAIL the imported canvas row is not in the table");
+  return row._id as Id<"canvases">;
+};
 
 const first = await openPageWithPasskeyDevice();
 const second = await openPageWithPasskeyDevice();
@@ -74,6 +93,12 @@ for (const { page } of [first, second]) {
 try {
   const { page } = first;
   await signInWithPasskey(page, `check-canvas-a-${stamp}`);
+  const main = await collectionCanvas(page);
+  const anonymous = new ConvexHttpClient(convexUrl());
+  assert(
+    (await outcome(openCanvas(anonymous, { collectionId: main.collectionId }))) === "NotSignedIn",
+    "opening a canvas without a session fails with NotSignedIn",
+  );
   await save(page, [
     { name: "wide.png", buffer: await pngOf(page, "rgb(200, 30, 30)", 1200, 800) },
     { name: "square.png", buffer: await pngOf(page, "rgb(30, 30, 200)", 300) },
@@ -86,8 +111,8 @@ try {
     elements.map((element) => element.getAttribute("data-ref-id")!),
   );
 
-  const owner = await clientFor(page);
-  const opened = await openCanvas(owner, {});
+  const owner = main.client;
+  const opened = await main.open();
   assert(
     opened.items.length === 3 &&
       opened.items
@@ -102,7 +127,7 @@ try {
     `the placed items do not overlap: ${opened.items.map((item) => JSON.stringify(boxOf(item)))}`,
   );
 
-  const reopened = await openCanvas(owner, {});
+  const reopened = await main.open();
   assert(
     reopened.rev === opened.rev &&
       reopened.canvasId === opened.canvasId &&
@@ -113,7 +138,7 @@ try {
   await save(page, [
     { name: "later.png", buffer: await pngOf(page, "rgb(200, 200, 30)", 640, 480) },
   ]);
-  const grown = await openCanvas(owner, {});
+  const grown = await main.open();
   const earlier = byKey(opened.items);
   const added = grown.items.filter((item) => !earlier.has(item.key));
   const layout = boundsOf(opened.items)!;
@@ -166,13 +191,12 @@ try {
     gone?.key === removed!.key && typeof gone.deletedAt === "number",
     `a removed item shows in changes with its deletedAt: ${gone?.deletedAt}`,
   );
-  const afterRemove = await openCanvas(owner, {});
+  const afterRemove = await main.open();
   assert(
     afterRemove.rev === removedRev &&
       afterRemove.items.length === 3 &&
-      afterRemove.items.every((item) => refOf(item) !== refOf(removed!)) &&
-      afterRemove.removed === 1,
-    `open leaves the removed item out, does not place its Ref again, and counts ${afterRemove.removed} image off the canvas: ${afterRemove.items.length} items at rev ${afterRemove.rev}`,
+      afterRemove.items.every((item) => refOf(item) !== refOf(removed!)),
+    `open leaves the removed item out and does not place its Ref again: ${afterRemove.items.length} items at rev ${afterRemove.rev}`,
   );
 
   const mixed = await outcome(
@@ -260,36 +284,27 @@ try {
     `one call with two ops raises rev once, and changes returns both items: rev ${removedRev} to ${bothRev}, ${sinceRemoved.items.length} items`,
   );
 
-  // The call above turned two images where they stood, so those two may overlap each other.
-  // What must hold is that the image put back overlaps none.
-  const putBack = await openCanvas(owner, { placeRemoved: true });
-  const back = putBack.items.find((item) => item.key === removed!.key);
-  const layoutBefore = boundsOf(putBack.items.filter((item) => item.key !== removed!.key))!;
+  const libraryCanvas = await importLibraryCanvas(workspaceId);
+  const refusedOld = {
+    changes: await outcome(canvasChanges(owner, { canvasId: libraryCanvas, rev: 0 })),
+    apply: await outcome(
+      owner.mutation(api.canvas.apply, {
+        canvasId: libraryCanvas,
+        ops: [{ op: "addGroup", key: "on-the-library" }],
+      }),
+    ),
+  };
   assert(
-    putBack.rev === bothRev + 1 &&
-      putBack.removed === 0 &&
-      putBack.placed === 1 &&
-      putBack.items.at(-1)?.key === removed!.key &&
-      putBack.items.length === 4 &&
-      back !== undefined &&
-      back.deletedAt === undefined &&
-      boxOf(back).left > layoutBefore.right &&
-      putBack.items.every(
-        (other) => other.key === back.key || !overlaps(boxOf(back), boxOf(other)),
-      ),
-    `open with placeRemoved places the removed image again to the right of the layout, at rev ${putBack.rev}, names it as the one item it placed, and counts ${putBack.removed} off the canvas`,
-  );
-  const putBackAgain = await openCanvas(owner, { placeRemoved: true });
-  assert(
-    putBackAgain.rev === putBack.rev &&
-      putBackAgain.removed === 0 &&
-      putBackAgain.placed === 0 &&
-      same(putBackAgain.items, putBack.items),
-    `a second open with placeRemoved finds nothing to place and keeps rev ${putBack.rev}: ${putBackAgain.rev}`,
+    refusedOld.changes === "CanvasNotFound" &&
+      refusedOld.apply === "CanvasNotFound" &&
+      (await rows("canvasItems")).every((row) => row.canvasId !== libraryCanvas) &&
+      (await rows("canvases")).find((row) => row._id === libraryCanvas)?.rev === 3,
+    `changes and apply refuse the user's own canvas row with no collection, the shape of a library's canvas from before, as they refuse a missing canvas, and write nothing: ${JSON.stringify(refusedOld)}`,
   );
 
   await signInWithPasskey(second.page, `check-canvas-b-${stamp}`);
-  const other = await clientFor(second.page);
+  const theirs = await collectionCanvas(second.page, [], "Theirs");
+  const other = theirs.client;
   assert(
     (await outcome(canvasChanges(other, { canvasId, rev: 0 }))) === "CanvasNotFound",
     "a second user gets CanvasNotFound from changes on the first user's canvas",
@@ -303,7 +318,7 @@ try {
     )) === "CanvasNotFound",
     "a second user gets CanvasNotFound from apply on the first user's canvas",
   );
-  const [own, ownAgain] = await Promise.all([openCanvas(other, {}), openCanvas(other, {})]);
+  const [own, ownAgain] = await Promise.all([theirs.open(), theirs.open()]);
   assert(
     own.canvasId !== canvasId && own.rev === 0 && own.items.length === 0,
     `the second user's open returns their own empty canvas: ${own.items.length} items at rev ${own.rev}`,
@@ -314,15 +329,15 @@ try {
   assert(
     ownAgain.canvasId === own.canvasId &&
       (await rows("canvases")).filter((row) => row.workspaceId === otherWorkspaceId).length === 1,
-    "two opens at once for a new workspace make one canvas",
+    "two opens at once for a new collection in a new workspace make one canvas",
   );
 
   await save(second.page, [
     { name: "one.png", buffer: await pngOf(second.page, "rgb(10, 90, 160)", 500, 300) },
     { name: "two.png", buffer: await pngOf(second.page, "rgb(160, 90, 10)", 300, 500) },
   ]);
-  await Promise.all([openCanvas(other, {}), openCanvas(other, {})]);
-  const settled = await openCanvas(other, {});
+  await Promise.all([theirs.open(), theirs.open()]);
+  const settled = await theirs.open();
   assert(
     settled.items.length === 2 &&
       new Set(settled.items.map((item) => refOf(item))).size === 2 &&

@@ -10,10 +10,10 @@ import { FilteredGallery, GalleryFilters, isFiltered } from "@/library/filters";
 import { type CardAction, Gallery, galleryPage } from "@/library/gallery";
 import { SaveImages } from "@/library/save-images";
 import { PageHeader } from "@/page-header";
-import { ViewLinks, validateGallerySearch } from "@/view";
+import { ViewLinks, validateCollectionSearch } from "@/view";
 
 export const Route = createFileRoute("/_app/c/$collectionId")({
-  validateSearch: validateGallerySearch,
+  validateSearch: validateCollectionSearch,
   component: CollectionPage,
 });
 
@@ -42,16 +42,16 @@ function Outside({ title, children }: { title: string; children: string }) {
 }
 
 function Collection({ collectionId, name }: { collectionId: Id<"collections">; name: string }) {
-  const { view = "gallery" } = Route.useSearch();
+  const { view = "canvas" } = Route.useSearch();
   return (
     <>
       <PageHeader title={name}>
         <ViewLinks />
       </PageHeader>
-      {view === "canvas" ? (
-        <CanvasView collectionId={collectionId} />
-      ) : (
+      {view === "gallery" ? (
         <CollectionGallery collectionId={collectionId} name={name} />
+      ) : (
+        <CanvasView collectionId={collectionId} />
       )}
     </>
   );
