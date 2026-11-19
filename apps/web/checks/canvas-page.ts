@@ -597,6 +597,36 @@ try {
     );
   }
 
+  // More in the panel than the window is high, as after many saved files. The lines are added to
+  // the page by hand, because saving that many files is slow.
+  const boxBefore = view.box;
+  const tall = await page.evaluate(() => {
+    const panel = document.querySelector('[data-testid="canvas-panel"]')!;
+    const list = panel.querySelector('[role="status"]')!;
+    for (let line = 0; line < 80; line += 1) {
+      list.append(
+        Object.assign(document.createElement("li"), { textContent: `file-${line}.png: saved.` }),
+      );
+    }
+    const scroller = [...panel.querySelectorAll("*"), panel].find(
+      (element) => element.scrollHeight > element.clientHeight + 1,
+    );
+    return {
+      page: document.documentElement.scrollHeight - window.innerHeight,
+      content: list.getBoundingClientRect().height,
+      scrolls: scroller !== undefined && getComputedStyle(scroller).overflowY === "auto",
+    };
+  });
+  await settle(page);
+  const boxAfter = (await pageView(page)).box;
+  assert(
+    tall.content > canvasViewport.height &&
+      tall.page === 0 &&
+      tall.scrolls &&
+      JSON.stringify(boxAfter) === JSON.stringify(boxBefore),
+    `with ${Math.round(tall.content)} px of save results in the panel, the page does not scroll, the panel does, and the canvas keeps its box: ${JSON.stringify(boxAfter)}`,
+  );
+
   assertCleanConsole();
 } finally {
   await browser.close();
