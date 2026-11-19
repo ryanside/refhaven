@@ -71,10 +71,7 @@ export default GroupSpec.make()
   .addFunction(
     FunctionSpec.publicMutation({
       name: "open",
-      args: () => ({
-        collectionId: Schema.optionalKey(Id("collections")),
-        placeRemoved: Schema.optionalKey(Schema.Boolean),
-      }),
+      args: () => ({ collectionId: Id("collections") }),
       returns: () =>
         Schema.Struct({
           canvasId: Id("canvases"),
@@ -82,7 +79,6 @@ export default GroupSpec.make()
           items: Schema.Array(CanvasItem),
           // The last `placed` items are the ones this call put on the canvas.
           placed: Schema.Int,
-          removed: Schema.Int,
         }),
       error: () => CollectionNotFound,
     }),

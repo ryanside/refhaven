@@ -116,6 +116,8 @@ try {
   const board = (await link.getAttribute("data-collection-id")) as Id<"collections">;
   await link.click();
   await page.getByRole("heading", { name: "Board" }).waitFor();
+  await page.getByRole("link", { name: "Gallery" }).click();
+  await page.getByText("Nothing saved yet.").waitFor();
   const members = async () =>
     (
       await owner.query(api.collections.refs, {

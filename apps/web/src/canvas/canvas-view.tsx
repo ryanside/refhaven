@@ -105,8 +105,8 @@ const idle = (store: SceneStore) =>
     });
   });
 
-/** The canvas of a set: the collection's, or the whole library's when `collectionId` is absent. */
-export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> }) {
+/** A collection's canvas. */
+export function CanvasView({ collectionId }: { collectionId: Id<"collections"> }) {
   const [store] = useState(createSceneStore);
   const [history] = useState(createHistory);
   const host = useRef<HTMLDivElement>(null);
@@ -117,41 +117,24 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
   const apply = useMutation(refs.public.canvas.apply);
   const urls = useMutation(refs.public.library.urls);
   const [base, setBase] = useState<Base>();
-  const [offCanvas, setOffCanvas] = useState(0);
   const snapshotting = useRef(false);
 
-  const takeSnapshot = useCallback(
-    async (placeRemoved = false) => {
-      if (snapshotting.current) return;
-      snapshotting.current = true;
-      try {
-        const opened = await open(
-          collectionId === undefined ? { placeRemoved } : { collectionId, placeRemoved },
-        );
-        if (Result.isFailure(opened)) {
-          setProblem(opened.failure._tag);
-          return;
-        }
-        if (store.loadSnapshot(opened.success)) {
-          setBase({ canvasId: opened.success.canvasId, rev: opened.success.rev });
-          setOffCanvas(opened.success.removed);
-          // Putting images back is an edit like a drop, so it can be undone and it empties redo.
-          if (placeRemoved && opened.success.placed > 0) {
-            history.record(
-              addEntry(
-                opened.success.items
-                  .slice(-opened.success.placed)
-                  .flatMap((item) => (item.kind === "image" ? [item] : [])),
-              ),
-            );
-          }
-        }
-      } finally {
-        snapshotting.current = false;
+  const takeSnapshot = useCallback(async () => {
+    if (snapshotting.current) return;
+    snapshotting.current = true;
+    try {
+      const opened = await open({ collectionId });
+      if (Result.isFailure(opened)) {
+        setProblem(opened.failure._tag);
+        return;
       }
-    },
-    [collectionId, history, open, store],
-  );
+      if (store.loadSnapshot(opened.success)) {
+        setBase({ canvasId: opened.success.canvasId, rev: opened.success.rev });
+      }
+    } finally {
+      snapshotting.current = false;
+    }
+  }, [collectionId, open, store]);
 
   useEffect(() => {
     void takeSnapshot();
@@ -480,36 +463,9 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
       <div data-testid="canvas-panel" className="relative w-80 shrink-0 border-r">
         <div className="absolute inset-0 flex flex-col gap-2 overflow-y-auto p-3">
           <SaveImages collectionId={collectionId} placeAt={placeAt} />
-          <EditButtons
-            store={store}
-            history={history}
-            removeLabel={
-              collectionId === undefined ? "Remove from canvas" : "Remove from collection"
-            }
-            actions={actions}
-          />
+          <EditButtons store={store} history={history} actions={actions} />
           <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
           <GroupButtons store={store} actions={actions} />
-          {offCanvas > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <p data-testid="off-canvas" data-count={offCanvas}>
-                {offCanvas === 1
-                  ? "1 image of the library is not on this canvas."
-                  : `${offCanvas} images of the library are not on this canvas.`}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  void inOrder(() => takeSnapshot(true).then(() => null)).catch(() =>
-                    setProblem("The images could not be put back."),
-                  )
-                }
-              >
-                Put them back
-              </Button>
-            </div>
-          ) : null}
           <Readout store={store} />
           {problem ? <p role="alert">{problem}</p> : null}
         </div>
@@ -528,12 +484,10 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
 function EditButtons({
   store,
   history,
-  removeLabel,
   actions,
 }: {
   store: SceneStore;
   history: History;
-  removeLabel: string;
   actions: Record<Action, () => void>;
 }) {
   const { selected } = useSyncExternalStore(store.subscribe, store.summary);
@@ -542,7 +496,7 @@ function EditButtons({
     <>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.remove}>
-          {removeLabel}
+          Remove from collection
         </Button>
         <Button variant="outline" size="sm" disabled={!canUndo} onClick={actions.undo}>
           Undo

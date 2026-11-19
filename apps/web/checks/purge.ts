@@ -158,7 +158,9 @@ try {
   await owner.mutation(api.collections.addRefs, { collectionId: board, refIds: [p, k] });
   await owner.mutation(api.ref.addTags, { refId: p, names: ["purged"] });
   await owner.mutation(api.ref.addTags, { refId: k, names: ["kept"] });
-  const library = await openCanvas(owner, {});
+  const main = await owner.mutation(api.collections.create, { name: "Main" });
+  await owner.mutation(api.collections.addRefs, { collectionId: main, refIds: [p, k, l] });
+  const mainCanvas = await openCanvas(owner, { collectionId: main });
   const collection = await openCanvas(owner, { collectionId: board });
 
   const before = await state();
@@ -185,14 +187,14 @@ try {
   );
   assert(
     before.pointing(p).tags === 1 &&
-      before.pointing(p).memberships === 1 &&
+      before.pointing(p).memberships === 2 &&
       before.pointing(p).items === 2 &&
       before.pointing(k).items === 2 &&
       before.refRow(s1)!.blobs.original === before.refRow(s2)!.blobs.original &&
       before.refRow(d1)!.blobs.original === before.refRow(d2)!.blobs.original &&
       JSON.stringify(Object.keys(before.blobsOf(workspace, pHash!)[0]!.variants).sort()) ===
         '["display","thumbnail"]',
-    "before the purge, the image has a tag, a membership, and an item on the library's and the collection's canvas, two pairs of Refs share a Blob, and the wide image has a thumbnail and a display copy",
+    "before the purge, the image has a tag, and a membership and an item in each of two collections and on their canvases, two pairs of Refs share a Blob, and the wide image has a thumbnail and a display copy",
   );
 
   const copies = await Promise.all(
@@ -322,7 +324,7 @@ try {
   const prepared = await owner.mutation(api.library.prepareUpload, { sha256: qHash!, roles: [] });
   const revs = () =>
     Promise.all(
-      [library, collection].map(
+      [mainCanvas, collection].map(
         async ({ canvasId }) => (await canvasChanges(owner, { canvasId, rev: 0 })).rev,
       ),
     );
@@ -340,23 +342,23 @@ try {
       JSON.stringify(afterPurge.pointing(p)) ===
         JSON.stringify({ tags: 0, memberships: 0, items: 0 }) &&
       (await outcome(owner.query(api.ref.get, { refId: p }))) === "RefNotFound",
-    "the purged Ref's row, its tag, its membership, and its items on both canvases are gone, and ref.get answers RefNotFound",
+    "the purged Ref's row, its tag, its memberships, and its items on both canvases are gone, and ref.get answers RefNotFound",
   );
-  const libraryAfter = await openCanvas(owner, {});
+  const mainAfter = await openCanvas(owner, { collectionId: main });
   const collectionAfter = await openCanvas(owner, { collectionId: board });
   assert(
     JSON.stringify(revsAfter) === JSON.stringify(revsBefore) &&
-      !libraryAfter.items.some((item) => refOf(item) === p) &&
+      !mainAfter.items.some((item) => refOf(item) === p) &&
       !collectionAfter.items.some((item) => refOf(item) === p) &&
-      libraryAfter.placed === 0,
+      mainAfter.placed === 0,
     `the purge raises neither canvas's rev, ${revsBefore} and ${revsAfter}, and canvas.open shows the purged image on neither canvas and places nothing`,
   );
   assert(
     typeof afterPurge.refRow(k)?.deletedAt === "number" &&
       JSON.stringify(afterPurge.pointing(k)) ===
-        JSON.stringify({ tags: 1, memberships: 1, items: 2 }) &&
+        JSON.stringify({ tags: 1, memberships: 2, items: 2 }) &&
       afterPurge.refRow(d2)?.deletedAt !== undefined,
-    "the Refs deleted just under 30 days before stay in the trash, with their tag, membership, and items",
+    "the Refs deleted just under 30 days before stay in the trash, with their tag, memberships, and items",
   );
   assert(
     afterPurge.refRow(l)?.deletedAt === undefined && afterPurge.pointing(l).items === 1,

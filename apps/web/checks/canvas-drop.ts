@@ -6,7 +6,6 @@ import {
   appUrl,
   assert,
   type Carried,
-  clientFor,
   consoleWatch,
   openPageWithPasskeyDevice,
   send,
@@ -33,10 +32,10 @@ import {
   waitForCanvas,
   refOf,
   openCanvas,
+  collectionCanvas,
 } from "./canvas-screen";
 
 const canvas = '[data-testid="canvas"]';
-const libraryCanvas = `${appUrl}/library?view=canvas`;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 const image = async (page: Page, name: string, color: Rgb, width: number, height: number) => ({
@@ -75,8 +74,9 @@ watchConsole(page);
 try {
   await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-drop-${Date.now().toString(36)}`);
-  const owner = await clientFor(page);
-  await page.goto(libraryCanvas);
+  const main = await collectionCanvas(page);
+  const owner = main.client;
+  await page.goto(`${main.url}?view=canvas`);
   await waitForCanvas(page, 0);
 
   const red = await image(page, "red.png", [210, 40, 40], 600, 300);
@@ -89,7 +89,7 @@ try {
   await waitForCanvas(page, 2);
   const redId = await refIdOf(owner, "red.png");
   const blueId = await refIdOf(owner, "blue.png");
-  const afterDrop = await openCanvas(owner, {});
+  const afterDrop = await main.open();
   const redItem = itemOf(afterDrop.items, redId);
   const blueItem = itemOf(afterDrop.items, blueId);
   assert(
@@ -97,7 +97,7 @@ try {
       afterDrop.items.length === 2 &&
       at(redItem, dropWorld) &&
       at(blueItem, { x: dropWorld.x + placedEdge + placementGap, y: dropWorld.y }),
-    `two files dropped on the library's canvas are saved, the first centered on the drop point ${dropWorld.x}, ${dropWorld.y} and the second ${placedEdge + placementGap} units to its right: ${afterDrop.items.map(({ x, y }) => `${x}, ${y}`).join(" and ")}`,
+    `two files dropped on a collection's canvas are saved, the first centered on the drop point ${dropWorld.x}, ${dropWorld.y} and the second ${placedEdge + placementGap} units to its right: ${afterDrop.items.map(({ x, y }) => `${x}, ${y}`).join(" and ")}`,
   );
   view = await pageView(page);
   let png = await screenshot(page, "01-dropped-two.png");
@@ -140,16 +140,16 @@ try {
     `a file dropped on a collection's canvas is in the collection and drawn on that canvas at the drop point ${boardWorld.x}, ${boardWorld.y}`,
   );
 
-  await page.goto(libraryCanvas);
-  await waitForCanvas(page, 3);
+  await page.goto(`${main.url}?view=canvas`);
+  await waitForCanvas(page, 2);
   const green = await image(page, "green.png", [40, 170, 70], 400, 400);
   view = await pageView(page);
   const middle = centerOf(view.box);
   const middleWorld = toWorld(view, middle);
   const pasted = await send(page, "paste", [green.carried], "body");
   await saved(page, 1);
-  await waitForCanvas(page, 4);
-  const greenItem = itemOf((await openCanvas(owner, {})).items, await refIdOf(owner, "green.png"));
+  await waitForCanvas(page, 3);
+  const greenItem = itemOf((await main.open()).items, await refIdOf(owner, "green.png"));
   png = await screenshot(page, "03-pasted.png");
   assert(
     pasted === "taken" && at(greenItem, middleWorld) && near(pixelAt(png, middle), green.color),
@@ -159,11 +159,8 @@ try {
   const orange = await image(page, "orange.png", [240, 140, 20], 300, 300);
   await page.getByLabel("Add images").setInputFiles([orange.carried]);
   await saved(page, 2);
-  await waitForCanvas(page, 5);
-  const orangeItem = itemOf(
-    (await openCanvas(owner, {})).items,
-    await refIdOf(owner, "orange.png"),
-  );
+  await waitForCanvas(page, 4);
+  const orangeItem = itemOf((await main.open()).items, await refIdOf(owner, "orange.png"));
   png = await screenshot(page, "04-picked.png");
   assert(
     at(orangeItem, middleWorld) &&
@@ -175,17 +172,14 @@ try {
   const second = await page.context().newPage();
   watchConsole(second);
   await second.setViewportSize(canvasViewport);
-  await second.goto(libraryCanvas);
-  await waitForCanvas(second, 5);
+  await second.goto(`${main.url}?view=canvas`);
+  await waitForCanvas(second, 4);
   const purple = await image(page, "purple.png", [150, 40, 200], 200, 200);
   view = await pageView(page);
   const purpleAt = { x: Math.round(view.box.x + 1200), y: Math.round(view.box.y + 700) };
   await send(page, "drop", [purple.carried], canvas, purpleAt);
-  await waitForCanvas(second, 6);
-  const purpleItem = itemOf(
-    (await openCanvas(owner, {})).items,
-    await refIdOf(owner, "purple.png"),
-  );
+  await waitForCanvas(second, 5);
+  const purpleItem = itemOf((await main.open()).items, await refIdOf(owner, "purple.png"));
   const secondView = await pageView(second);
   const shown = await until(
     async () => {
@@ -212,15 +206,15 @@ try {
     socket.onMessage((message) => server.send(message));
     server.onMessage((message) => setTimeout(() => socket.send(message), 1500));
   });
-  await late.goto(libraryCanvas);
+  await late.goto(`${main.url}?view=canvas`);
   await late.locator(canvas).waitFor();
   const atDrop = await readout(late);
   const pink = await image(late, "pink.png", [240, 90, 170], 200, 200);
   const lateBox = (await late.locator(canvas).boundingBox())!;
   const lateAt = { x: Math.round(lateBox.x + 900), y: Math.round(lateBox.y + 300) };
   await send(late, "drop", [pink.carried], canvas, lateAt);
-  await waitForCanvas(late, 7);
-  const pinkItem = itemOf((await openCanvas(owner, {})).items, await refIdOf(owner, "pink.png"));
+  await waitForCanvas(late, 6);
+  const pinkItem = itemOf((await main.open()).items, await refIdOf(owner, "pink.png"));
   const lateView = await pageView(late);
   const landed = toPage(lateView, pinkItem!);
   assert(
@@ -234,7 +228,7 @@ try {
 
   const outcomes = page.locator('[role="status"] li');
   const unsaved = async () => {
-    const items = (await openCanvas(owner, {})).items.length;
+    const items = (await main.open()).items.length;
     return `${await outcomes.count()} outcomes, ${items} items`;
   };
   const before = await unsaved();
@@ -271,13 +265,13 @@ try {
   );
 
   const gray = await image(page, "gray.png", [120, 120, 120], 150, 150);
-  const itemsBefore = (await openCanvas(owner, {})).items.length;
+  const itemsBefore = (await main.open()).items.length;
   view = await pageView(page);
   const viewCenter = toWorld(view, centerOf(view.box));
   const panelBox = (await page.getByTestId("canvas-panel").boundingBox())!;
   await send(page, "drop", [gray.carried], '[data-testid="canvas-panel"]', centerOf(panelBox));
   await waitForCanvas(page, itemsBefore + 1);
-  const grayItem = itemOf((await openCanvas(owner, {})).items, await refIdOf(owner, "gray.png"));
+  const grayItem = itemOf((await main.open()).items, await refIdOf(owner, "gray.png"));
   assert(
     panelBox.x + panelBox.width <= view.box.x && at(grayItem, viewCenter),
     `a file dropped on the canvas's panel, which is beside the canvas, lands at the center of the view, ${viewCenter.x.toFixed(1)}, ${viewCenter.y.toFixed(1)}`,

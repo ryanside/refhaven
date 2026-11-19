@@ -19,18 +19,18 @@ Each card in the library's grid has a `Delete` button. A deleted image goes to t
 - Open `/trash` directly.
 - Choose the `Library` link in the sidebar to go back.
 
-The `Delete` button exists only on `/library`. A collection's page keeps `Remove from collection`, and the canvas page has no delete key.
+The `Delete` button exists only on `/library`. A collection's gallery and canvas keep `Remove from collection`, and the canvas has no delete key.
 
 ## Driving it with Playwright
 
 Preconditions:
 
 - `verify.sh doctor` reports that the deployment has the four R2 variables.
-- A new user, signed in with `signInWithPasskey`, who saved images through the Library recipe. For the canvas path, add one to a collection and open both canvases once.
+- A new user, signed in with `signInWithPasskey`, who saved images through the Library recipe. For the canvas path, add two to a collection and open its canvas once.
 
 - **Delete.** On `/library`, run `page.locator('[data-ref-id="<refId>"]').getByRole("button", { name: "Delete" }).click()`. The page shows no confirmation. Wait for the card with `waitFor({ state: "detached" })`.
 - **List.** Click `page.getByRole("link", { name: "Trash", exact: true })` and wait for `page.getByRole("heading", { name: "Trash" })`. Each deleted image is a card with `data-ref-id`. The latest deleted is first. Wait for the thumbnails as the Library recipe does.
-- **Everywhere.** Before the delete, open `/library?view=canvas` in a second page with `page.context().newPage()`. Its `page.getByTestId("canvas-readout")` drops `data-items` by one after the delete. A collection's grid on `/c/{collectionId}` no longer shows the card.
+- **Everywhere.** Before the delete, open the collection's canvas, `/c/{collectionId}`, in a second page with `page.context().newPage()`. Its `page.getByTestId("canvas-readout")` drops `data-items` by one after the delete. The collection's gallery, `/c/{collectionId}?view=gallery`, no longer shows the card.
 - **Restore.** On `/trash`, click the card's `Restore` button. The card leaves `/trash`. Click `Library` and wait for the card. The open canvas page's `data-items` rises by one.
 - **Days left.** On `/trash`, `page.getByText("Images in the trash are deleted for good 30 days after they were deleted.")` shows once, and `page.locator('[data-ref-id="<refId>"]').getByText("30 days left")` shows on a card deleted today.
 - **Purge.** No page triggers it. Run `bunx convex run trash:purge '{"pretend":{"workspaceId":"<workspaceId>","now":<ms>}}'` from `packages/backend`, then `trash:sweep` the same way, with the run's own workspace from the `workspaceId` of one of its `refs` rows. An open `/trash` drops the purged cards without a reload.

@@ -4,12 +4,11 @@ import refs from "@refhaven/backend/refs";
 import { Button } from "@refhaven/ui/components/button";
 import { NativeSelect, NativeSelectOption } from "@refhaven/ui/components/native-select";
 import { createFileRoute } from "@tanstack/react-router";
-import { CanvasView } from "@/canvas/canvas-view";
 import { FilteredGallery, GalleryFilters, isFiltered } from "@/library/filters";
 import { type CardAction, Gallery, galleryPage } from "@/library/gallery";
 import { SaveImages } from "@/library/save-images";
 import { PageHeader } from "@/page-header";
-import { ViewLinks, validateGallerySearch } from "@/view";
+import { validateGallerySearch } from "@/view";
 
 export const Route = createFileRoute("/_app/library")({
   validateSearch: validateGallerySearch,
@@ -17,19 +16,18 @@ export const Route = createFileRoute("/_app/library")({
 });
 
 function Library() {
-  const { view = "gallery" } = Route.useSearch();
   return (
     <>
-      <PageHeader title="Library">
-        <ViewLinks />
-      </PageHeader>
-      {view === "canvas" ? <CanvasView /> : <LibraryGallery />}
+      <PageHeader title="Library" />
+      <LibraryGallery />
     </>
   );
 }
 
 function LibraryGallery() {
-  const { view: _, ...filters } = Route.useSearch();
+  // The router keeps search keys it was not asked about, such as an old `view`. Only the filters go on.
+  const { q, tag } = Route.useSearch();
+  const filters = { ...(q === undefined ? {} : { q }), ...(tag === undefined ? {} : { tag }) };
   const collections = useQuery(refs.public.collections.list, {});
   const addRefs = useMutation(refs.public.collections.addRefs);
   const remove = useMutation(refs.public.library.remove);

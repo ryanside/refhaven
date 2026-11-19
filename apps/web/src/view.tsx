@@ -20,30 +20,34 @@ const decoded = (schema: Schema.Decoder<string>, value: unknown) =>
   );
 
 /**
- * Reads a gallery page's search parameters. A page with no valid `view` is the gallery. A search
- * text or a tag that the server would refuse is left out. A tag is put in its normal form, so
- * `?tag=Mood` filters by `mood`.
+ * Reads a gallery's filters from the search parameters. A search text or a tag that the server
+ * would refuse is left out. A tag is put in its normal form, so `?tag=Mood` filters by `mood`.
  */
-export const validateGallerySearch = (
-  search: Record<string, unknown>,
-): { view?: View } & Filters => {
+export const validateGallerySearch = (search: Record<string, unknown>): Filters => {
   const q = decoded(SearchQuery, search.q);
   const tag = decoded(TagName, search.tag);
   return {
-    ...(search.view === "canvas" || search.view === "gallery" ? { view: search.view } : {}),
     ...(q === undefined ? {} : { q }),
     ...(tag === undefined ? {} : { tag }),
   };
 };
 
+/** Reads a collection page's search parameters. A page with no valid `view` is the canvas. */
+export const validateCollectionSearch = (
+  search: Record<string, unknown>,
+): { view?: View } & Filters => ({
+  ...(search.view === "canvas" || search.view === "gallery" ? { view: search.view } : {}),
+  ...validateGallerySearch(search),
+});
+
 const views = [
-  { view: "gallery", label: "Gallery" },
   { view: "canvas", label: "Canvas" },
+  { view: "gallery", label: "Gallery" },
 ] as const;
 
-/** Switches the current page between its gallery and its canvas, and marks the one it shows. */
+/** Switches a collection's page between its canvas and its gallery, and marks the one it shows. */
 export function ViewLinks() {
-  const current = useSearch({ strict: false, select: (search) => search.view ?? "gallery" });
+  const current = useSearch({ strict: false, select: (search) => search.view ?? "canvas" });
   return (
     <nav className="flex gap-3">
       {views.map(({ view, label }) => (

@@ -1,9 +1,11 @@
 import { api } from "@refhaven/backend/api";
+import type { Id } from "@refhaven/backend/id";
 import { type Camera, type Point, screenToWorld, topmostAt, worldToScreen } from "@refhaven/scene";
 import type { ConvexHttpClient } from "convex/browser";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { PNG } from "pngjs";
 import type { Page } from "playwright";
+import { appUrl, clientFor } from "./browser";
 
 /** A page wide enough for a canvas of 1400 by about 840 pixels, beside the sidebar and the canvas's panel, and under the page's bar. */
 export const canvasViewport = { width: 1976, height: 900 };
@@ -17,13 +19,32 @@ const placedOf = (items: ReadonlyArray<Listed>) =>
   items.filter((item): item is Item => item.kind !== "group");
 
 /** `canvas.open` with the items that have a place. A group has none. */
-export const openCanvas = (
-  client: ConvexHttpClient,
-  args: FunctionArgs<typeof api.canvas.open> = {},
-) =>
+export const openCanvas = (client: ConvexHttpClient, args: FunctionArgs<typeof api.canvas.open>) =>
   client
     .mutation(api.canvas.open, args)
     .then((opened) => ({ ...opened, items: placedOf(opened.items) }));
+
+/**
+ * Makes a collection, puts `refIds` in it, and opens its gallery, where a check saves the rest of
+ * the images its canvas needs. Only a collection has a canvas. `url` opens the canvas, and `open`
+ * is `canvas.open` of the collection.
+ */
+export const collectionCanvas = async (
+  page: Page,
+  refIds: ReadonlyArray<Id<"refs">> = [],
+  name = "Main",
+) => {
+  const client = await clientFor(page);
+  const collectionId = await client.mutation(api.collections.create, { name });
+  if (refIds.length > 0) {
+    await client.mutation(api.collections.addRefs, { collectionId, refIds: [...refIds] });
+  }
+  const url = `${appUrl}/c/${collectionId}`;
+  await page.goto(`${url}?view=gallery`);
+  await page.getByRole("heading", { name, exact: true }).waitFor();
+  return { client, collectionId, url, open: () => openCanvas(client, { collectionId }) };
+};
+export type CollectionCanvas = Awaited<ReturnType<typeof collectionCanvas>>;
 
 /** `canvas.changes` with the items that have a place. */
 export const canvasChanges = (

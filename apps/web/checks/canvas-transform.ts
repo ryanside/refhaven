@@ -8,16 +8,8 @@ import {
   handles,
   minFrameEdge,
 } from "@refhaven/scene";
-import type { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
-import {
-  appUrl,
-  assert,
-  clientFor,
-  consoleWatch,
-  openPageWithPasskeyDevice,
-  signInWithPasskey,
-} from "./browser";
+import { assert, consoleWatch, openPageWithPasskeyDevice, signInWithPasskey } from "./browser";
 import {
   canvasViewport,
   type Item,
@@ -39,18 +31,16 @@ import {
   until,
   waitForCanvas,
   refOf,
-  openCanvas,
+  collectionCanvas,
+  type CollectionCanvas,
 } from "./canvas-screen";
 
 const red = { name: "red.png", color: [210, 40, 40] as Rgb, width: 600, height: 400 };
 const blue = { name: "blue.png", color: [40, 60, 210] as Rgb, width: 400, height: 400 };
 
-const canvasUrl = `${appUrl}/library?view=canvas`;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 type Op = { op: string; key?: string; fields?: Record<string, unknown> };
-
-const snapshotOf = (owner: ConvexHttpClient) => openCanvas(owner, {});
 
 const rectFor = (item: Item): Rect => ({
   x: item.x,
@@ -133,12 +123,12 @@ page.on("websocket", (socket) =>
 );
 
 /** Runs a gesture and waits for its save. Returns the ops of each apply call it made. */
-const savedBy = async (owner: ConvexHttpClient, gesture: () => Promise<void>) => {
-  const before = await snapshotOf(owner);
+const savedBy = async (main: CollectionCanvas, gesture: () => Promise<void>) => {
+  const before = await main.open();
   const calls = applied.length;
   await gesture();
   const after = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > before.rev,
     "the gesture to save",
   );
@@ -152,6 +142,8 @@ const patchedFields = (calls: ReadonlyArray<ReadonlyArray<Op>>) =>
 try {
   await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-transform-${Date.now().toString(36)}`);
+  const main = await collectionCanvas(page);
+  const canvasUrl = `${main.url}?view=canvas`;
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
       [red, blue].map(async ({ name, color, width, height }) => ({
@@ -170,8 +162,8 @@ try {
   const redRef = await refIdOf(red.name);
   const blueRef = await refIdOf(blue.name);
 
-  const owner = await clientFor(page);
-  const placed = await snapshotOf(owner);
+  const owner = main.client;
+  const placed = await main.open();
   const keyOf = (refId: string) => placed.items.find((item) => refOf(item) === refId)!.key;
   const redKey = keyOf(redRef);
   const blueKey = keyOf(blueRef);
@@ -197,7 +189,7 @@ try {
   await waitForCanvas(second, 2);
   const secondView = await pageView(second);
 
-  let now = await snapshotOf(owner);
+  let now = await main.open();
   await click(page, toPage(view, itemOf(now, redKey)));
   await selected(page, 1);
   await settle(page);
@@ -221,7 +213,7 @@ try {
   await selected(page, 1);
   await settle(page);
   const cornerStart = round(await gripCenter(page, "se"));
-  const corner = await savedBy(owner, () =>
+  const corner = await savedBy(main, () =>
     dragTo(page, cornerStart, { x: cornerStart.x + 120, y: cornerStart.y + 60 }),
   );
   const redBefore = itemOf(corner.before, redKey);
@@ -269,7 +261,7 @@ try {
   await selected(page, 1);
   await settle(page);
   const edgeStart = round(await gripCenter(page, "w"));
-  const edge = await savedBy(owner, () =>
+  const edge = await savedBy(main, () =>
     dragTo(page, edgeStart, { x: edgeStart.x - 80, y: edgeStart.y + 30 }),
   );
   const redEdge = itemOf(edge.after, redKey);
@@ -286,7 +278,7 @@ try {
   );
 
   const floorStart = round(await gripCenter(page, "se"));
-  const floor = await savedBy(owner, () => dragTo(page, floorStart, { x: 500, y: 150 }));
+  const floor = await savedBy(main, () => dragTo(page, floorStart, { x: 500, y: 150 }));
   const redFloor = itemOf(floor.after, redKey);
   const floorRect = rectFor(redFloor);
   const nwBefore = handleAt(rectFor(redEdge), "nw");
@@ -304,11 +296,11 @@ try {
     `dragging the bottom-right handle far past the top-left corner stops at the floor: scale ${redFloor.scale.toFixed(5)}, a longer edge of ${(Math.max(floorRect.width, floorRect.height) * view.camera.zoom).toFixed(3)} px, still below and right of the fixed corner, so it did not flip`,
   );
 
-  const undoResize = await savedBy(owner, () => page.keyboard.press("ControlOrMeta+z"));
+  const undoResize = await savedBy(main, () => page.keyboard.press("ControlOrMeta+z"));
   const redUndone = itemOf(undoResize.after, redKey);
-  const redoResize = await savedBy(owner, () => page.keyboard.press("ControlOrMeta+Shift+z"));
+  const redoResize = await savedBy(main, () => page.keyboard.press("ControlOrMeta+Shift+z"));
   const redRedone = itemOf(redoResize.after, redKey);
-  const undoAgain = await savedBy(owner, () => page.keyboard.press("ControlOrMeta+z"));
+  const undoAgain = await savedBy(main, () => page.keyboard.press("ControlOrMeta+z"));
   const redBack = itemOf(undoAgain.after, redKey);
   const sameTransform = (a: Item, b: Item) =>
     a.x === b.x && a.y === b.y && a.scale === b.scale && a.rotation === b.rotation;
@@ -325,7 +317,7 @@ try {
   const turnStart = round(await gripCenter(page, "rotate"));
   const center = toPage(view, redEdge);
   const turnEnd = round({ x: center.x + 250, y: center.y });
-  const turn = await savedBy(owner, () => dragTo(page, turnStart, turnEnd));
+  const turn = await savedBy(main, () => dragTo(page, turnStart, turnEnd));
   const redTurned = itemOf(turn.after, redKey);
   const expectedTurn = sweep(center, turnStart, turnEnd);
   assert(
@@ -377,9 +369,9 @@ try {
     "after a resize and a turn, a click inside the new footprint selects the image, and a click inside the old footprint but outside the new one selects nothing",
   );
 
-  const undoTurn = await savedBy(owner, () => page.getByRole("button", { name: "Undo" }).click());
-  const redoTurn = await savedBy(owner, () => page.getByRole("button", { name: "Redo" }).click());
-  const undoTurnAgain = await savedBy(owner, () =>
+  const undoTurn = await savedBy(main, () => page.getByRole("button", { name: "Undo" }).click());
+  const redoTurn = await savedBy(main, () => page.getByRole("button", { name: "Redo" }).click());
+  const undoTurnAgain = await savedBy(main, () =>
     page.getByRole("button", { name: "Undo" }).click(),
   );
   assert(
@@ -401,7 +393,7 @@ try {
     x: center.x + radius * Math.cos((-40 * Math.PI) / 180),
     y: center.y + radius * Math.sin((-40 * Math.PI) / 180),
   });
-  const snapped = await savedBy(owner, () => dragTo(page, snapStart, snapEnd, true));
+  const snapped = await savedBy(main, () => dragTo(page, snapStart, snapEnd, true));
   const redSnapped = itemOf(snapped.after, redKey);
   assert(
     snapped.rose === 1 && Math.abs(redSnapped.rotation - Math.PI / 4) < 1e-12,
@@ -421,7 +413,7 @@ try {
     `two selected images have one upright frame around both, its handles within ${pairOff.toFixed(2)} px of its points`,
   );
   const pairStart = round(await gripCenter(page, "sw"));
-  const pairResize = await savedBy(owner, () =>
+  const pairResize = await savedBy(main, () =>
     dragTo(page, pairStart, { x: pairStart.x + 100, y: pairStart.y - 50 }),
   );
   const fixedCorner = handleAt(pairFrame, "ne");
@@ -451,7 +443,7 @@ try {
     x: pairCenter.x + 200 * Math.cos((-30 * Math.PI) / 180),
     y: pairCenter.y + 200 * Math.sin((-30 * Math.PI) / 180),
   });
-  const pairTurn = await savedBy(owner, () => dragTo(page, pairTurnStart, pairTurnEnd));
+  const pairTurn = await savedBy(main, () => dragTo(page, pairTurnStart, pairTurnEnd));
   const pairAngle = sweep(pairCenter, pairTurnStart, pairTurnEnd);
   const turnedAbout = [blueKey, redKey].every((key) => {
     const was = itemOf(pairResize.after, key);
@@ -474,7 +466,7 @@ try {
     `turning two selected images grows each rotation by ${degrees(pairAngle)} degrees and turns their centers about the frame's center, in one apply call`,
   );
 
-  now = await snapshotOf(owner);
+  now = await main.open();
   const redNow = itemOf(now, redKey);
   await page.keyboard.press("Escape");
   await click(page, toPage(view, redNow));

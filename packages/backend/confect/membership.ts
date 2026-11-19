@@ -36,8 +36,8 @@ export const addMember = (collectionId: Id<"collections">, refId: Id<"refs">) =>
     }
   }).pipe(Effect.orDie);
 
-/** The canvas of a set: the collection's, or the whole library's when `collectionId` is absent. */
-export const canvasOf = (collectionId: Id<"collections"> | undefined) =>
+/** The canvas of a collection, if it was ever opened. */
+export const canvasOf = (collectionId: Id<"collections">) =>
   Effect.gen(function* () {
     const { workspaceId } = yield* CurrentWorkspace;
     const reader = yield* DatabaseReader;

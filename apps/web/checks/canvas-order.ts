@@ -1,15 +1,7 @@
 import { api } from "@refhaven/backend/api";
 import { type Point, boundsOf } from "@refhaven/scene";
-import type { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
-import {
-  appUrl,
-  assert,
-  clientFor,
-  consoleWatch,
-  openPageWithPasskeyDevice,
-  signInWithPasskey,
-} from "./browser";
+import { assert, consoleWatch, openPageWithPasskeyDevice, signInWithPasskey } from "./browser";
 import {
   canvasViewport,
   type Item,
@@ -26,7 +18,7 @@ import {
   until,
   waitForCanvas,
   refOf,
-  openCanvas,
+  collectionCanvas,
 } from "./canvas-screen";
 
 const images = {
@@ -36,12 +28,9 @@ const images = {
 } satisfies Record<string, Rgb>;
 type Color = keyof typeof images;
 
-const canvasUrl = `${appUrl}/library?view=canvas`;
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 type Op = { op: string; key?: string; fields?: Record<string, unknown> };
-
-const snapshotOf = (owner: ConvexHttpClient) => openCanvas(owner, {});
 
 const round = ({ x, y }: Point): Point => ({ x: Math.round(x), y: Math.round(y) });
 
@@ -107,6 +96,8 @@ const fieldsOf = (calls: ReadonlyArray<ReadonlyArray<Op>>) =>
 try {
   await page.setViewportSize(canvasViewport);
   await signInWithPasskey(page, `check-canvas-order-${Date.now().toString(36)}`);
+  const main = await collectionCanvas(page);
+  const canvasUrl = `${main.url}?view=canvas`;
   await page.getByLabel("Add images").setInputFiles(
     await Promise.all(
       (Object.entries(images) as Array<[Color, Rgb]>).map(async ([name, color]) => ({
@@ -131,8 +122,8 @@ try {
     blue: await refIdOf("blue"),
   };
 
-  const owner = await clientFor(page);
-  const placed = await snapshotOf(owner);
+  const owner = main.client;
+  const placed = await main.open();
   const canvasId = placed.canvasId;
   const keyOf = (name: Color) => placed.items.find((item) => refOf(item) === refs[name])!.key;
   const key = { red: keyOf("red"), green: keyOf("green"), blue: keyOf("blue") };
@@ -162,7 +153,7 @@ try {
   const secondView = await pageView(second);
 
   // A marquee dragged up and to the left, from empty canvas below green to above red.
-  const rev = (await snapshotOf(owner)).rev;
+  const rev = (await main.open()).rev;
   let calls = applied.length;
   let during = {
     shown: 0,
@@ -189,7 +180,7 @@ try {
     "a marquee around red and green selects exactly those two",
   );
   assert(
-    applied.length === calls && (await snapshotOf(owner)).rev === rev,
+    applied.length === calls && (await main.open()).rev === rev,
     "the marquee made no apply call",
   );
 
@@ -207,7 +198,7 @@ try {
     blue: { x: 1200, y: 0, rotation: Math.PI / 4 },
   });
   const turned = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.items.some((item) => item.key === key.blue && item.rotation !== 0),
     "blue to turn",
   );
@@ -249,13 +240,13 @@ try {
     "a press on empty canvas with no movement clears the selection and saves nothing",
   );
 
-  let before = await snapshotOf(owner);
+  let before = await main.open();
   let drawnDuring = -1;
   await drag(at({ x: 0, y: 0 }), at({ x: 0, y: 60 }), false, async () => {
     drawnDuring = await marquee.count();
   });
   let after = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > before.rev,
     "the drag to save",
   );
@@ -297,11 +288,11 @@ try {
       .join(" < ");
   // The second page must show green on top first, or red there afterwards would prove nothing.
   await shows(second, secondView, "green", "green on top on the second page before the command");
-  before = await snapshotOf(owner);
+  before = await main.open();
   calls = applied.length;
   await page.getByRole("button", { name: "Send to back" }).click();
   after = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > before.rev,
     "send to back to save",
   );
@@ -333,7 +324,7 @@ try {
   calls = applied.length;
   await page.getByRole("button", { name: "Bring to front" }).click();
   after = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > before.rev,
     "bring to front to save",
   );
@@ -349,7 +340,7 @@ try {
   calls = applied.length;
   await page.keyboard.press("ControlOrMeta+z");
   after = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > fronted.rev,
     "the undo to save",
   );
@@ -363,7 +354,7 @@ try {
   const undone = after;
   await page.keyboard.press("ControlOrMeta+Shift+z");
   after = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > undone.rev,
     "the redo to save",
   );
@@ -379,7 +370,7 @@ try {
   calls = applied.length;
   await page.keyboard.press("]");
   after = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > before.rev,
     "] to save",
   );
@@ -393,7 +384,7 @@ try {
   calls = applied.length;
   await page.keyboard.press("[");
   after = await until(
-    () => snapshotOf(owner),
+    () => main.open(),
     (s) => s.rev > before.rev,
     "[ to save",
   );
@@ -408,7 +399,7 @@ try {
   await page.keyboard.press("[");
   await settle(page);
   assert(
-    applied.length === calls && (await snapshotOf(owner)).rev === after.rev,
+    applied.length === calls && (await main.open()).rev === after.rev,
     "[ on an image already at the back makes no call",
   );
 
@@ -425,7 +416,7 @@ try {
   assert(
     (await field.inputValue()) === "][" &&
       applied.length === calls &&
-      (await snapshotOf(owner)).rev === after.rev,
+      (await main.open()).rev === after.rev,
     `with a text field focused, ] and [ type into it ("${await field.inputValue()}") and make no call`,
   );
   await page.evaluate(() => document.querySelector('input[aria-label="Probe"]')!.remove());
@@ -441,9 +432,7 @@ try {
     ),
   );
   assert(
-    disabled.every(Boolean) &&
-      applied.length === calls &&
-      (await snapshotOf(owner)).rev === after.rev,
+    disabled.every(Boolean) && applied.length === calls && (await main.open()).rev === after.rev,
     "with nothing selected, both buttons are disabled and both keys make no call",
   );
 

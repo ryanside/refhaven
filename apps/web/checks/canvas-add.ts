@@ -12,7 +12,7 @@ import {
   rows,
   signInWithPasskey,
 } from "./browser";
-import { refOf, openCanvas, canvasChanges, type Item } from "./canvas-screen";
+import { refOf, openCanvas, canvasChanges, collectionCanvas, type Item } from "./canvas-screen";
 
 const stamp = Date.now().toString(36);
 
@@ -103,7 +103,12 @@ try {
     { name: "c.png", buffer: await pngOf(page, "rgb(30, 160, 30)", 200, 500) },
     { name: "trashed.png", buffer: await pngOf(page, "rgb(90, 90, 90)", 100) },
   ]);
-  const opened = await openCanvas(owner, {});
+  const firstSaved = await refIdsByName(owner);
+  const main = await collectionCanvas(
+    page,
+    ["a.png", "b.png", "c.png", "trashed.png"].map((name) => firstSaved.get(name) as Id<"refs">),
+  );
+  const opened = await main.open();
   const { canvasId } = opened;
   await save(page, [
     { name: "fresh.png", buffer: await pngOf(page, "rgb(200, 200, 30)", 800, 200) },
@@ -122,11 +127,11 @@ try {
   ].map((name) => ids.get(name)!);
   assert(
     opened.items.length === 4 && [a, b, c, trashed, fresh, f, g].every(Boolean),
-    `the library's canvas holds the 4 images saved before it opened, and 3 more are saved after: ${opened.items.length} items`,
+    `the collection's canvas holds the 4 images it had when it opened, and 3 more are saved into it after: ${opened.items.length} items`,
   );
 
   const changesSince = (rev: number) => canvasChanges(owner, { canvasId, rev });
-  const libraryRows = async () =>
+  const canvasRows = async () =>
     (await rows("canvasItems")).filter((row) => row.canvasId === canvasId);
 
   const freshRev = await owner.mutation(api.canvas.apply, {
@@ -167,7 +172,7 @@ try {
   });
   const sinceFresh = await changesSince(freshRev);
   const byRef = new Map(sinceFresh.items.map((item) => [refOf(item), item]));
-  const mixedRows = (await libraryRows()).filter((row) => row.rev === mixedRev);
+  const mixedRows = (await canvasRows()).filter((row) => row.rev === mixedRev);
   assert(
     mixedRev === freshRev + 1 &&
       sinceFresh.rev === mixedRev &&
@@ -187,18 +192,18 @@ try {
     canvasId,
     ops: [{ op: "remove", key: b! }],
   });
-  const afterRemove = await openCanvas(owner, {});
+  const afterRemove = await main.open();
   assert(
     afterRemove.rev === removedRev && afterRemove.items.every((item) => refOf(item) !== b),
-    `on the library's canvas open does not place a removed item's Ref again: ${afterRemove.items.length} items at rev ${afterRemove.rev}`,
+    `open does not place the Ref of an item removed from the collection's canvas again: ${afterRemove.items.length} items at rev ${afterRemove.rev}`,
   );
   const backRev = await owner.mutation(api.canvas.apply, {
     canvasId,
     ops: [{ op: "add", refId: b!, x: -500, y: -250 }],
   });
   const [back] = (await changesSince(removedRev)).items;
-  const reopened = await openCanvas(owner, {});
-  const bRows = (await libraryRows()).filter((row) => row.refId === b);
+  const reopened = await main.open();
+  const bRows = (await canvasRows()).filter((row) => row.refId === b);
   assert(
     backRev === removedRev + 1 &&
       back !== undefined &&
@@ -219,7 +224,7 @@ try {
     ops: [{ op: "add", refId: c!, x: 9000, y: 9100 }],
   });
   const [moved] = (await changesSince(backRev)).items;
-  const cRows = (await libraryRows()).filter((row) => row.refId === c);
+  const cRows = (await canvasRows()).filter((row) => row.refId === c);
   assert(
     movedRev === backRev + 1 &&
       moved !== undefined &&
@@ -246,13 +251,13 @@ try {
       freshOnBoard.y === 20 &&
       boardAfter.rev === boardAddRev &&
       (await changesSince(movedRev)).rev === movedRev,
-    "add on a collection's canvas for a Ref outside the collection makes it a member and places it there, and the library's canvas is not written",
+    "add on a collection's canvas for a Ref outside the collection makes it a member and places it there, and another collection's canvas is not written",
   );
 
   await owner.mutation(api.library.remove, { refIds: [trashed!] });
   // An add that names a z puts the item at that place in the stack, not on top. This is how undo
   // restores a removed item with one op.
-  const lowest = [...(await openCanvas(owner, {})).items].sort((one, other) =>
+  const lowest = [...(await main.open()).items].sort((one, other) =>
     one.z < other.z ? -1 : 1,
   )[0]!;
   await owner.mutation(api.canvas.apply, { canvasId, ops: [{ op: "remove", key: lowest.key }] });
@@ -260,13 +265,13 @@ try {
     canvasId,
     ops: [{ op: "add", refId: refOf(lowest), x: lowest.x, y: lowest.y, z: lowest.z }],
   });
-  const restored = (await openCanvas(owner, {})).items.find((item) => item.key === lowest.key);
+  const restored = (await main.open()).items.find((item) => item.key === lowest.key);
   assert(
     restored?.z === lowest.z && restored.x === lowest.x && restored.scale === lowest.scale,
     `an add that names a z brings a removed item back at that z, under the others: ${restored?.z}`,
   );
 
-  const libraryRev = (await changesSince(movedRev)).rev;
+  const mainRev = (await changesSince(movedRev)).rev;
   await signInWithPasskey(second.page, `check-canvas-add-b-${stamp}`);
   await save(second.page, [
     { name: "foreign.png", buffer: await pngOf(second.page, "rgb(10, 90, 160)", 50) },
@@ -316,7 +321,7 @@ try {
       boardSince.rev === boardAddRev &&
       boardSince.items.length === 0 &&
       !(await members(owner, board)).includes(b!) &&
-      (await changesSince(libraryRev)).rev === libraryRev,
+      (await changesSince(mainRev)).rev === mainRev,
     `a call that mixes a good add with a bad one fails with ${goodThenBad} and writes nothing: no item, no membership, rev ${boardSince.rev}`,
   );
 
@@ -326,7 +331,7 @@ try {
         canvasId,
         ops: [{ op: "add", refId: foreign, x: 0, y: 0 }],
       }),
-    )) === "CanvasNotFound" && (await changesSince(libraryRev)).rev === libraryRev,
+    )) === "CanvasNotFound" && (await changesSince(mainRev)).rev === mainRev,
     "a second user gets CanvasNotFound from an add on the first user's canvas, which stays as it was",
   );
 } finally {
