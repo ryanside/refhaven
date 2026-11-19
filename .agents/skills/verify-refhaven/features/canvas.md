@@ -17,7 +17,7 @@ The canvas view of the library shows every saved image on a free canvas. Each co
 - `canvas-sync` shows a move made in another page of the same user, without a reload.
 - `canvas-collection` shows a collection's images on its own canvas. A move there does not move the image on the library's canvas.
 - `canvas-drop` saves image files dropped on the canvas and places them with one `canvas.apply` add each: the first centered on the drop point, each next one 440 units to the right. On a collection's canvas the image joins the collection.
-- `canvas-paste` places a pasted image, or one picked with `Add images` in the panel, at the center of the view, in a row the same way.
+- `canvas-paste` places a pasted image, one picked with `Add images` in the panel, or a file dropped beside the canvas, at the center of the view, in a row the same way.
 - `canvas-remove` removes the selected images with one `canvas.apply` call of `remove` ops, by Delete, Backspace, or `Remove from canvas`. On a collection's canvas the button is `Remove from collection`, and the image leaves the collection.
 - `canvas-undo` undoes and redoes the page's moves, resizes, turns, changes of order, removals, and adds with one `canvas.apply` call each, by Mod+Z, Mod+Shift+Z, Ctrl+Y, or the `Undo` and `Redo` buttons. An undo that the server state no longer allows shows "That change could not be undone." and changes nothing.
 - `canvas-keys` maps Delete and Backspace, Mod+Z, Mod+Shift+Z, Ctrl+Y, Mod+A to select every item, Escape to clear the selection, `]` to bring the selection to the front, `[` to send it to the back, N to add a note, Mod+G to group the selection, and Mod+Shift+G to ungroup it. No shortcut fires while a text field has focus.

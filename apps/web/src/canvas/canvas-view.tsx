@@ -434,11 +434,17 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
   const placeAt = useCallback<PlaceAt>(
     (at) => {
       const box = host.current!.getBoundingClientRect();
-      const toWorld = () =>
-        screenToWorld(
-          store.camera(),
-          at ? { x: at.x - box.left, y: at.y - box.top } : { x: box.width / 2, y: box.height / 2 },
-        );
+      // A drop beside the canvas, as on its panel, starts at the center of the view, as a paste does.
+      const onCanvas =
+        at !== null &&
+        at.x >= box.left &&
+        at.x <= box.right &&
+        at.y >= box.top &&
+        at.y <= box.bottom;
+      const point = onCanvas
+        ? { x: at.x - box.left, y: at.y - box.top }
+        : { x: box.width / 2, y: box.height / 2 };
+      const toWorld = () => screenToWorld(store.camera(), point);
       // The first snapshot fits the camera to the items. A point read before that would end up
       // somewhere else on screen, so a drop that comes earlier is read when its first image is placed.
       let start = latestBase.current ? toWorld() : null;
@@ -470,41 +476,43 @@ export function CanvasView({ collectionId }: { collectionId?: Id<"collections"> 
 
   return (
     <div className="flex min-h-0 flex-1">
-      <div
-        data-testid="canvas-panel"
-        className="flex w-80 shrink-0 flex-col gap-2 overflow-y-auto border-r p-3"
-      >
-        <SaveImages collectionId={collectionId} placeAt={placeAt} />
-        <EditButtons
-          store={store}
-          history={history}
-          removeLabel={collectionId === undefined ? "Remove from canvas" : "Remove from collection"}
-          actions={actions}
-        />
-        <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
-        <GroupButtons store={store} actions={actions} />
-        {offCanvas > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <p data-testid="off-canvas" data-count={offCanvas}>
-              {offCanvas === 1
-                ? "1 image of the library is not on this canvas."
-                : `${offCanvas} images of the library are not on this canvas.`}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void inOrder(() => takeSnapshot(true).then(() => null)).catch(() =>
-                  setProblem("The images could not be put back."),
-                )
-              }
-            >
-              Put them back
-            </Button>
-          </div>
-        ) : null}
-        <Readout store={store} />
-        {problem ? <p role="alert">{problem}</p> : null}
+      {/* The content is laid over the column, so its height never adds to the page's. It scrolls. */}
+      <div data-testid="canvas-panel" className="relative w-80 shrink-0 border-r">
+        <div className="absolute inset-0 flex flex-col gap-2 overflow-y-auto p-3">
+          <SaveImages collectionId={collectionId} placeAt={placeAt} />
+          <EditButtons
+            store={store}
+            history={history}
+            removeLabel={
+              collectionId === undefined ? "Remove from canvas" : "Remove from collection"
+            }
+            actions={actions}
+          />
+          <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
+          <GroupButtons store={store} actions={actions} />
+          {offCanvas > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p data-testid="off-canvas" data-count={offCanvas}>
+                {offCanvas === 1
+                  ? "1 image of the library is not on this canvas."
+                  : `${offCanvas} images of the library are not on this canvas.`}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void inOrder(() => takeSnapshot(true).then(() => null)).catch(() =>
+                    setProblem("The images could not be put back."),
+                  )
+                }
+              >
+                Put them back
+              </Button>
+            </div>
+          ) : null}
+          <Readout store={store} />
+          {problem ? <p role="alert">{problem}</p> : null}
+        </div>
       </div>
       <div className="relative flex-1 overflow-hidden">
         <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
