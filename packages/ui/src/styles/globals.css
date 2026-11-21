@@ -4,6 +4,10 @@
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant narrow (@media (max-width: 719px));
+/* Widths where the top bar's sides fold so its center keeps room: compact folds Add images to its +
+   and shortens the username, and tight shows only the avatar and the views' icons. */
+@custom-variant compact (@media (max-width: 1179px));
+@custom-variant tight (@media (max-width: 999px));
 @source "../../../apps/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 

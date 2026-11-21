@@ -259,6 +259,34 @@ try {
   if (evidence) {
     await page.screenshot({ path: `${evidence}/03-collection-page.png`, fullPage: true });
   }
+
+  // The top bar's left, center, and right parts, each the span of what it shows.
+  const barParts = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll("header > div")].map((part) => {
+        const boxes = [...part.querySelectorAll("*")]
+          .filter((element) => !element.closest('[role="alert"]'))
+          .map((element) => element.getBoundingClientRect())
+          .filter((box) => box.width > 1 && box.height > 1);
+        return {
+          left: Math.min(...boxes.map((box) => box.left)),
+          right: Math.max(...boxes.map((box) => box.right)),
+        };
+      }),
+    );
+  const crowded: Array<string> = [];
+  for (const width of [768, 900, 1024, 1180, 1280, 1496]) {
+    await page.setViewportSize({ width, height: 800 });
+    const [left, center, right] = await barParts();
+    if (left!.right > center!.left || center!.right > right!.left || right!.right > width) {
+      crowded.push(`${width}: ${JSON.stringify({ left, center, right })}`);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  assert(
+    crowded.length === 0,
+    `on a collection's page the top bar's nav, title, and account and Add images never overlap, from 768 to 1496 px wide: ${crowded.join("; ")}`,
+  );
   await page.goto(`${appUrl}/library`);
   await page.locator(`[data-collection-id="${moodId}"]`).getByText("Mood board").waitFor();
   assert(

@@ -5,6 +5,7 @@ import refs from "@refhaven/backend/refs";
 import { Button } from "@refhaven/ui/components/button";
 import { Icon } from "@refhaven/ui/components/icon";
 import { Tooltip } from "@refhaven/ui/components/tooltip";
+import { cn } from "@refhaven/ui/lib/utils";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import * as Result from "effect/Result";
 import { useState } from "react";
@@ -94,8 +95,8 @@ function CollectionTitle({
   };
 
   return (
-    <div className="relative">
-      <div className={pillClass}>
+    <div className="relative min-w-0">
+      <div className={cn(pillClass, "shrink")}>
         {draft === null ? (
           <div className="flex min-w-0 items-center gap-2 pr-0.5 pl-3">
             <h1 className="max-w-[24vw] truncate font-[600] tracking-[-0.012em]">{name}</h1>

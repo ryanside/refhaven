@@ -41,8 +41,8 @@ const PickContext = createContext<() => void>(() => {});
 const usePickImages = () => useContext(PickContext);
 
 /**
- * The page's "Add images" button. It opens the file picker. With `fold`, a narrow window shows only
- * its +.
+ * The page's "Add images" button. It opens the file picker. With `fold`, a window too narrow for the
+ * whole top bar shows only its +.
  */
 export function AddImagesButton({
   className,
@@ -53,9 +53,9 @@ export function AddImagesButton({
 }) {
   const pick = usePickImages();
   return (
-    <Button size="lg" className={cn(fold && "narrow:w-11 narrow:px-0", className)} onClick={pick}>
+    <Button size="lg" className={cn(fold && "compact:w-11 compact:px-0", className)} onClick={pick}>
       <Icon icon={PlusSignIcon} size={18} />
-      <span className={cn(fold && "narrow:sr-only")}>Add images</span>
+      <span className={cn(fold && "compact:sr-only")}>Add images</span>
     </Button>
   );
 }

@@ -235,7 +235,7 @@ function Breadcrumb({ origin, fileName }: { origin: Origin; fileName: string }) 
   return (
     <nav
       aria-label="Breadcrumb"
-      className={cn(pillClass, "min-w-0 gap-0.5 pr-4 pl-1.5 narrow:hidden")}
+      className={cn(pillClass, "min-w-0 shrink gap-0.5 pr-4 pl-1.5 narrow:hidden")}
     >
       <Link
         {...originLink(origin)}

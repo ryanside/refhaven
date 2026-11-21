@@ -42,7 +42,7 @@ export function Rule({ className }: { className?: string }) {
 
 export function TopBar({ center, action }: { center?: ReactNode; action?: ReactNode }) {
   return (
-    <header className="pointer-events-none fixed inset-x-0 top-0 z-30 grid h-[68px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-gutter narrow:h-auto narrow:grid-cols-[auto_minmax(0,1fr)] narrow:gap-y-2 narrow:py-3">
+    <header className="pointer-events-none fixed inset-x-0 top-0 z-30 grid h-[68px] grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] items-center gap-3 px-gutter narrow:h-auto narrow:grid-cols-[auto_minmax(0,1fr)] narrow:gap-y-2 narrow:py-3">
       <div className="flex min-w-0 items-center">
         <MainNav />
       </div>
@@ -161,7 +161,7 @@ function AccountMenu() {
         render={
           <button
             type="button"
-            className="flex h-8 shrink-0 items-center gap-2 rounded-full pr-2 pl-1 font-[520] outline-offset-2 transition-colors duration-150 hover:bg-hover aria-expanded:bg-hover narrow:pr-1"
+            className="flex h-8 shrink-0 items-center gap-2 rounded-full pr-2 pl-1 font-[520] outline-offset-2 transition-colors duration-150 hover:bg-hover aria-expanded:bg-hover tight:pr-1"
           />
         }
       >
@@ -171,7 +171,7 @@ function AccountMenu() {
         >
           {name.slice(0, 1)}
         </span>
-        <span data-testid="username" className="max-w-40 truncate narrow:sr-only">
+        <span data-testid="username" className="max-w-40 truncate compact:max-w-24 tight:sr-only">
           {username}
         </span>
         <span hidden data-testid="message">
@@ -180,7 +180,7 @@ function AccountMenu() {
         <span hidden data-testid="user-id">
           {userId}
         </span>
-        <Icon icon={ArrowDown01Icon} size={14} className="-ml-0.5 text-ink-3 narrow:hidden" />
+        <Icon icon={ArrowDown01Icon} size={14} className="-ml-0.5 text-ink-3 tight:hidden" />
       </MenuTrigger>
       <MenuContent align="end" className="min-w-56">
         <MenuGroup>

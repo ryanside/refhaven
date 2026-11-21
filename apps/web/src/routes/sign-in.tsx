@@ -39,7 +39,7 @@ function SignIn() {
           <ThemeMenu />
         </div>
       </header>
-      <main className="grid min-h-svh place-items-center px-gutter py-24">
+      <main className="grid min-h-svh place-items-center overflow-x-clip px-gutter py-24">
         <div className="-mt-6 grid w-full justify-items-center text-center">
           <Fan />
           <h1 className="text-[44px] leading-[50px] font-[640] tracking-[-0.042em] text-balance max-sm:text-[34px] max-sm:leading-[40px]">
@@ -105,7 +105,7 @@ function Fan() {
     "absolute top-3 left-1/2 h-[156px] w-[116px] origin-[50%_260%] overflow-hidden rounded-[4px] shadow-print";
   const at = (rotate: number) => ({ transform: `translateX(-50%) rotate(${rotate}deg)` });
   return (
-    <div aria-hidden className="relative mb-9 h-[188px] w-[420px] max-sm:scale-[0.8]">
+    <div aria-hidden className="relative mb-9 h-[188px] w-full max-w-[420px] max-sm:scale-[0.8]">
       <div
         className={print}
         style={{

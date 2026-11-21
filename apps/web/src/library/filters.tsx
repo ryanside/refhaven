@@ -82,7 +82,7 @@ export function SearchField({
       className={cn(
         "flex shrink-0 items-center gap-2.5 text-ink-3 transition-shadow duration-150",
         variant === "bar"
-          ? "glass h-11 w-[min(440px,34vw)] rounded-full pr-2 pl-4 shadow-float focus-within:shadow-[var(--float),inset_0_0_0_1.5px_var(--ink)]"
+          ? "glass h-11 w-[min(440px,34vw)] max-w-full rounded-full pr-2 pl-4 shadow-float focus-within:shadow-[var(--float),inset_0_0_0_1.5px_var(--ink)]"
           : "h-8 w-[min(320px,100%)] gap-2 rounded-full bg-page pr-1.5 pl-3 shadow-[inset_0_0_0_1px_var(--line-2)] focus-within:shadow-[inset_0_0_0_1.5px_var(--ink)]",
       )}
     >

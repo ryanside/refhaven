@@ -29,7 +29,7 @@ Preconditions:
 - **Session.** Run `await page.reload()`. `page.getByTestId("user-id")` shows the same ID.
 - **Sign out.** Run `await page.getByTestId("username").click()` to open the account menu, then `await page.getByRole("menuitem", { name: "Sign out" }).click()` and `await page.waitForURL("http://localhost:3000/sign-in")`.
 - **Sign in again.** Repeat the sign-up step with the same username in the same browser. `page.getByTestId("user-id")` shows the same ID as before.
-- **Proof.** Screenshot `/library` after sign-up and after the second sign-in. Confirm the account with `verify.sh rows users 5`, where the newest row's `_id` equals the text of `page.getByTestId("user-id")`. The account button at the top right shows the username, and its menu holds `Sign out`. The ID and the greeting are in the page for the checks, in `hidden` elements.
+- **Proof.** Screenshot `/library` after sign-up and after the second sign-in. Confirm the account with `verify.sh rows users 5`, where the newest row's `_id` equals the text of `page.getByTestId("user-id")`. The account button at the top right shows the username, shortened under 1180 px wide and left to its initial under 1000 px, and its menu holds `Sign out`. The ID and the greeting are in the page for the checks, in `hidden` elements.
 
 `apps/web/checks/auth.ts` runs this journey. `signInWithPasskey(page, username)` in `apps/web/checks/browser.ts` does the sign-up step.
 
