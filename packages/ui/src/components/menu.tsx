@@ -13,6 +13,8 @@ const Menu = MenuPrimitive.Root;
 const MenuTrigger = MenuPrimitive.Trigger;
 const MenuGroup = MenuPrimitive.Group;
 const MenuRadioGroup = MenuPrimitive.RadioGroup;
+/** A radio item with no row of its own, for a choice its children draw, such as a swatch. */
+const MenuRadioItemRoot = MenuPrimitive.RadioItem;
 const MenuSubmenu = MenuPrimitive.SubmenuRoot;
 
 function MenuContent({
@@ -117,6 +119,7 @@ export {
   MenuLinkItem,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuRadioItemRoot,
   MenuSeparator,
   MenuSubmenu,
   MenuSubmenuTrigger,

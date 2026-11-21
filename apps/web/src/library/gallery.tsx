@@ -211,7 +211,11 @@ export function CollectionPicker({
           </PopoverTrigger>
         </Tooltip>
       )}
-      <PopoverContent align={align} className="flex w-[280px] flex-col p-1.5">
+      <PopoverContent
+        align={align}
+        aria-label="Add to a collection"
+        className="flex w-[280px] flex-col p-1.5"
+      >
         {open ? <PickerBody refId={refId} /> : null}
       </PopoverContent>
     </Popover>

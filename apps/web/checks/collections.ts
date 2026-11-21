@@ -31,7 +31,10 @@ const collectionLinks = (page: Page) => page.locator("[data-collection-id]");
 const addOnCard = async (page: Page, refId: string, name: string) => {
   await card(page, refId).hover();
   await card(page, refId).getByRole("button", { name: "Add to a collection" }).click();
-  await page.getByRole("dialog").getByRole("button", { name, exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Add to a collection" })
+    .getByRole("button", { name, exact: true })
+    .click();
   await page.keyboard.press("Escape");
 };
 
@@ -259,6 +262,24 @@ try {
   if (evidence) {
     await page.screenshot({ path: `${evidence}/03-collection-page.png`, fullPage: true });
   }
+
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("button", { name: "Collections" })
+    .click();
+  const finder = page.getByRole("dialog", { name: "Collections" });
+  await finder.getByRole("button", { name: "New collection" }).click();
+  await finder.getByLabel("New collection").fill("Never made");
+  await finder.getByLabel("New collection").press("Escape");
+  await finder.getByRole("button", { name: "New collection" }).waitFor();
+  const finderKept = await finder.isVisible();
+  await page.keyboard.press("Escape");
+  await finder.waitFor({ state: "hidden" });
+  assert(
+    finderKept &&
+      !(await owner.query(api.collections.list, {})).some(({ name }) => name === "Never made"),
+    "Escape in the Collections menu's new collection field leaves the field and keeps the menu, a dialog named Collections, open, and a second Escape closes it",
+  );
 
   // The top bar's left, center, and right parts, each the span of what it shows.
   const barParts = () =>

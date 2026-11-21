@@ -17,6 +17,13 @@ import {
 import type { IconSvgElement } from "@hugeicons/react";
 import { Button } from "@refhaven/ui/components/button";
 import { Icon } from "@refhaven/ui/components/icon";
+import {
+  Menu,
+  MenuContent,
+  MenuRadioGroup,
+  MenuRadioItemRoot,
+  MenuTrigger,
+} from "@refhaven/ui/components/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@refhaven/ui/components/popover";
 import { Tooltip } from "@refhaven/ui/components/tooltip";
 import { cn } from "@refhaven/ui/lib/utils";
@@ -31,10 +38,10 @@ import {
   noteColors,
   worldToScreen,
 } from "@refhaven/scene";
-import { type ReactNode, useState, useSyncExternalStore } from "react";
+import { type ComponentProps, type ReactNode, useState, useSyncExternalStore } from "react";
 import { Rule, pillClass } from "@/shell/top-bar";
 import type { Action } from "./keymap";
-import { noteInk } from "./notes";
+import { noteInkStyle } from "./notes";
 
 const chromeInsets = { top: 56, bottom: 76 } as const;
 const fitMargin = 56;
@@ -169,7 +176,13 @@ function ZoomLevel({
       >
         {percent}%
       </PopoverTrigger>
-      <PopoverContent side="top" align="start" sideOffset={14} className="w-52 p-1.5">
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={14}
+        aria-label="Zoom level"
+        className="w-52 p-1.5"
+      >
         <form
           className="mb-1 flex h-10 items-center gap-1 rounded-xl bg-sunken px-3 focus-within:shadow-[inset_0_0_0_1.5px_var(--ink)]"
           onSubmit={(event) => {
@@ -296,7 +309,7 @@ function Swatch({ color, className }: { color: NoteColor; className?: string }) 
         "block size-[18px] rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.12)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.16)]",
         className,
       )}
-      style={{ background: noteInk(color) }}
+      style={{ background: noteInkStyle(color) }}
     />
   );
 }
@@ -308,11 +321,10 @@ function NoteColorPicker({
   color: NoteColor;
   recolor: (color: NoteColor) => void;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Menu orientation="horizontal">
       <Tooltip label="Note color">
-        <PopoverTrigger
+        <MenuTrigger
           aria-label={`Note color: ${colorNames[color]}`}
           className="flex h-10 items-center gap-1 rounded-r-full pr-2.5 pl-1.5 text-ink-3 transition-colors duration-150 hover:bg-hover hover:text-ink-2 aria-expanded:bg-hover"
         >
@@ -321,29 +333,38 @@ function NoteColorPicker({
             className="size-5 shadow-[0_0_0_2px_var(--surface),0_0_0_3px_var(--line-2)] dark:shadow-[0_0_0_2px_var(--surface),0_0_0_3px_rgb(255_255_255/0.22)]"
           />
           <Icon icon={ArrowDown01Icon} size={12} />
-        </PopoverTrigger>
+        </MenuTrigger>
       </Tooltip>
-      <PopoverContent side="top" align="center" sideOffset={14} className="p-2">
-        <div role="radiogroup" aria-label="Note color" className="flex gap-1">
+      <MenuContent
+        side="top"
+        align="center"
+        sideOffset={14}
+        aria-label="Note color"
+        className="min-w-0 p-2"
+      >
+        <MenuRadioGroup
+          value={color}
+          onValueChange={(name) => recolor(name as NoteColor)}
+          className="flex gap-1"
+        >
           {noteColors.map((name) => (
-            <button
-              key={name}
-              type="button"
-              role="radio"
-              aria-checked={name === color}
-              aria-label={colorNames[name]}
-              onClick={() => {
-                recolor(name);
-                setOpen(false);
-              }}
-              className="grid size-9 place-items-center rounded-full hover:bg-hover aria-checked:shadow-[inset_0_0_0_1.5px_var(--ink)]"
-            >
+            <MenuSwatch key={name} value={name} aria-label={colorNames[name]}>
               <Swatch color={name} />
-            </button>
+            </MenuSwatch>
           ))}
-        </div>
-      </PopoverContent>
-    </Popover>
+        </MenuRadioGroup>
+      </MenuContent>
+    </Menu>
+  );
+}
+
+function MenuSwatch(props: ComponentProps<typeof MenuRadioItemRoot>) {
+  return (
+    <MenuRadioItemRoot
+      closeOnClick
+      className="grid size-9 place-items-center rounded-full -outline-offset-2 data-checked:shadow-[inset_0_0_0_1.5px_var(--ink)] data-highlighted:bg-hover"
+      {...props}
+    />
   );
 }
 
@@ -363,11 +384,10 @@ export function SelectionCluster({
     store.selected().some((item) => item.group),
   );
   const none = selected === 0;
+  // The readout stays out of the toolbar, which is inert while nothing is selected, so a screen
+  // reader still hears it say so.
   return (
     <div
-      role="toolbar"
-      aria-label="Selection"
-      inert={none}
       className={cn(
         pillClass,
         // Under 1000 px it would meet the centered dock, so it stands above it.
@@ -387,43 +407,45 @@ export function SelectionCluster({
       >
         {none ? "Nothing selected" : `${selected} selected`}
       </p>
-      <Rule />
-      <Tool
-        label="Bring to front"
-        shortcut="]"
-        icon={LayerBringToFrontIcon}
-        disabled={none}
-        onClick={actions.bringToFront}
-      />
-      <Tool
-        label="Send to back"
-        shortcut="["
-        icon={LayerSendToBackIcon}
-        disabled={none}
-        onClick={actions.sendToBack}
-      />
-      <Tool
-        label="Group"
-        shortcut="Mod+G"
-        icon={GroupItemsIcon}
-        disabled={!canGroup}
-        onClick={actions.group}
-      />
-      <Tool
-        label="Ungroup"
-        shortcut="Mod+Shift+G"
-        icon={UngroupItemsIcon}
-        disabled={!canUngroup}
-        onClick={actions.ungroup}
-      />
-      <Rule />
-      <Tool
-        label="Remove from collection"
-        shortcut="Delete"
-        icon={FolderRemoveIcon}
-        disabled={none}
-        onClick={actions.remove}
-      />
+      <div role="toolbar" aria-label="Selection" inert={none} className="contents">
+        <Rule />
+        <Tool
+          label="Bring to front"
+          shortcut="]"
+          icon={LayerBringToFrontIcon}
+          disabled={none}
+          onClick={actions.bringToFront}
+        />
+        <Tool
+          label="Send to back"
+          shortcut="["
+          icon={LayerSendToBackIcon}
+          disabled={none}
+          onClick={actions.sendToBack}
+        />
+        <Tool
+          label="Group"
+          shortcut="Mod+G"
+          icon={GroupItemsIcon}
+          disabled={!canGroup}
+          onClick={actions.group}
+        />
+        <Tool
+          label="Ungroup"
+          shortcut="Mod+Shift+G"
+          icon={UngroupItemsIcon}
+          disabled={!canUngroup}
+          onClick={actions.ungroup}
+        />
+        <Rule />
+        <Tool
+          label="Remove from collection"
+          shortcut="Delete"
+          icon={FolderRemoveIcon}
+          disabled={none}
+          onClick={actions.remove}
+        />
+      </div>
     </div>
   );
 }

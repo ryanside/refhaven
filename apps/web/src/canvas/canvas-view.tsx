@@ -54,7 +54,7 @@ import { AddImagesButton, type PlaceAt, SaveScope } from "@/library/save-images"
 import { TopBar } from "@/shell/top-bar";
 import { Dock, Problem, SelectionCluster, ZoomCluster, fitToView } from "./chrome";
 import { type Action, keymap } from "./keymap";
-import { boxFor, createNoteTextures, noteFont, noteInk, noteTextureKey } from "./notes";
+import { boxFor, createNoteTextures, noteFont, noteInkStyle, noteTextureKey } from "./notes";
 import { type Need, type Sign, createTextureLoader, textureKey } from "./textures";
 
 /** A change list longer than this is replaced by a new snapshot. */
@@ -565,7 +565,7 @@ function NoteEditor({
         padding: noteType.padding * unit,
         font: noteFont(noteType.size * unit),
         lineHeight: `${noteType.lineHeight * unit}px`,
-        color: noteInk(draft.color),
+        color: noteInkStyle(draft.color),
         transform: `rotate(${draft.rotation}rad)`,
         transformOrigin: "0 0",
       }}

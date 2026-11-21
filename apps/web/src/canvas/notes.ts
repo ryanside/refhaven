@@ -20,11 +20,18 @@ const lightInk: Record<NoteColor, string> = {
 };
 
 /** Whether the page, and so the canvas behind the notes, is dark. */
-export const onDark = () => document.documentElement.classList.contains("dark");
+const onDark = () => document.documentElement.classList.contains("dark");
 
-/** A note color's ink. Black would not show on the dark canvas, so there it is near white. */
-export const noteInk = (color: NoteColor, dark = onDark()) =>
+/**
+ * A note color's ink on the canvas. Black would not show on the dark canvas, so there it is near
+ * white, as the page's `--note-black` is.
+ */
+const noteInk = (color: NoteColor, dark: boolean) =>
   dark && color === "black" ? "#fafaf9" : lightInk[color];
+
+/** A note color's ink as CSS for the page, which follows the page between light and dark. */
+export const noteInkStyle = (color: NoteColor) =>
+  color === "black" ? "var(--note-black)" : lightInk[color];
 
 /** The type a note is drawn and edited in, at a size of `size` pixels. */
 export const noteFont = (size: number) => `500 ${size}px ui-sans-serif, system-ui, sans-serif`;

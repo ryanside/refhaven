@@ -31,7 +31,12 @@ export function CollectionsMenu() {
         Collections
         <Icon icon={ArrowDown01Icon} size={14} className="-mr-0.5" />
       </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={10} className="flex w-[300px] flex-col p-1.5">
+      <PopoverContent
+        align="start"
+        sideOffset={10}
+        aria-label="Collections"
+        className="flex w-[300px] flex-col p-1.5"
+      >
         <CollectionFinder close={() => setOpen(false)} />
       </PopoverContent>
     </Popover>

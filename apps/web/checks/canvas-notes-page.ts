@@ -235,6 +235,13 @@ try {
     await page.getByRole("button", { name: "Theme" }).click();
     await page.getByRole("menuitemradio", { name, exact: true }).click();
   };
+  const colorButton = page.getByRole("button", { name: "Note color" });
+  const swatchInk = () =>
+    colorButton
+      .locator("span")
+      .first()
+      .evaluate((swatch) => getComputedStyle(swatch).backgroundColor);
+  const swatchOnLight = await swatchInk();
   await chooseTheme("Dark");
   const lightOnDark = await until(
     () => inkOn(page, view, first!, ink.blackOnDark),
@@ -242,6 +249,7 @@ try {
     "the black note's text to turn near white on the dark page",
   );
   const blackOnDark = await inkOn(page, view, first!, ink.black);
+  const swatchOnDark = await swatchInk();
   await screenshot(page, "01-note-on-dark.png");
   await chooseTheme("Light");
   const blackAgain = await until(
@@ -253,6 +261,13 @@ try {
   assert(
     lightOnDark > 20 && blackAgain > 20 && blackOnDark < blackAgain / 4,
     `on the dark page a black note is drawn near white, ${lightOnDark} pixels with ${blackOnDark} near black on its edges, and black again on the light page, ${blackAgain} pixels`,
+  );
+  assert(
+    (await colorButton.getAttribute("aria-label")) === "Note color: Black" &&
+      swatchOnLight === "rgb(28, 25, 23)" &&
+      swatchOnDark === "rgb(250, 250, 249)" &&
+      (await swatchInk()) === swatchOnLight,
+    `the dock's black swatch follows the theme as the canvas does: ${swatchOnLight} on light, ${swatchOnDark} on dark`,
   );
 
   let note = first!;
@@ -335,7 +350,7 @@ try {
   await selected(1);
   calls = applied.length;
   await page.getByRole("button", { name: "Note color" }).click();
-  await page.getByRole("radio", { name: "Blue" }).click();
+  await page.getByRole("menuitemradio", { name: "Blue" }).click();
   note = (await until(noteIn, (found) => found?.color === "blue", "the color to save"))!;
   await until(
     () => inkOn(page, view, note, ink.blue),
@@ -478,8 +493,38 @@ try {
 
   await page.keyboard.press("Escape");
   await selected(0);
-  await page.getByRole("button", { name: "Note color" }).click();
-  await page.getByRole("radio", { name: "Red" }).click();
+  const readoutHeard = await page
+    .getByTestId("canvas-readout")
+    .evaluate(
+      (readout) =>
+        readout.closest("[inert]") === null &&
+        readout.getAttribute("aria-live") === "polite" &&
+        readout.textContent === "Nothing selected",
+    );
+  const toolsInert = await page
+    .getByRole("button", { name: "Bring to front" })
+    .evaluate((tool) => tool.closest("[inert]") !== null);
+  await page.getByRole("button", { name: /^Zoom level/ }).click();
+  const zoomDialogs = await page.getByRole("dialog", { name: "Zoom level" }).count();
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog").waitFor({ state: "detached" });
+  assert(
+    readoutHeard && toolsInert && zoomDialogs === 1,
+    "with nothing selected the selection's tools are inert and its readout stays outside them, live, saying Nothing selected, and the zoom level's popover is a dialog named Zoom level",
+  );
+  // The color's menu moves between its swatches with the arrow keys and takes one with Enter.
+  await colorButton.focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("menu", { name: "Note color" }).waitFor();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowRight");
+  const highlighted = await page.evaluate(() => document.activeElement?.getAttribute("aria-label"));
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Note color: Red" }).waitFor();
+  assert(
+    highlighted === "Red" && (await page.getByRole("menu").count()) === 0,
+    "the note color's menu moves from Black to Red with → and takes Red with Enter, which closes it",
+  );
   await page.getByRole("button", { name: "Add note" }).click();
   await editor.waitFor();
   await page.keyboard.type("A red label");

@@ -72,7 +72,9 @@ export function NewCollectionForm({
           onChange={(event) => setName(event.currentTarget.value)}
           onKeyDown={(event) => {
             if (event.key !== "Escape" || !cancel) return;
+            // Escape here leaves only the field, not the popover or the sheet it sits in.
             event.preventDefault();
+            event.stopPropagation();
             cancel();
           }}
           className={cn(
