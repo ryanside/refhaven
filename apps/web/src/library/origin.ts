@@ -18,7 +18,7 @@ export const OriginContext = createContext<Origin>(libraryOrigin);
 export const useOrigin = () => useContext(OriginContext);
 
 /** Where an image's page was opened from, and that list's images in order. */
-export type Opened = { readonly origin: Origin; readonly order: ReadonlyArray<Id<"refs">> };
+type Opened = { readonly origin: Origin; readonly order: ReadonlyArray<Id<"refs">> };
 
 let opened: (Opened & { readonly refId: Id<"refs"> }) | null = null;
 

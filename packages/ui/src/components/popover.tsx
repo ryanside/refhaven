@@ -4,16 +4,13 @@ import { popupClass } from "./menu";
 
 const Popover = PopoverPrimitive.Root;
 const PopoverTrigger = PopoverPrimitive.Trigger;
-const PopoverClose = PopoverPrimitive.Close;
-const PopoverTitle = PopoverPrimitive.Title;
 
 function PopoverContent({
   className,
   align = "start",
   side = "bottom",
   sideOffset = 8,
-  alignOffset = 0,
-  initialFocus,
+  alignOffset,
   ...props
 }: PopoverPrimitive.Popup.Props &
   Pick<PopoverPrimitive.Positioner.Props, "align" | "side" | "sideOffset" | "alignOffset">) {
@@ -27,7 +24,6 @@ function PopoverContent({
         alignOffset={alignOffset}
       >
         <PopoverPrimitive.Popup
-          initialFocus={initialFocus}
           className={cn(popupClass, "max-h-(--available-height)", className)}
           {...props}
         />
@@ -36,4 +32,4 @@ function PopoverContent({
   );
 }
 
-export { Popover, PopoverClose, PopoverContent, PopoverTitle, PopoverTrigger };
+export { Popover, PopoverContent, PopoverTrigger };

@@ -1,4 +1,4 @@
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva } from "class-variance-authority";
 
 /** A tag or filter chip. The active one is filled ink. */
 const chipVariants = cva(
@@ -16,6 +16,4 @@ const chipVariants = cva(
   },
 );
 
-type ChipVariants = VariantProps<typeof chipVariants>;
-
-export { chipVariants, type ChipVariants };
+export { chipVariants };

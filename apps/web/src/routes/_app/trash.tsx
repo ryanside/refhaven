@@ -7,8 +7,7 @@ import { Button } from "@refhaven/ui/components/button";
 import { Icon } from "@refhaven/ui/components/icon";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { thumbHashToDataURL } from "thumbhash";
-import { galleryPage } from "@/library/gallery";
+import { galleryPage, thumbHashBackground } from "@/library/gallery";
 import { ShownName } from "@/library/name";
 import { rememberOpened } from "@/library/origin";
 import { useRefUrls } from "@/library/use-ref-urls";
@@ -57,7 +56,11 @@ function Trash() {
         )}
         {more ? (
           <div className="mt-10 flex justify-center">
-            <Button variant="secondary" size="lg" onClick={() => items.loadMore(60)}>
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => items.loadMore(galleryPage.initialNumItems)}
+            >
               Load more
             </Button>
           </div>
@@ -109,13 +112,7 @@ function TrashCard({
   const restore = useMutation(refs.public.library.restore);
   const [loaded, setLoaded] = useState(false);
   const days = daysLeft(item.deletedAt, Date.now());
-  const placeholder = useMemo(
-    () =>
-      item.thumbHash === null
-        ? undefined
-        : `url(${thumbHashToDataURL(Uint8Array.from(atob(item.thumbHash), (c) => c.charCodeAt(0)))})`,
-    [item.thumbHash],
-  );
+  const placeholder = useMemo(() => thumbHashBackground(item.thumbHash), [item.thumbHash]);
   return (
     <li data-ref-id={item.refId} className="min-w-0">
       <Link

@@ -37,6 +37,9 @@ export function useCollectionCover(collectionId: Id<"collections">) {
 export const countLabel = ({ count, more }: { count: number; more: boolean }) =>
   more ? `${count}+ images` : count === 1 ? "1 image" : `${count} images`;
 
+export const shortCount = ({ count, more }: { count: number; more: boolean }) =>
+  more ? `${count}+` : `${count}`;
+
 // Three prints fanned like photos on a table: the newest in front and upright.
 const poses = [
   { x: 0, y: 0, r: 0, big: true },

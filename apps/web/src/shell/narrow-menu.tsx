@@ -15,6 +15,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@refhaven/ui/components/sheet";
+import { cn } from "@refhaven/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { CollectionFinder } from "@/shell/collections-menu";
@@ -62,12 +63,8 @@ export function NarrowMenu() {
         <div className="flex min-h-0 flex-1 flex-col">
           <CollectionFinder close={close} listClassName="max-h-none flex-1" />
         </div>
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          className="mt-2 flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-[540] text-ink-2 outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover"
-        >
-          <Icon icon={Logout03Icon} size={18} className="text-ink-3" />
+        <button type="button" onClick={() => void signOut()} className={cn(sheetLinkClass, "mt-2")}>
+          <Icon icon={Logout03Icon} size={18} />
           Sign out
         </button>
       </SheetContent>

@@ -17,6 +17,7 @@ import {
 import type { Id } from "@refhaven/backend/id";
 import { FileName, Note, SourceUrl, TagName } from "@refhaven/backend/refFields";
 import refs from "@refhaven/backend/refs";
+import { trashDays } from "@refhaven/backend/trash";
 import { Button, buttonVariants } from "@refhaven/ui/components/button";
 import { chipVariants } from "@refhaven/ui/components/chip";
 import { Icon } from "@refhaven/ui/components/icon";
@@ -34,7 +35,7 @@ import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Pile, useCollectionCover } from "@/collections/pile";
+import { Pile, shortCount, useCollectionCover } from "@/collections/pile";
 import { CollectionPicker, galleryPage } from "@/library/gallery";
 import { ShownName } from "@/library/name";
 import { type Origin, libraryOrigin, openedFrom, rememberOpened } from "@/library/origin";
@@ -72,7 +73,7 @@ const failureTag = (result: Result.Result<unknown, { readonly _tag: string }>) =
 function ImageNotFound() {
   return (
     <NotFound title="Image not found.">
-      It may be in another account, or deleted for good after its 30 days in the trash.
+      It may be in another account, or deleted for good after its {trashDays} days in the trash.
     </NotFound>
   );
 }
@@ -219,7 +220,7 @@ function Breadcrumb({ origin, fileName }: { origin: Origin; fileName: string }) 
     // A narrow window has no room for it beside the menu and the account. The panel names the image.
     <nav
       aria-label="Breadcrumb"
-      className={cn(pillClass, "min-w-0 gap-0.5 pr-4 pl-1.5 max-[719px]:hidden")}
+      className={cn(pillClass, "min-w-0 gap-0.5 pr-4 pl-1.5 narrow:hidden")}
     >
       <Link
         {...originLink(origin)}
@@ -248,7 +249,7 @@ function StepButton({ side, onClick }: { side: "previous" | "next"; onClick: () 
         aria-label={label}
         onClick={onClick}
         className={cn(
-          "absolute top-1/2 z-10 -translate-y-1/2 shadow-float",
+          "absolute top-1/2 z-10 -translate-y-1/2",
           side === "previous" ? "-left-16 max-[900px]:left-3" : "-right-16 max-[900px]:right-3",
         )}
       >
@@ -753,9 +754,7 @@ function CollectionRow({ collectionId, name }: { collectionId: Id<"collections">
         {name}
       </Link>
       {cover.loaded ? (
-        <span className="text-[14px] text-ink-3 num">
-          {cover.more ? `${cover.count}+` : cover.count}
-        </span>
+        <span className="text-[14px] text-ink-3 num">{shortCount(cover)}</span>
       ) : null}
       <Icon icon={ArrowRight01Icon} size={16} className="ml-auto shrink-0 text-ink-3" />
     </li>

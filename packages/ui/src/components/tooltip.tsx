@@ -14,7 +14,7 @@ function Tooltip({
   children,
 }: {
   label: string;
-  shortcut?: string;
+  shortcut?: string | undefined;
   side?: TooltipPrimitive.Positioner.Props["side"];
   children: React.ReactElement;
 }) {

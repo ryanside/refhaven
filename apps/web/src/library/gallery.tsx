@@ -29,7 +29,7 @@ import { cn } from "@refhaven/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { thumbHashToDataURL } from "thumbhash";
-import { NewCollectionForm } from "@/collections/new-collection";
+import { NewCollectionForm, newCollectionButtonClass } from "@/collections/new-collection";
 import { Pile, useCollectionCover } from "@/collections/pile";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { rememberOpened, useOrigin } from "@/library/origin";
@@ -94,8 +94,6 @@ export function Masonry({ items, removal }: { items: ReadonlyArray<Item>; remova
   );
 }
 
-const glassButton = "size-8 shadow-float";
-
 function Tile({
   item,
   url,
@@ -133,7 +131,6 @@ function Tile({
             variant="glass"
             size="icon"
             aria-label={removal.label}
-            className={glassButton}
             onClick={() => removal.run(item.refId)}
           >
             <Icon icon={removal.icon} size={16} />
@@ -150,15 +147,14 @@ function Tile({
   );
 }
 
+export const thumbHashBackground = (thumbHash: string | null) =>
+  thumbHash === null
+    ? undefined
+    : `url(${thumbHashToDataURL(Uint8Array.from(atob(thumbHash), (c) => c.charCodeAt(0)))})`;
+
 function Thumbnail({ item, url }: { item: Item; url: string | undefined }) {
   const [loaded, setLoaded] = useState(false);
-  const placeholder = useMemo(
-    () =>
-      item.thumbHash === null
-        ? undefined
-        : `url(${thumbHashToDataURL(Uint8Array.from(atob(item.thumbHash), (c) => c.charCodeAt(0)))})`,
-    [item.thumbHash],
-  );
+  const placeholder = useMemo(() => thumbHashBackground(item.thumbHash), [item.thumbHash]);
 
   return (
     <RetryingImg
@@ -214,14 +210,7 @@ export function CollectionPicker({
       ) : (
         <Tooltip label="Add to a collection">
           <PopoverTrigger
-            render={
-              <Button
-                variant="glass"
-                size="icon"
-                aria-label="Add to a collection"
-                className={glassButton}
-              />
-            }
+            render={<Button variant="glass" size="icon" aria-label="Add to a collection" />}
           >
             <Icon icon={FolderAddIcon} size={16} />
           </PopoverTrigger>
@@ -273,7 +262,7 @@ function PickerBody({ refId }: { refId: Id<"refs"> }) {
           <button
             type="button"
             onClick={() => setMaking(true)}
-            className="flex h-10 w-full items-center gap-2.5 rounded-[11px] px-2.5 text-[14px] font-[520] text-ink-2 outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover"
+            className={newCollectionButtonClass}
           >
             <Icon icon={PlusSignIcon} size={16} className="text-ink-3" />
             New collection

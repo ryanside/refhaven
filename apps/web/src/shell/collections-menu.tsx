@@ -7,8 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@refhaven/ui/components
 import { cn } from "@refhaven/ui/lib/utils";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { NewCollectionForm } from "@/collections/new-collection";
-import { Pile, countLabel, useCollectionCover } from "@/collections/pile";
+import { NewCollectionForm, newCollectionButtonClass } from "@/collections/new-collection";
+import { Pile, countLabel, shortCount, useCollectionCover } from "@/collections/pile";
 import { navItemClass } from "@/shell/top-bar";
 
 type Collection = { readonly collectionId: Id<"collections">; readonly name: string };
@@ -101,7 +101,7 @@ export function CollectionFinder({
           <button
             type="button"
             onClick={() => setMaking(true)}
-            className="flex h-10 w-full items-center gap-2.5 rounded-[11px] px-2.5 text-[14px] font-[520] text-ink-2 outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover"
+            className={newCollectionButtonClass}
           >
             <span className="grid size-6 place-items-center rounded-[5px] border-[1.5px] border-dashed border-ink-4">
               <Icon icon={PlusSignIcon} size={12} />
@@ -137,11 +137,13 @@ function CollectionRow({ collectionId, name, close }: Collection & { close: () =
         {name}
       </Link>
       {cover.loaded ? (
-        <span aria-hidden className="shrink-0 text-[13px] text-ink-3 num">
-          {cover.more ? `${cover.count}+` : cover.count}
-        </span>
+        <>
+          <span aria-hidden className="shrink-0 text-[13px] text-ink-3 num">
+            {shortCount(cover)}
+          </span>
+          <span className="sr-only">{countLabel(cover)}</span>
+        </>
       ) : null}
-      <span className="sr-only">{cover.loaded ? countLabel(cover) : ""}</span>
     </li>
   );
 }

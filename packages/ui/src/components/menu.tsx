@@ -21,7 +21,7 @@ function MenuContent({
   align = "start",
   side = "bottom",
   sideOffset = 8,
-  alignOffset = 0,
+  alignOffset,
   ...props
 }: MenuPrimitive.Popup.Props &
   Pick<MenuPrimitive.Positioner.Props, "align" | "side" | "sideOffset" | "alignOffset">) {
@@ -123,6 +123,5 @@ export {
   MenuSubmenu,
   MenuSubmenuTrigger,
   MenuTrigger,
-  itemClass,
   popupClass,
 };

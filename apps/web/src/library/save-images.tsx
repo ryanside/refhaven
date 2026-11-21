@@ -32,7 +32,7 @@ type ClientPoint = { readonly x: number; readonly y: number };
 export type PlaceAt = (at: ClientPoint | null) => (refId: Id<"refs">) => Promise<void>;
 
 /** Where saved images go: the library, or a collection too. */
-export type SaveTarget = {
+type SaveTarget = {
   readonly collectionId?: Id<"collections"> | undefined;
   /** Named on the drop veil. */
   readonly name: string;
@@ -41,7 +41,7 @@ export type SaveTarget = {
 const PickContext = createContext<() => void>(() => {});
 
 /** Opens the file picker of the page's save scope. */
-export const usePickImages = () => useContext(PickContext);
+const usePickImages = () => useContext(PickContext);
 
 /**
  * The page's "Add images" button. It opens the file picker. With `fold`, a narrow window shows only
@@ -56,13 +56,9 @@ export function AddImagesButton({
 }) {
   const pick = usePickImages();
   return (
-    <Button
-      size="lg"
-      className={cn(fold && "max-[719px]:w-11 max-[719px]:px-0", className)}
-      onClick={pick}
-    >
+    <Button size="lg" className={cn(fold && "narrow:w-11 narrow:px-0", className)} onClick={pick}>
       <Icon icon={PlusSignIcon} size={18} />
-      <span className={cn(fold && "max-[719px]:sr-only")}>Add images</span>
+      <span className={cn(fold && "narrow:sr-only")}>Add images</span>
     </Button>
   );
 }

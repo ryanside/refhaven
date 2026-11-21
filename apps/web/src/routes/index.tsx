@@ -1,6 +1,7 @@
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { buttonVariants } from "@refhaven/ui/components/button";
 import { Icon } from "@refhaven/ui/components/icon";
+import { cn } from "@refhaven/ui/lib/utils";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Mark } from "@/shell/mark";
 
@@ -16,7 +17,7 @@ function Landing() {
           A reference library for images. Gather them into collections, and arrange each on a
           canvas.
         </p>
-        <Link to="/library" className={`${buttonVariants({ size: "lg" })} mt-8`}>
+        <Link to="/library" className={cn(buttonVariants({ size: "lg" }), "mt-8")}>
           Open your library
           <Icon icon={ArrowRight01Icon} size={18} className="-mr-1" />
         </Link>

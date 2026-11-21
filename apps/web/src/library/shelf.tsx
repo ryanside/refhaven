@@ -3,7 +3,6 @@ import type { Id } from "@refhaven/backend/id";
 import { Icon } from "@refhaven/ui/components/icon";
 import { cn } from "@refhaven/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
-import { useRef } from "react";
 import { NewCollectionForm } from "@/collections/new-collection";
 import { FadeRow } from "@/library/fade-row";
 import { Pile, countLabel, useCollectionCover } from "@/collections/pile";
@@ -71,13 +70,11 @@ function ShelfItem({ collectionId, name }: { collectionId: Id<"collections">; na
  * A click anywhere on it goes to the field.
  */
 function NewShelfItem() {
-  const item = useRef<HTMLLIElement>(null);
   return (
     <li
-      ref={item}
       onClick={(event) => {
         if (!(event.target instanceof Element) || !event.target.closest("button, input")) {
-          item.current?.querySelector("input")?.focus();
+          event.currentTarget.querySelector("input")?.focus();
         }
       }}
       className={cn(

@@ -32,12 +32,12 @@ import {
   worldToScreen,
 } from "@refhaven/scene";
 import { type ReactNode, useState, useSyncExternalStore } from "react";
-import { pillClass } from "@/shell/top-bar";
+import { Rule, pillClass } from "@/shell/top-bar";
 import type { Action } from "./keymap";
 import { noteInk } from "./notes";
 
 /** The bands the floating chrome covers: the top bar's pills above, and the dock below. */
-export const chromeInsets = { top: 56, bottom: 76 } as const;
+const chromeInsets = { top: 56, bottom: 76 } as const;
 const fitMargin = 56;
 
 /**
@@ -103,7 +103,7 @@ function Tool({
   large?: boolean;
 }) {
   return (
-    <Tooltip label={label} {...(shortcut ? { shortcut: keys(shortcut) } : {})}>
+    <Tooltip label={label} shortcut={shortcut === undefined ? undefined : keys(shortcut)}>
       <span className="inline-flex">
         <Button
           variant="ghost"
@@ -119,8 +119,6 @@ function Tool({
     </Tooltip>
   );
 }
-
-const Rule = () => <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line-2" />;
 
 /** The zoom level, − and +, and Fit, at the bottom left. The level opens presets and a field. */
 export function ZoomCluster({ store }: { store: SceneStore }) {
@@ -284,13 +282,13 @@ export function Dock({
         onClick={actions.redo}
       />
       <Rule />
-      <div className="flex items-center rounded-full">
+      <div className="flex items-center">
         <Tooltip label="Add note" shortcut="N">
           <Button
             variant="ghost"
             aria-label="Add note"
             onClick={actions.addNote}
-            className="h-10 gap-2 rounded-r-none pr-2.5 pl-3 text-[14px] text-ink hover:text-ink"
+            className="h-10 gap-2 rounded-r-none pr-2.5 pl-3 text-[14px] text-ink"
           >
             <Icon icon={TextIcon} size={20} className="text-ink-2" />
             Note

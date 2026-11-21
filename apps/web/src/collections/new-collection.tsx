@@ -10,6 +10,9 @@ import { useState } from "react";
 
 export const isCollectionName = Schema.is(CollectionName);
 
+export const newCollectionButtonClass =
+  "flex h-10 w-full items-center gap-2.5 rounded-[11px] px-2.5 text-[14px] font-[520] text-ink-2 outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover";
+
 /** What a refused collection name means, by the server's tag. */
 export const nameRefusal = (tag: string) =>
   tag === "SchemaError" || tag === "InvalidName"

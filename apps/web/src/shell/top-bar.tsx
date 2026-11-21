@@ -37,6 +37,10 @@ export const pillClass =
 export const navItemClass =
   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-[520] whitespace-nowrap text-ink-2 transition-[background-color,color] duration-150 hover:text-ink aria-[current=page]:bg-hover aria-[current=page]:text-ink aria-expanded:bg-hover aria-expanded:text-ink data-[current]:bg-hover data-[current]:text-ink [&_svg]:text-ink-3";
 
+export function Rule({ className }: { className?: string }) {
+  return <span aria-hidden className={cn("mx-1 h-5 w-px shrink-0 bg-line-2", className)} />;
+}
+
 /**
  * The bar over every signed-in page: the places on the left, the page's own control in the middle,
  * and the theme, the account, and the page's main action on the right.
@@ -51,17 +55,17 @@ export function TopBar({
 }) {
   return (
     // A narrow window moves the middle to a second row, under the places and the account.
-    <header className="pointer-events-none fixed inset-x-0 top-0 z-30 grid h-[68px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-gutter max-[719px]:h-auto max-[719px]:grid-cols-[auto_minmax(0,1fr)] max-[719px]:gap-y-2 max-[719px]:py-3">
+    <header className="pointer-events-none fixed inset-x-0 top-0 z-30 grid h-[68px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-gutter narrow:h-auto narrow:grid-cols-[auto_minmax(0,1fr)] narrow:gap-y-2 narrow:py-3">
       <div className="flex min-w-0 items-center">
         <MainNav />
       </div>
-      <div className="pointer-events-auto flex min-w-0 justify-center max-[719px]:order-3 max-[719px]:col-span-2 max-[719px]:justify-start max-[719px]:empty:hidden">
+      <div className="pointer-events-auto flex min-w-0 justify-center narrow:order-3 narrow:col-span-2 narrow:justify-start narrow:empty:hidden">
         {center}
       </div>
-      <div className="flex min-w-0 items-center justify-end gap-2 max-[719px]:order-2">
+      <div className="flex min-w-0 items-center justify-end gap-2 narrow:order-2">
         <div className={pillClass}>
           <ThemeMenu />
-          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line-2 max-[719px]:hidden" />
+          <Rule className="narrow:hidden" />
           <AccountMenu />
         </div>
         {action ? <div className="pointer-events-auto">{action}</div> : null}
@@ -89,15 +93,15 @@ function MainNav() {
       <Link
         to="/library"
         activeOptions={{ includeSearch: false }}
-        className={cn(navItemClass, "max-[719px]:hidden")}
+        className={cn(navItemClass, "narrow:hidden")}
       >
         Library
       </Link>
-      <div className="contents max-[719px]:hidden">
+      <div className="contents narrow:hidden">
         <CollectionsMenu />
         <TrashLink />
       </div>
-      <div className="hidden max-[719px]:contents">
+      <div className="hidden narrow:contents">
         <NarrowMenu />
       </div>
     </nav>
@@ -178,7 +182,7 @@ function AccountMenu() {
         render={
           <button
             type="button"
-            className="flex h-8 shrink-0 items-center gap-2 rounded-full pr-2 pl-1 font-[520] outline-offset-2 transition-colors duration-150 hover:bg-hover aria-expanded:bg-hover max-[719px]:pr-1"
+            className="flex h-8 shrink-0 items-center gap-2 rounded-full pr-2 pl-1 font-[520] outline-offset-2 transition-colors duration-150 hover:bg-hover aria-expanded:bg-hover narrow:pr-1"
           />
         }
       >
@@ -188,7 +192,7 @@ function AccountMenu() {
         >
           {name.slice(0, 1)}
         </span>
-        <span data-testid="username" className="max-w-40 truncate max-[719px]:sr-only">
+        <span data-testid="username" className="max-w-40 truncate narrow:sr-only">
           {username}
         </span>
         <span hidden data-testid="message">
@@ -197,7 +201,7 @@ function AccountMenu() {
         <span hidden data-testid="user-id">
           {userId}
         </span>
-        <Icon icon={ArrowDown01Icon} size={14} className="-ml-0.5 text-ink-3 max-[719px]:hidden" />
+        <Icon icon={ArrowDown01Icon} size={14} className="-ml-0.5 text-ink-3 narrow:hidden" />
       </MenuTrigger>
       <MenuContent align="end" className="min-w-56">
         <MenuGroup>

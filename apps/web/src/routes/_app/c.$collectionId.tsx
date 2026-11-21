@@ -16,7 +16,7 @@ import * as Result from "effect/Result";
 import { useState } from "react";
 import { CanvasView } from "@/canvas/canvas-view";
 import { isCollectionName, nameRefusal } from "@/collections/new-collection";
-import { useCollectionCover } from "@/collections/pile";
+import { shortCount, useCollectionCover } from "@/collections/pile";
 import { EmptyDropZone, PasteKeys } from "@/library/empty";
 import {
   ClearFilters,
@@ -32,7 +32,7 @@ import { OriginContext } from "@/library/origin";
 import { AddImagesButton, SaveScope } from "@/library/save-images";
 import { NotFound } from "@/shell/not-found";
 import { toast } from "@/shell/toast";
-import { TopBar, pillClass } from "@/shell/top-bar";
+import { Rule, TopBar, pillClass } from "@/shell/top-bar";
 import { type Filters, ViewLinks, validateCollectionSearch } from "@/view";
 
 export const Route = createFileRoute("/_app/c/$collectionId")({
@@ -109,9 +109,7 @@ function CollectionTitle({
         {draft === null ? (
           <div className="flex min-w-0 items-center gap-2 pr-0.5 pl-3">
             <h1 className="max-w-[24vw] truncate font-[600] tracking-[-0.012em]">{name}</h1>
-            {cover.loaded ? (
-              <span className="text-ink-3 num">{cover.more ? `${cover.count}+` : cover.count}</span>
-            ) : null}
+            {cover.loaded ? <span className="text-ink-3 num">{shortCount(cover)}</span> : null}
             <Tooltip label="Rename">
               <Button
                 variant="ghost"
@@ -146,7 +144,7 @@ function CollectionTitle({
             className="h-8 max-w-[28vw] min-w-40 rounded-full bg-sunken px-3 font-[600] tracking-[-0.012em] outline-none [field-sizing:content] focus:shadow-[inset_0_0_0_1.5px_var(--ink)]"
           />
         )}
-        <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line-2" />
+        <Rule />
         <ViewLinks />
       </div>
       {error ? (
@@ -194,7 +192,7 @@ function CollectionGallery({
           .
         </EmptyDropZone>
       ) : (
-        <main className="px-gutter pt-[84px] pb-28 max-[719px]:pt-[132px]">
+        <main className="px-gutter pt-[84px] pb-28 narrow:pt-[132px]">
           <OriginContext value={{ kind: "collection", collectionId, name }}>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5">
               <SearchField filters={filters} variant="inline" />

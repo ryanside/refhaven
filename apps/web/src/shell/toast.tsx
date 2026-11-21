@@ -4,7 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 type Toast = {
   readonly id: number;
   readonly message: string;
-  readonly action?: { readonly label: string; readonly run: () => void };
+  readonly action?: { readonly label: string; readonly run: () => void } | undefined;
 };
 
 const shownForMs = 5000;
@@ -15,7 +15,7 @@ const emit = () => listeners.forEach((listener) => listener());
 
 /** Shows one short message at the bottom of the page, with an action when it has one. */
 export function toast(message: string, action?: Toast["action"]) {
-  current = { id: nextId++, message, ...(action ? { action } : {}) };
+  current = { id: nextId++, message, action };
   emit();
 }
 
@@ -39,6 +39,7 @@ export function Toaster() {
     const timer = setTimeout(() => dismiss(shown.id), shownForMs);
     return () => clearTimeout(timer);
   }, [shown]);
+  const action = shown?.action;
 
   return (
     <div
@@ -51,20 +52,20 @@ export function Toaster() {
           key={shown.id}
           className={cn(
             "pointer-events-auto flex h-11 animate-in items-center gap-3 rounded-full bg-ink pr-1.5 pl-4 text-[14px] font-[520] text-page shadow-float-lg duration-200 fade-in slide-in-from-bottom-2",
-            !shown.action && "pr-4",
+            !action && "pr-4",
           )}
         >
           {shown.message}
-          {shown.action ? (
+          {action ? (
             <button
               type="button"
               onClick={() => {
-                shown.action!.run();
+                action.run();
                 dismiss(shown.id);
               }}
               className="h-8 rounded-full px-3 font-[580] text-page outline-offset-0 hover:bg-[color-mix(in_srgb,var(--page)_14%,transparent)]"
             >
-              {shown.action.label}
+              {action.label}
             </button>
           ) : null}
         </div>

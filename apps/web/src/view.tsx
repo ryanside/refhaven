@@ -62,7 +62,7 @@ export function ViewLinks() {
           className={segmentClass}
         >
           <Icon icon={icon} size={16} />
-          <span className="max-[719px]:sr-only">{label}</span>
+          <span className="narrow:sr-only">{label}</span>
         </Link>
       ))}
     </Segmented>

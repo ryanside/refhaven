@@ -143,12 +143,11 @@ export function CanvasView({
         setProblem(opened.failure._tag);
         return;
       }
-      const first = !framed.current;
       if (store.loadSnapshot(opened.success)) {
         // The store fits its first snapshot to the whole view. The chrome floats over its top and
         // bottom, so the first view is fitted again into the part the chrome leaves open, before
         // anything reads the camera.
-        if (first) {
+        if (!framed.current) {
           framed.current = true;
           fitToView(store);
         }
