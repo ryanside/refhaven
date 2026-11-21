@@ -33,7 +33,7 @@ Preconditions:
 - **Upload.** On the collection's gallery, run `page.getByLabel("Add images").setInputFiles(...)`. The outcome line reads `Saved`. A card with `data-ref-id` appears on the page and on `/library`.
 - **Add.** On `/library`, hover the card, click its `Add to a collection` button, then `page.getByRole("dialog").getByRole("button", { name, exact: true })`. The row shows a tick once the image is in. Wait for the membership with `verify.sh rows collectionRefs` or `collections.refs`, then open the collection to see the card.
 - **Remove.** On the collection's gallery, hover the card and click its `Remove from collection` button. The card leaves that page and stays on `/library`.
-- **Rename.** On the collection's page, click `Rename`, fill `page.getByLabel("Collection name")`, and press Enter. The heading and the shelf's link show the trimmed name.
+- **Rename.** On the collection's page, click `Rename`, fill `page.getByLabel("Collection name")`, and press Enter. The heading and the shelf's link show the trimmed name, and focus is back on `Rename`. Escape leaves the field unsaved. A refused name shows its reason in `page.getByRole("alert")` and stays in the field when the field loses focus, until it is edited.
 - **Private.** A second user opening the first user's `/c/{collectionId}` sees `Collection not found.`
 - **Proof.** Screenshot `/library` with its collection links and a collection's page with images. Read `verify.sh rows collectionRefs`, filter it to the `collectionId`, and confirm one row per image in the collection.
 

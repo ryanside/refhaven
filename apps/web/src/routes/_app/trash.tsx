@@ -7,7 +7,7 @@ import { Button } from "@refhaven/ui/components/button";
 import { Icon } from "@refhaven/ui/components/icon";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { thumbHashBackground } from "@/library/gallery";
+import { PagesFoot, thumbHashBackground } from "@/library/gallery";
 import { galleryPage } from "@/library/page";
 import { shownName } from "@/library/name";
 import { rememberOpened } from "@/library/origin";
@@ -31,7 +31,8 @@ type Trashed = {
 function Trash() {
   const items = usePaginatedQuery(refs.public.library.trash, {}, galleryPage);
   const count = items.results.length;
-  const more = PaginatedQueryResult.isCanLoadMore(items);
+  const more =
+    PaginatedQueryResult.isCanLoadMore(items) || PaginatedQueryResult.isLoadingMore(items);
 
   return (
     <>
@@ -55,17 +56,7 @@ function Trash() {
         ) : (
           <TrashGrid items={items.results} />
         )}
-        {more ? (
-          <div className="mt-10 flex justify-center">
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => items.loadMore(galleryPage.initialNumItems)}
-            >
-              Load more
-            </Button>
-          </div>
-        ) : null}
+        <PagesFoot items={items} />
       </main>
     </>
   );

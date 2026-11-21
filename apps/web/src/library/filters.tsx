@@ -156,21 +156,23 @@ export function TagChips({ filters }: { filters: Filters }) {
   );
   return (
     <nav aria-label="Tags" className="min-w-0">
-      <FadeRow className="gap-1.5">
-        {chip("", undefined, "All", tag === undefined)}
-        {shown.map((name) =>
-          name === tag
-            ? chip(
-                name,
-                undefined,
-                <>
-                  {name}
-                  <Icon icon={Cancel01Icon} size={12} className="opacity-70" />
-                </>,
-                true,
-              )
-            : chip(name, name, name, false),
-        )}
+      <FadeRow>
+        <div className="flex w-max items-center gap-1.5">
+          {chip("", undefined, "All", tag === undefined)}
+          {shown.map((name) =>
+            name === tag
+              ? chip(
+                  name,
+                  undefined,
+                  <>
+                    {name}
+                    <Icon icon={Cancel01Icon} size={12} className="opacity-70" />
+                  </>,
+                  true,
+                )
+              : chip(name, name, name, false),
+          )}
+        </div>
       </FadeRow>
     </nav>
   );

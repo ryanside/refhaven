@@ -253,6 +253,28 @@ try {
   await page.getByLabel("Collection name").fill("  Mood board ");
   await page.getByLabel("Collection name").press("Enter");
   await page.getByRole("heading", { name: "Mood board" }).waitFor();
+  const focusedAfterRename = await page.evaluate(() =>
+    document.activeElement?.getAttribute("aria-label"),
+  );
+  await page.getByRole("button", { name: "Rename" }).click();
+  const nameField = page.getByLabel("Collection name");
+  await nameField.fill("x".repeat(101));
+  await nameField.press("Enter");
+  const refusal = page.getByRole("alert").filter({ hasText: "A name is 1 to 100 characters." });
+  await refusal.waitFor();
+  await nameField.blur();
+  await Bun.sleep(300);
+  const keptAfterBlur = (await nameField.isVisible()) && (await refusal.count()) === 1;
+  await nameField.press("Escape");
+  await page.getByRole("heading", { name: "Mood board" }).waitFor();
+  assert(
+    focusedAfterRename === "Rename" &&
+      keptAfterBlur &&
+      (await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))) ===
+        "Rename" &&
+      (await owner.query(api.collections.list, {})).some(({ name }) => name === "Mood board"),
+    "saving a new name with Enter or leaving it with Escape puts focus back on Rename, and a refused name stays in the field with its reason when the field loses focus, and saves nothing",
+  );
   await card(page, uploadedRefId).locator("img").waitFor();
   await page.waitForFunction(() =>
     [...document.querySelectorAll<HTMLImageElement>("[data-ref-id] img")].every(

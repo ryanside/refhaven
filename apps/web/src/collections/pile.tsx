@@ -2,7 +2,6 @@ import { PaginatedQueryResult, usePaginatedQuery } from "@confect/react";
 import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
 import { cn } from "@refhaven/ui/lib/utils";
-import { useMemo } from "react";
 import { galleryPage } from "@/library/page";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { RetryingImg } from "@/library/retrying-img";
@@ -52,8 +51,10 @@ export function Pile({
   scale?: number;
   className?: string;
 }) {
-  const refIds = useMemo(() => prints.map(({ refId }) => refId), [prints]);
-  const urls = useRefUrls(refIds, "thumbnail");
+  const urls = useRefUrls(
+    prints.map(({ refId }) => refId),
+    "thumbnail",
+  );
   const box = 58 * scale;
   return (
     <div

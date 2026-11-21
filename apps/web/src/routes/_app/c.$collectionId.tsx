@@ -8,7 +8,7 @@ import { Tooltip } from "@refhaven/ui/components/tooltip";
 import { cn } from "@refhaven/ui/lib/utils";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import * as Result from "effect/Result";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CanvasView } from "@/canvas/canvas-view";
 import { isCollectionName, nameRefusal } from "@/collections/new-collection";
 import { shortCount, useCollectionCover, useCollectionMembers } from "@/collections/pile";
@@ -72,26 +72,36 @@ function CollectionTitle({
   const cover = useCollectionCover(collectionId);
   const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const field = useRef<HTMLInputElement>(null);
+  // Enter and then leaving the field would otherwise send the name twice.
+  const saving = useRef(false);
+  const refocus = useRef(false);
 
+  /** Leaves the field. Focus that was in it goes back to Rename. */
+  const close = () => {
+    refocus.current = document.activeElement === field.current;
+    setDraft(null);
+    setError(null);
+  };
   const save = async () => {
-    if (draft === null) return;
+    if (draft === null || saving.current) return;
     const trimmed = draft.trim();
     if (trimmed === name || trimmed === "") {
-      setDraft(null);
-      setError(null);
+      close();
       return;
     }
     if (!isCollectionName(trimmed)) {
       setError("A name is 1 to 100 characters.");
       return;
     }
+    saving.current = true;
     const renamed = await rename({ collectionId, name: trimmed });
+    saving.current = false;
     if (Result.isFailure(renamed)) {
       setError(nameRefusal(renamed.failure._tag));
       return;
     }
-    setDraft(null);
-    setError(null);
+    close();
   };
 
   return (
@@ -103,6 +113,11 @@ function CollectionTitle({
             {cover.loaded ? <span className="text-ink-3 num">{shortCount(cover)}</span> : null}
             <Tooltip label="Rename">
               <Button
+                ref={(button) => {
+                  if (!button || !refocus.current) return;
+                  refocus.current = false;
+                  button.focus();
+                }}
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Rename"
@@ -115,21 +130,28 @@ function CollectionTitle({
           </div>
         ) : (
           <input
+            ref={field}
             aria-label="Collection name"
             autoFocus
             value={draft}
             maxLength={200}
             onFocus={(event) => event.currentTarget.select()}
-            onChange={(event) => setDraft(event.currentTarget.value)}
-            onBlur={() => void save()}
+            onChange={(event) => {
+              setDraft(event.currentTarget.value);
+              setError(null);
+            }}
+            // A refused name stays in the field with its reason until it is edited, so leaving the
+            // field does not send it again.
+            onBlur={() => {
+              if (error === null) void save();
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
                 void save();
               } else if (event.key === "Escape") {
                 event.preventDefault();
-                setDraft(null);
-                setError(null);
+                close();
               }
             }}
             className="h-8 max-w-[28vw] min-w-40 rounded-full bg-sunken px-3 font-[600] tracking-[-0.012em] outline-none [field-sizing:content] focus:shadow-[inset_0_0_0_1.5px_var(--ink)]"

@@ -7,15 +7,22 @@ const backoffMs = 800;
 export function RetryingImg({ onError, src, ...props }: ComponentProps<"img">) {
   const [attempt, setAttempt] = useState(0);
   const [waiting, setWaiting] = useState(false);
-  useEffect(() => {
+  const [tried, setTried] = useState(src);
+  // A new image starts over, and a retry still waiting was for the old one.
+  if (src !== tried) {
+    setTried(src);
     setAttempt(0);
-  }, [src]);
+    setWaiting(false);
+  }
   useEffect(() => {
     if (!waiting) return;
-    const timer = setTimeout(() => {
-      setWaiting(false);
-      setAttempt((count) => count + 1);
-    }, backoffMs * attempt);
+    const timer = setTimeout(
+      () => {
+        setWaiting(false);
+        setAttempt((count) => count + 1);
+      },
+      backoffMs * (attempt + 1),
+    );
     return () => clearTimeout(timer);
   }, [waiting, attempt]);
   return (

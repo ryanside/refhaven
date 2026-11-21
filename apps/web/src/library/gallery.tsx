@@ -373,6 +373,22 @@ export function Gallery<E extends { readonly _tag: string }>({
   return (
     <>
       <Masonry items={items.results} removal={removal} />
+      <PagesFoot items={items} />
+    </>
+  );
+}
+
+/**
+ * The foot of a set loaded a page at a time: an alert when a page fails to load, and Load more while
+ * there is more, disabled while the next page loads.
+ */
+export function PagesFoot<T, E extends { readonly _tag: string }>({
+  items,
+}: {
+  items: PaginatedQueryResult.PaginatedQueryResult<T, E>;
+}) {
+  return (
+    <>
       {PaginatedQueryResult.isFailure(items) ? (
         <p role="alert" className="mt-6 text-[14px] text-bad">
           The images could not be loaded ({items.error._tag}).

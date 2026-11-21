@@ -1,11 +1,12 @@
 import { cn } from "@refhaven/ui/lib/utils";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 
 /**
  * A row that scrolls sideways once it is wider than its box, and fades at each edge it can scroll
- * toward.
+ * toward. Its one child holds the items in a box as wide as they are, which it watches for a change
+ * of width. It keeps room for a focus ring above and below the items, and takes no height for it.
  */
-export function FadeRow({ className, children }: { className?: string; children: ReactNode }) {
+export function FadeRow({ className, children }: { className?: string; children: ReactElement }) {
   const row = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ start: false, end: false });
 
@@ -19,19 +20,19 @@ export function FadeRow({ className, children }: { className?: string; children:
     measure();
     const resize = new ResizeObserver(measure);
     resize.observe(element);
-    for (const child of element.children) resize.observe(child);
+    resize.observe(element.firstElementChild!);
     element.addEventListener("scroll", measure, { passive: true });
     return () => {
       resize.disconnect();
       element.removeEventListener("scroll", measure);
     };
-  }, [children]);
+  }, []);
 
   return (
     <div
       ref={row}
       className={cn(
-        "flex items-center overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "-my-1 overflow-x-auto overscroll-x-contain py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,
       )}
       style={{

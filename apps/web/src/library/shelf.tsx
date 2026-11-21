@@ -24,14 +24,16 @@ export function Shelf() {
         Collections
         <span className="font-[450] text-ink-3 num">{collections.length || null}</span>
       </h2>
-      <FadeRow className="-mx-2.5 mt-1 gap-1.5 px-2.5">
-        <ul className="contents">
-          {collections.map(({ collectionId, name }) => (
-            <ShelfItem key={collectionId} collectionId={collectionId} name={name} />
-          ))}
-          <NewShelfItem />
-        </ul>
-      </FadeRow>
+      <div className="-mx-2.5 mt-1">
+        <FadeRow className="px-2.5">
+          <ul className="flex w-max items-center gap-1.5">
+            {collections.map(({ collectionId, name }) => (
+              <ShelfItem key={collectionId} collectionId={collectionId} name={name} />
+            ))}
+            <NewShelfItem />
+          </ul>
+        </FadeRow>
+      </div>
     </section>
   );
 }
