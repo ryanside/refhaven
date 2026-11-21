@@ -16,7 +16,7 @@ export function ShownName({ fileName }: { fileName: string }) {
   return (
     <>
       {stem}
-      {extension ? <span className="text-[0px]">{extension}</span> : null}
+      {extension ? <span className="text-[0px] leading-[0]">{extension}</span> : null}
     </>
   );
 }

@@ -565,7 +565,9 @@ function NoteField({ refId, note }: { refId: Id<"refs">; note: string | null }) 
           }}
           className={cn(
             fieldClass,
-            "field-sizing-content min-h-[88px] resize-none py-2.5 pb-10 leading-[21px]",
+            // Room for Save at the foot only while there is a change to save.
+            "field-sizing-content min-h-[88px] resize-none py-2.5 leading-[21px]",
+            dirty && "pb-10",
           )}
         />
         <div className="absolute right-1.5 bottom-1.5">{saveButton("Save note", dirty)}</div>
