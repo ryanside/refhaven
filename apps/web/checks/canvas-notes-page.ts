@@ -516,6 +516,10 @@ try {
   await colorButton.focus();
   await page.keyboard.press("Enter");
   await page.getByRole("menu", { name: "Note color" }).waitFor();
+  // The menu takes focus a moment after it shows, and a key pressed before then goes to the button.
+  await page.waitForFunction(
+    () => document.activeElement?.getAttribute("role") === "menuitemradio",
+  );
   await page.keyboard.press("Home");
   await page.keyboard.press("ArrowRight");
   const highlighted = await page.evaluate(() => document.activeElement?.getAttribute("aria-label"));
