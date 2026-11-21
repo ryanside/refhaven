@@ -328,6 +328,12 @@ try {
   const other = await clientFor(second.page);
   const foreign = moodId as Id<"collections">;
   const own = await other.mutation(api.collections.create, { name: "Mine" });
+  await second.page.getByRole("main").getByRole("link", { name: "Mine", exact: true }).waitFor();
+  assert(
+    (await second.page.getByText("Nothing saved yet.").count()) === 1 &&
+      (await second.page.getByRole("heading", { name: "Collections" }).count()) === 1,
+    "a library with a collection and no images shows its shelf above the drop zone",
+  );
   const calls = {
     rename: outcome(
       other.mutation(api.collections.rename, { collectionId: foreign, name: "Taken" }),

@@ -1,6 +1,7 @@
 import { ImageAdd02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@refhaven/ui/components/icon";
 import { Kbd } from "@refhaven/ui/components/kbd";
+import { cn } from "@refhaven/ui/lib/utils";
 import type { ReactNode } from "react";
 import { AddImagesButton } from "@/library/save-images";
 
@@ -35,9 +36,12 @@ export function PasteKeys() {
   );
 }
 
-export function EmptyDropZone({ title, children }: { title: string; children: ReactNode }) {
+const zoneClass =
+  "grid place-items-center overflow-y-auto rounded-[24px] bg-[color-mix(in_srgb,var(--sunken)_45%,var(--page))]";
+
+function ZoneContent({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <main className="fixed inset-x-(--gutter) top-20 bottom-(--gutter) grid place-items-center overflow-y-auto rounded-[24px] bg-[color-mix(in_srgb,var(--sunken)_45%,var(--page))]">
+    <>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 rounded-[24px] border-[1.5px] border-dashed border-ink-4"
@@ -52,6 +56,35 @@ export function EmptyDropZone({ title, children }: { title: string; children: Re
         </p>
         <AddImagesButton className="mt-7" />
       </div>
+    </>
+  );
+}
+
+/**
+ * The page of a set with no images: a drop zone that fills the window under the top bar. A page
+ * whose narrow top bar has a second row moves its top down with `className`.
+ */
+export function EmptyDropZone({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <main className={cn("fixed inset-x-(--gutter) top-20 bottom-(--gutter)", zoneClass, className)}>
+      <ZoneContent title={title}>{children}</ZoneContent>
     </main>
+  );
+}
+
+/** The same drop zone as a part of a page, under what the page shows above it. */
+export function EmptyDropSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className={cn("relative mt-6 min-h-[420px] py-16", zoneClass)}>
+      <ZoneContent title={title}>{children}</ZoneContent>
+    </section>
   );
 }

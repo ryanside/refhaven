@@ -4,7 +4,7 @@ The library lets a signed-in user save image files and see every saved image in 
 
 ## Sub-features
 
-- `library-empty` shows `Nothing saved yet.` for a new user.
+- `library-empty` shows `Nothing saved yet.` for a new user. A user with collections and no images sees the collections' shelf above it.
 - `library-save` saves one or more picked files and reports an outcome for each.
 - `library-paste-drop` saves image files pasted or dropped anywhere on the page, the same way. The canvas takes them too and places each image, as the Canvas recipe says.
 - `library-grid` shows each saved image with its file name, newest first, and the images load.
@@ -51,7 +51,7 @@ Preconditions:
 - An image saved before variants existed, or from a browser that cannot encode WebP, has no variants. It shows its original. Saving the same bytes again from a browser that can encode WebP uploads the missing variants, so that one duplicate does send `PUT` requests.
 - A reload clears the outcome list.
 - Playwright cannot drag a file from the desktop. The check builds a `DataTransfer` in the page and dispatches the events, so it proves the page's handling and not the operating system's drag.
-- The save tray at the bottom right reports one line per file, in order, under `[role="status"]`. A tray whose every file saved clears itself after four seconds, and its lines stay in the list, hidden. Wait for the line you expect, not for a fixed count of cards.
+- The save tray at the bottom right reports one line per file, in order, under `[role="status"]`. A tray whose every file saved clears itself after four seconds, and so does its `Close` button. Its lines stay in the list, hidden, with no preview, until a reload. Wait for the line you expect, not for a fixed count of cards.
 - Image URLs are signed and expire after an hour. Read `src` from the card when you need it. Never store one for a later run.
 - A card's `img` has no `src` for a moment after the card appears, until the page has fetched the signed URL.
 - The file picker accepts `image/*` and a person cannot pick another file with it. `setInputFiles` and a drop can both offer one, and the page reports it as not saved.

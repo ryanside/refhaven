@@ -61,7 +61,13 @@ export function AddImagesButton({
 }
 
 type Started = { readonly key: number; readonly file: File };
-type Finished = Started & { readonly outcome: SaveOutcome };
+/** A file's outcome. Once the tray clears it, the row lets go of its file and stays in the list, hidden. */
+type Finished = {
+  readonly key: number;
+  readonly name: string;
+  readonly outcome: SaveOutcome;
+  readonly file: File | null;
+};
 
 const reasons: Record<string, string> = {
   UnsupportedImage: "This file is not an image refhaven can read.",
@@ -98,13 +104,16 @@ const dragGoneAfterMs = 200;
 export function SaveScope({
   target,
   placeAt,
-  veil = "page",
+  surface = "page",
   children,
 }: {
   target: SaveTarget;
   placeAt?: PlaceAt;
-  /** A canvas keeps its images in view under the veil, so a drop can be aimed. */
-  veil?: "page" | "canvas";
+  /**
+   * A canvas keeps its images in view under the veil, so a drop can be aimed, and its tray sits
+   * above the canvas's tools.
+   */
+  surface?: "page" | "canvas";
   children: ReactNode;
 }) {
   const saveImage = useSaveImage(target.collectionId);
@@ -112,7 +121,6 @@ export function SaveScope({
   const nextKey = useRef(0);
   const [pending, setPending] = useState<ReadonlyArray<Started>>([]);
   const [finished, setFinished] = useState<ReadonlyArray<Finished>>([]);
-  const [clearedBefore, setClearedBefore] = useState(0);
   const [dragging, setDragging] = useState(false);
 
   const saveAll = useCallback(
@@ -123,7 +131,10 @@ export function SaveScope({
       for (const row of started) {
         const outcome = await saveImage(row.file);
         setPending((earlier) => earlier.filter(({ key }) => key !== row.key));
-        setFinished((earlier) => [...earlier, { ...row, outcome }]);
+        setFinished((earlier) => [
+          ...earlier,
+          { key: row.key, name: row.file.name, outcome, file: row.file },
+        ]);
         if (place && outcome.status === "saved") await place(outcome.refId);
       }
     },
@@ -184,16 +195,21 @@ export function SaveScope({
     };
   }, [saveAll]);
 
-  const shown = finished.slice(clearedBefore);
+  const shown = finished.filter(({ file }) => file !== null);
   const allSaved =
     pending.length === 0 &&
     shown.length > 0 &&
     shown.every(({ outcome }) => outcome.status === "saved");
+  const clear = useCallback(
+    () =>
+      setFinished((rows) => rows.map((row) => (row.file === null ? row : { ...row, file: null }))),
+    [],
+  );
   useEffect(() => {
     if (!allSaved) return;
-    const timer = setTimeout(() => setClearedBefore(finished.length), clearAfterMs);
+    const timer = setTimeout(clear, clearAfterMs);
     return () => clearTimeout(timer);
-  }, [allSaved, finished.length]);
+  }, [allSaved, finished.length, clear]);
 
   const pick = useCallback(() => input.current?.click(), []);
 
@@ -215,13 +231,8 @@ export function SaveScope({
           await saveAll(files, null);
         }}
       />
-      <DropVeil shown={dragging} name={target.name} kind={veil} />
-      <SaveTray
-        finished={finished}
-        clearedBefore={clearedBefore}
-        pending={pending}
-        close={() => setClearedBefore(finished.length)}
-      />
+      <DropVeil shown={dragging} name={target.name} surface={surface} />
+      <SaveTray finished={finished} pending={pending} close={clear} surface={surface} />
     </PickContext>
   );
 }
@@ -229,18 +240,18 @@ export function SaveScope({
 function DropVeil({
   shown,
   name,
-  kind,
+  surface,
 }: {
   shown: boolean;
   name: string;
-  kind: "page" | "canvas";
+  surface: "page" | "canvas";
 }) {
   return (
     <div
       aria-hidden
       className={cn(
         "pointer-events-none fixed inset-0 z-40 transition-opacity duration-150 ease-out",
-        kind === "page" && "bg-scrim backdrop-blur-[2px]",
+        surface === "page" && "bg-scrim backdrop-blur-[2px]",
         shown ? "opacity-100" : "opacity-0",
       )}
     >
@@ -248,7 +259,7 @@ function DropVeil({
       <div
         className={cn(
           "absolute left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-surface py-3 pr-5 pl-4 text-[15px] font-[560] tracking-[-0.012em] shadow-float-lg transition-[translate,scale] duration-200 ease-out",
-          kind === "page" ? "top-1/2 -translate-y-1/2" : "top-20",
+          surface === "page" ? "top-1/2 -translate-y-1/2" : "top-20 narrow:top-[132px]",
           shown ? "scale-100" : "scale-[0.97]",
         )}
       >
@@ -285,16 +296,16 @@ function Preview({ file }: { file: File }) {
 
 function SaveTray({
   finished,
-  clearedBefore,
   pending,
   close,
+  surface,
 }: {
   finished: ReadonlyArray<Finished>;
-  clearedBefore: number;
   pending: ReadonlyArray<Started>;
   close: () => void;
+  surface: "page" | "canvas";
 }) {
-  const shown = finished.slice(clearedBefore);
+  const shown = finished.filter(({ file }) => file !== null);
   const refused = shown.filter(({ outcome }) => outcome.status === "rejected").length;
   const saved = shown.length - refused;
   const title =
@@ -310,7 +321,10 @@ function SaveTray({
     <section
       data-testid="save-tray"
       aria-label="Saving images"
-      className="fixed right-(--gutter) bottom-5 z-40 hidden w-[min(360px,calc(100vw-32px))] flex-col overflow-hidden rounded-[20px] bg-surface shadow-float-lg has-[li:not([hidden])]:flex"
+      className={cn(
+        "fixed right-(--gutter) z-40 hidden w-[min(360px,calc(100vw-32px))] flex-col overflow-hidden rounded-[20px] bg-surface shadow-float-lg has-[li:not([hidden])]:flex",
+        surface === "page" ? "bottom-5" : "bottom-[82px] tight:bottom-[144px]",
+      )}
     >
       <header className="flex h-12 shrink-0 items-center gap-2.5 pr-2 pl-4">
         {pending.length > 0 ? <Spinner className="text-ink-2" /> : null}
@@ -323,21 +337,19 @@ function SaveTray({
       </header>
       <div className="max-h-[min(340px,calc(100vh-160px))] overflow-y-auto overscroll-contain px-2 pb-2">
         <ul role="status" className="flex flex-col">
-          {finished.map(({ key, file, outcome }, index) => {
+          {finished.map(({ key, name, file, outcome }) => {
             const detail = outcomeDetail(outcome);
             return (
               <li
                 key={key}
                 data-outcome={outcome.status}
-                hidden={index < clearedBefore}
+                hidden={file === null}
                 className="flex items-start gap-3 rounded-xl px-2 py-2"
               >
-                <Preview file={file} />
+                {file ? <Preview file={file} /> : null}
                 <div className="min-w-0 flex-1 pt-px">
                   <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-[520]">
-                      {file.name}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-[520]">{name}</span>
                     <span className="sr-only">: </span>
                     <OutcomeBadge outcome={outcome} />
                   </div>

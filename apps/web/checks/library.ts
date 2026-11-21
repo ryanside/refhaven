@@ -58,7 +58,11 @@ try {
     { name: "large.png", mimeType: "image/png", buffer: large },
     { name: "small.png", mimeType: "image/png", buffer: small },
   ]);
-  await outcomes(page).nth(1).waitFor();
+  await outcomes(page).nth(1).locator("img").waitFor();
+  await outcomes(page).first().locator("img").waitFor();
+  const previews = await outcomes(page)
+    .locator("img")
+    .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).src));
   await page.waitForFunction(() => {
     const images = [...document.querySelectorAll<HTMLImageElement>("[data-ref-id] img")];
     return images.length === 2 && images.every((image) => image.complete && image.naturalWidth > 0);
@@ -132,6 +136,30 @@ try {
   assert(
     faintest >= 4.5,
     `the faintest text color has a contrast of at least 4.5:1 on the page, a surface, a sunken field, and a hover: ${faintest.toFixed(2)}`,
+  );
+
+  await page.getByTestId("save-tray").waitFor({ state: "hidden" });
+  const previewsAfter = await page.evaluate(
+    (urls) =>
+      Promise.all(
+        urls.map((url) =>
+          fetch(url).then(
+            () => "kept",
+            () => "let go",
+          ),
+        ),
+      ),
+    previews,
+  );
+  assert(
+    previews.length === 2 &&
+      previewsAfter.every((state) => state === "let go") &&
+      (await outcomes(page).count()) === 2 &&
+      (await outcomes(page).evaluateAll((rows) =>
+        rows.every((row) => (row as HTMLElement).hidden),
+      )) &&
+      (await outcomes(page).locator("img").count()) === 0,
+    `once the tray clears itself its lines stay in the list, hidden, with no preview, and the previews' files are let go: ${previewsAfter}`,
   );
 
   const workspaceId = uploads[0]!.split("/")[2];

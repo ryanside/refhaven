@@ -171,7 +171,7 @@ function CollectionGallery({
     <SaveScope target={{ collectionId, name }}>
       <TopBar center={title} action={empty ? null : <AddImagesButton fold />} />
       {empty ? (
-        <EmptyDropZone title="Nothing in this collection yet.">
+        <EmptyDropZone title="Nothing in this collection yet." className="narrow:top-[132px]">
           Drop images anywhere on this page, paste them with <PasteKeys />, or pick files. They go
           into your library too, or add images from the{" "}
           <Link

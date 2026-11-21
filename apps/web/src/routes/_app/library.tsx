@@ -3,7 +3,7 @@ import { Delete02Icon } from "@hugeicons/core-free-icons";
 import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
 import { createFileRoute } from "@tanstack/react-router";
-import { EmptyDropZone, PasteKeys } from "@/library/empty";
+import { EmptyDropSection, EmptyDropZone, PasteKeys } from "@/library/empty";
 import {
   ClearFilters,
   FilteredGallery,
@@ -17,6 +17,7 @@ import { Gallery, type Removal } from "@/library/gallery";
 import { galleryPage } from "@/library/page";
 import { AddImagesButton, SaveScope } from "@/library/save-images";
 import { Shelf } from "@/library/shelf";
+import { useCollections } from "@/shell/collections-menu";
 import { useNarrow } from "@/shell/narrow";
 import { toast } from "@/shell/toast";
 import { TopBar } from "@/shell/top-bar";
@@ -51,39 +52,47 @@ function Library() {
   const all = usePaginatedQuery(refs.public.library.list, {}, galleryPage);
   const empty =
     !isFiltered(filters) && PaginatedQueryResult.isExhausted(all) && all.results.length === 0;
+  const collections = useCollections();
   const narrow = useNarrow();
   const removal = useMoveToTrash();
   const search = <SearchField filters={filters} variant={narrow ? "inline" : "bar"} />;
+  const hint = (
+    <>
+      Drop images anywhere on this page, paste them with <PasteKeys />, or pick files.
+    </>
+  );
 
   return (
     <SaveScope target={{ name: "Library" }}>
       <TopBar center={narrow ? null : search} action={empty ? null : <AddImagesButton fold />} />
-      {empty ? (
-        <EmptyDropZone title="Nothing saved yet.">
-          Drop images anywhere on this page, paste them with <PasteKeys />, or pick files.
-        </EmptyDropZone>
+      {empty && collections.length === 0 ? (
+        <EmptyDropZone title="Nothing saved yet.">{hint}</EmptyDropZone>
       ) : (
         <main className="px-gutter pt-[84px] pb-28">
-          {narrow ? <div className="mb-6">{search}</div> : null}
+          {narrow && !empty ? <div className="mb-6">{search}</div> : null}
           <Shelf />
-          <section aria-labelledby="images-heading" className="mt-6">
-            <ImagesHeading
-              filters={filters}
-              count={
-                PaginatedQueryResult.isLoadingFirstPage(all)
-                  ? null
-                  : `${all.results.length}${PaginatedQueryResult.isCanLoadMore(all) || PaginatedQueryResult.isLoadingMore(all) ? "+" : ""}`
-              }
-            />
-            <div className="mt-2.5 mb-4">
-              <TagChips filters={filters} />
-            </div>
-            {isFiltered(filters) ? (
-              <Filtered filters={filters} removal={removal} />
-            ) : (
-              <Gallery items={all} removal={removal} />
-            )}
-          </section>
+          {empty ? (
+            <EmptyDropSection title="Nothing saved yet.">{hint}</EmptyDropSection>
+          ) : (
+            <section aria-labelledby="images-heading" className="mt-6">
+              <ImagesHeading
+                filters={filters}
+                count={
+                  PaginatedQueryResult.isLoadingFirstPage(all)
+                    ? null
+                    : `${all.results.length}${PaginatedQueryResult.isCanLoadMore(all) || PaginatedQueryResult.isLoadingMore(all) ? "+" : ""}`
+                }
+              />
+              <div className="mt-2.5 mb-4">
+                <TagChips filters={filters} />
+              </div>
+              {isFiltered(filters) ? (
+                <Filtered filters={filters} removal={removal} />
+              ) : (
+                <Gallery items={all} removal={removal} />
+              )}
+            </section>
+          )}
         </main>
       )}
     </SaveScope>

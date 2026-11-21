@@ -370,7 +370,8 @@ export function SelectionCluster({
       inert={none}
       className={cn(
         pillClass,
-        "fixed right-(--gutter) bottom-[26px] z-30 origin-bottom-right transition-[opacity,translate,scale] duration-200 ease-out",
+        // Under 1000 px it would meet the centered dock, so it stands above it.
+        "fixed right-(--gutter) bottom-[26px] z-30 origin-bottom-right transition-[opacity,translate,scale] duration-200 ease-out tight:bottom-[88px]",
         none && "pointer-events-none translate-y-1.5 scale-[0.97] opacity-0",
       )}
     >
@@ -429,7 +430,7 @@ export function SelectionCluster({
 
 export function Problem({ children, close }: { children: ReactNode; close: () => void }) {
   return (
-    <div className="fixed bottom-[92px] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-surface py-1.5 pr-1.5 pl-4 shadow-float-lg">
+    <div className="fixed bottom-[92px] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-surface py-1.5 pr-1.5 pl-4 shadow-float-lg tight:bottom-[144px]">
       <Icon icon={Alert02Icon} size={16} className="shrink-0 text-bad" />
       <p role="alert" className="text-[13px] font-[520]">
         {children}

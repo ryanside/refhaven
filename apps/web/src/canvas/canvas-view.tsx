@@ -477,7 +477,7 @@ export function CanvasView({
   }, [store, urls]);
 
   return (
-    <SaveScope target={{ collectionId, name }} placeAt={placeAt} veil="canvas">
+    <SaveScope target={{ collectionId, name }} placeAt={placeAt} surface="canvas">
       <div className="on-canvas contents">
         <TopBar center={title} action={<AddImagesButton fold />} />
         <main className="fixed inset-0 overflow-hidden bg-canvas">
