@@ -105,6 +105,7 @@ function Tile({
   order: ReadonlyArray<Id<"refs">>;
 }) {
   const origin = useOrigin();
+  const open = () => rememberOpened(item.refId, { origin, order, listBehind: true });
   return (
     <li
       data-ref-id={item.refId}
@@ -114,7 +115,7 @@ function Tile({
       <Link
         to="/r/$refId"
         params={{ refId: item.refId }}
-        onClick={() => rememberOpened(item.refId, origin, order)}
+        onClick={open}
         className="image-edge block overflow-hidden rounded-[6px] bg-sunken"
         style={{ height: box.imageHeight }}
       >
@@ -137,7 +138,7 @@ function Tile({
         <p className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-ink-2">
           {shownName(item.fileName)}
         </p>
-        <TileMenu item={item} removal={removal} />
+        <TileMenu item={item} removal={removal} open={open} />
       </div>
     </li>
   );
@@ -297,7 +298,7 @@ function PickerRow({
   );
 }
 
-function TileMenu({ item, removal }: { item: Item; removal: Removal }) {
+function TileMenu({ item, removal, open }: { item: Item; removal: Removal; open: () => void }) {
   return (
     <Menu>
       <MenuTrigger
@@ -313,7 +314,10 @@ function TileMenu({ item, removal }: { item: Item; removal: Removal }) {
         <Icon icon={MoreHorizontalIcon} size={16} />
       </MenuTrigger>
       <MenuContent align="end" className="min-w-52">
-        <MenuLinkItem render={<Link to="/r/$refId" params={{ refId: item.refId }} />}>
+        <MenuLinkItem
+          render={<Link to="/r/$refId" params={{ refId: item.refId }} />}
+          onClick={open}
+        >
           Open
         </MenuLinkItem>
         <MenuSubmenu>

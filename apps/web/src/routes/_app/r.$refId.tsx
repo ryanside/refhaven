@@ -39,7 +39,13 @@ import { Pile, shortCount, useCollectionCover } from "@/collections/pile";
 import { CollectionPicker } from "@/library/gallery";
 import { galleryPage } from "@/library/page";
 import { shownName } from "@/library/name";
-import { type Origin, libraryOrigin, openedFrom, rememberOpened } from "@/library/origin";
+import {
+  type Opened,
+  type Origin,
+  libraryOrigin,
+  openedFrom,
+  rememberOpened,
+} from "@/library/origin";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { NotFound } from "@/shell/not-found";
 import { TopBar, pillClass } from "@/shell/top-bar";
@@ -79,9 +85,7 @@ function ImageNotFound() {
   );
 }
 
-type Steps = {
-  readonly origin: Origin;
-  readonly order: ReadonlyArray<Id<"refs">>;
+type Steps = Opened & {
   readonly previous: Id<"refs"> | undefined;
   readonly next: Id<"refs"> | undefined;
 };
@@ -94,6 +98,7 @@ function useSteps(refId: Id<"refs">): Steps {
   return {
     origin: opened?.origin ?? libraryOrigin,
     order,
+    listBehind: opened?.listBehind ?? false,
     previous: at > 0 ? order[at - 1] : undefined,
     next: at >= 0 ? order[at + 1] : undefined,
   };
@@ -104,7 +109,7 @@ function RefPage() {
   const steps = useSteps(refId);
   const details = useQuery(refs.public.ref.get, { refId });
   const display = useDisplayCopies(refId, QueryResult.isSuccess(details), steps);
-  useStepKeys(refId, steps);
+  useStepKeys(steps);
 
   return QueryResult.match(details, {
     onLoading: () => <TopBar />,
@@ -124,16 +129,32 @@ function RefPage() {
 /**
  * The display copies of the image and its neighbors, whose details and pixels load ahead of a
  * step. Nothing is signed until the page has found the image, so a missing or foreign one gets no
- * URL.
+ * URL. One missing image fails a whole signing call, so the image is signed in a call of its own,
+ * and a neighbor joins a later call only once its details have loaded.
  */
 function useDisplayCopies(refId: Id<"refs">, found: boolean, { previous, next }: Steps) {
-  useQuery(refs.public.ref.get, previous ? { refId: previous } : "skip");
-  useQuery(refs.public.ref.get, next ? { refId: next } : "skip");
+  const previousFound = QueryResult.isSuccess(
+    useQuery(refs.public.ref.get, previous ? { refId: previous } : "skip"),
+  );
+  const nextFound = QueryResult.isSuccess(
+    useQuery(refs.public.ref.get, next ? { refId: next } : "skip"),
+  );
+  const [signedFor, setSignedFor] = useState<Id<"refs"> | null>(null);
   const signable = useMemo(
-    () => (found ? [refId, ...(previous ? [previous] : []), ...(next ? [next] : [])] : []),
-    [found, refId, previous, next],
+    () =>
+      !found
+        ? []
+        : signedFor !== refId
+          ? [refId]
+          : [
+              refId,
+              ...(previous && previousFound ? [previous] : []),
+              ...(next && nextFound ? [next] : []),
+            ],
+    [found, refId, signedFor, previous, previousFound, next, nextFound],
   );
   const display = useRefUrls(signable, "display");
+  if (display.has(refId) && signedFor !== refId) setSignedFor(refId);
   usePreload(
     [previous, next].map((neighbor) => (neighbor ? display.get(neighbor)?.url : undefined)),
   );
@@ -155,16 +176,18 @@ function useStep(steps: Steps) {
   const navigate = useNavigate();
   return (refId: Id<"refs"> | undefined) => {
     if (!refId) return;
-    rememberOpened(refId, steps.origin, steps.order);
+    const { origin, order, listBehind } = steps;
+    rememberOpened(refId, { origin, order, listBehind });
     void navigate({ to: "/r/$refId", params: { refId }, replace: true });
   };
 }
 
-function useLeave(refId: Id<"refs">, origin: Origin) {
+/** Back to the list the image was opened from, or to that list's page when it is not behind. */
+function useLeave({ origin, listBehind }: Steps) {
   const router = useRouter();
   const navigate = useNavigate();
   return () => {
-    if (openedFrom(refId)) router.history.back();
+    if (listBehind) router.history.back();
     else void navigate(originLink(origin));
   };
 }
@@ -180,9 +203,9 @@ const originLink = (origin: Origin) =>
       ? ({ to: "/trash" } as const)
       : ({ to: "/library" } as const);
 
-function useStepKeys(refId: Id<"refs">, steps: Steps) {
+function useStepKeys(steps: Steps) {
   const step = useStep(steps);
-  const leave = useLeave(refId, steps.origin);
+  const leave = useLeave(steps);
   const keys = useRef({ step, leave, steps });
   keys.current = { step, leave, steps };
   useEffect(() => {
@@ -273,7 +296,7 @@ function RefDetails({
       <TopBar center={<Breadcrumb origin={steps.origin} fileName={details.fileName} />} />
       <main className="min-h-svh bg-canvas">
         <div className="fixed inset-y-0 right-[calc(408px+var(--gutter))] left-0 flex items-center justify-center px-16 pt-[84px] pb-7 max-[900px]:relative max-[900px]:px-gutter">
-          <div className="relative flex max-w-full">
+          <div className="relative flex max-w-full max-[900px]:static">
             <div className="image-edge flex max-w-full shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.25)]">
               <RetryingImg
                 // Every image load is a CORS request, as in the gallery.
@@ -293,7 +316,7 @@ function RefDetails({
         </div>
         <aside
           aria-label="Image details"
-          className="fixed top-[68px] right-(--gutter) z-20 flex max-h-[calc(100svh-68px-var(--gutter))] w-[408px] flex-col overflow-hidden rounded-[24px] bg-surface shadow-float max-[900px]:static max-[900px]:mx-gutter max-[900px]:mb-gutter max-[900px]:max-h-none max-[900px]:w-auto"
+          className="fixed top-[68px] right-(--gutter) z-20 flex max-h-[calc(100svh-68px-var(--gutter))] w-[408px] flex-col overflow-hidden rounded-[24px] bg-surface shadow-float max-[900px]:static max-[900px]:mx-(--gutter) max-[900px]:mb-(--gutter) max-[900px]:max-h-none max-[900px]:w-auto"
         >
           {trashed ? (
             <div className="flex items-center gap-3 border-b border-line bg-sunken py-3 pr-3 pl-5">
@@ -404,9 +427,15 @@ function Section({
   );
 }
 
-function useSaveState() {
+/**
+ * A field's last save: `Saved` for two seconds, or an alert that stays until the next save.
+ * `subject` is the value the field edits, and an alert leaves once it changes from outside.
+ */
+function useSaveState(subject?: unknown) {
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ readonly message: string; readonly about: unknown } | null>(
+    null,
+  );
   useEffect(() => {
     if (!saved) return;
     const timer = setTimeout(() => setSaved(false), 2000);
@@ -414,8 +443,13 @@ function useSaveState() {
   }, [saved]);
   return {
     done: (failure: string | null) => {
-      setError(failure);
+      setError(failure === null ? null : { message: failure, about: subject });
       setSaved(failure === null);
+    },
+    /** Forgets the last save, as when an edit is cancelled. */
+    clear: () => {
+      setError(null);
+      setSaved(false);
     },
     status: saved ? (
       <span className="flex items-center gap-1 font-[540] text-ok">
@@ -423,12 +457,13 @@ function useSaveState() {
         Saved
       </span>
     ) : null,
-    alert: error ? (
-      <p role="alert" className="mt-1.5 flex items-center gap-1.5 text-[12px] text-bad">
-        <Icon icon={Alert02Icon} size={14} />
-        {error}
-      </p>
-    ) : null,
+    alert:
+      error && Object.is(error.about, subject) ? (
+        <p role="alert" className="mt-1.5 flex items-center gap-1.5 text-[12px] text-bad">
+          <Icon icon={Alert02Icon} size={14} />
+          {error.message}
+        </p>
+      ) : null,
   };
 }
 
@@ -447,9 +482,9 @@ function NameField({ refId, fileName }: { refId: Id<"refs">; fileName: string })
   const update = useMutation(refs.public.ref.update);
   const [draft, setDraft] = useState<string | null>(null);
   const state = useSaveState();
-  const close = () => {
+  const cancel = () => {
     setDraft(null);
-    state.done(null);
+    state.clear();
   };
 
   if (draft === null) {
@@ -458,6 +493,9 @@ function NameField({ refId, fileName }: { refId: Id<"refs">; fileName: string })
         <h1 className="min-w-0 flex-1 text-[20px] leading-7 font-[620] tracking-[-0.022em] break-words">
           {shownName(fileName)}
         </h1>
+        {state.status ? (
+          <span className="flex h-7 shrink-0 items-center text-[12px]">{state.status}</span>
+        ) : null}
         <Tooltip label="Rename">
           <Button
             variant="ghost"
@@ -482,8 +520,8 @@ function NameField({ refId, fileName }: { refId: Id<"refs">; fileName: string })
           return;
         }
         const failure = failureTag(await update({ refId, fileName: decoded.value }));
-        if (failure === null) close();
-        else state.done(failure);
+        state.done(failure);
+        if (failure === null) setDraft(null);
       }}
     >
       <div className="flex items-center gap-1.5">
@@ -496,7 +534,7 @@ function NameField({ refId, fileName }: { refId: Id<"refs">; fileName: string })
           onKeyDown={(event) => {
             if (event.key !== "Escape") return;
             event.preventDefault();
-            close();
+            cancel();
           }}
           className={cn(fieldClass, "h-10 text-[16px] font-[560]")}
         />
@@ -525,15 +563,24 @@ function NoteField({ refId, note }: { refId: Id<"refs">; note: string | null }) 
   const state = useSaveState();
   const dirty = value !== (note ?? "");
   const form = useRef<HTMLFormElement>(null);
+  // Mod+Enter and then leaving the field would otherwise send the same note twice.
+  const saving = useRef(false);
   const save = async () => {
-    const decoded = parseClearable(Note)(value);
+    if (saving.current) return;
+    const submitted = value;
+    const decoded = parseClearable(Note)(submitted);
     if (Option.isNone(decoded)) {
       state.done("A note is at most 10,000 characters.");
       return;
     }
+    saving.current = true;
     const failure = failureTag(await update({ refId, note: decoded.value }));
+    saving.current = false;
     state.done(failure);
-    if (failure === null) setValue(decoded.value ?? "");
+    // The saved note is trimmed. Text typed while it was saving stays as typed.
+    if (failure === null) {
+      setValue((current) => (current === submitted ? (decoded.value ?? "") : current));
+    }
   };
 
   return (
@@ -578,8 +625,8 @@ function SourceField({ refId, sourceUrl }: { refId: Id<"refs">; sourceUrl: strin
   const update = useMutation(refs.public.ref.update);
   const id = useId();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(sourceUrl ?? "");
-  const state = useSaveState();
+  const [draft, setDraft] = useDraft(sourceUrl ?? "");
+  const state = useSaveState(sourceUrl);
   const showLink = sourceUrl !== null && !editing;
 
   return (
@@ -639,7 +686,7 @@ function SourceField({ refId, sourceUrl }: { refId: Id<"refs">; sourceUrl: strin
               if (event.key !== "Escape" || !editing) return;
               event.preventDefault();
               setEditing(false);
-              state.done(null);
+              state.clear();
             }}
             className={cn(fieldClass, "h-10")}
           />

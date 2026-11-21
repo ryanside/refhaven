@@ -117,7 +117,9 @@ function TrashCard({
       <Link
         to="/r/$refId"
         params={{ refId: item.refId }}
-        onClick={() => rememberOpened(item.refId, { kind: "trash" }, order)}
+        onClick={() =>
+          rememberOpened(item.refId, { origin: { kind: "trash" }, order, listBehind: true })
+        }
         className="image-edge block aspect-[4/3] overflow-hidden rounded-[6px] bg-sunken"
       >
         <RetryingImg
