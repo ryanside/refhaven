@@ -57,7 +57,9 @@ function Library() {
   return (
     <SaveScope target={{ name: "Library" }}>
       <TopBar
-        center={empty || narrow ? null : search}
+        // Search stays on an empty library too, so a field typed into while the library loads
+        // is never taken away.
+        center={narrow ? null : search}
         action={empty ? null : <AddImagesButton />}
       />
       {empty ? (
