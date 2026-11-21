@@ -264,7 +264,7 @@ function StepButton({ side, onClick }: { side: "previous" | "next"; onClick: () 
         onClick={onClick}
         className={cn(
           "absolute top-1/2 z-10 -translate-y-1/2",
-          side === "previous" ? "-left-16 max-[900px]:left-3" : "-right-16 max-[900px]:right-3",
+          side === "previous" ? "-left-14 max-[900px]:left-3" : "-right-14 max-[900px]:right-3",
         )}
       >
         <Icon icon={side === "previous" ? ArrowLeft01Icon : ArrowRight01Icon} size={18} />
@@ -295,7 +295,7 @@ function RefDetails({
     <>
       <TopBar center={<Breadcrumb origin={steps.origin} fileName={details.fileName} />} />
       <main className="min-h-svh bg-canvas max-[900px]:pb-(--gutter)">
-        <div className="fixed inset-y-0 right-[calc(408px+var(--gutter))] left-0 flex items-center justify-center px-16 pt-[84px] pb-7 max-[900px]:relative max-[900px]:px-gutter">
+        <div className="fixed inset-y-0 right-[calc(408px+var(--gutter))] left-0 flex items-center justify-center px-[calc(var(--gutter)+56px)] pt-[84px] pb-7 max-[900px]:relative max-[900px]:px-gutter">
           <div className="relative flex max-w-full max-[900px]:static">
             <div className="image-edge flex max-w-full shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.25)]">
               <RetryingImg
@@ -765,7 +765,7 @@ function Tags({ refId, tags }: { refId: Id<"refs">; tags: ReadonlyArray<string> 
               placeholder="Add tag"
               value={name}
               onChange={(event) => setName(event.currentTarget.value)}
-              className="min-w-[7ch] bg-transparent text-[13px] font-[500] text-ink outline-none [field-sizing:content] placeholder:text-ink-2"
+              className="min-w-[7ch] bg-transparent text-[13px] font-[500] text-ink outline-none [field-sizing:content] placeholder:text-ink-2 [&::-webkit-calendar-picker-indicator]:hidden!"
             />
           </label>
           {name !== "" ? (
