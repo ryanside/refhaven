@@ -294,7 +294,7 @@ function RefDetails({
   return (
     <>
       <TopBar center={<Breadcrumb origin={steps.origin} fileName={details.fileName} />} />
-      <main className="min-h-svh bg-canvas">
+      <main className="min-h-svh bg-canvas max-[900px]:pb-(--gutter)">
         <div className="fixed inset-y-0 right-[calc(408px+var(--gutter))] left-0 flex items-center justify-center px-16 pt-[84px] pb-7 max-[900px]:relative max-[900px]:px-gutter">
           <div className="relative flex max-w-full max-[900px]:static">
             <div className="image-edge flex max-w-full shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.25)]">
@@ -316,7 +316,7 @@ function RefDetails({
         </div>
         <aside
           aria-label="Image details"
-          className="fixed top-[68px] right-(--gutter) z-20 flex max-h-[calc(100svh-68px-var(--gutter))] w-[408px] flex-col overflow-hidden rounded-[24px] bg-surface shadow-float max-[900px]:static max-[900px]:mx-(--gutter) max-[900px]:mb-(--gutter) max-[900px]:max-h-none max-[900px]:w-auto"
+          className="fixed top-[68px] right-(--gutter) z-20 flex max-h-[calc(100svh-68px-var(--gutter))] w-[408px] flex-col overflow-hidden rounded-[24px] bg-surface shadow-float max-[900px]:static max-[900px]:mx-(--gutter) max-[900px]:max-h-none max-[900px]:w-auto"
         >
           {trashed ? (
             <div className="flex items-center gap-3 border-b border-line bg-sunken py-3 pr-3 pl-5">
@@ -433,17 +433,16 @@ function Section({
  */
 function useSaveState(subject?: unknown) {
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<{ readonly message: string; readonly about: unknown } | null>(
-    null,
-  );
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!saved) return;
     const timer = setTimeout(() => setSaved(false), 2000);
     return () => clearTimeout(timer);
   }, [saved]);
+  useEffect(() => setError(null), [subject]);
   return {
     done: (failure: string | null) => {
-      setError(failure === null ? null : { message: failure, about: subject });
+      setError(failure);
       setSaved(failure === null);
     },
     /** Forgets the last save, as when an edit is cancelled. */
@@ -457,13 +456,12 @@ function useSaveState(subject?: unknown) {
         Saved
       </span>
     ) : null,
-    alert:
-      error && Object.is(error.about, subject) ? (
-        <p role="alert" className="mt-1.5 flex items-center gap-1.5 text-[12px] text-bad">
-          <Icon icon={Alert02Icon} size={14} />
-          {error.message}
-        </p>
-      ) : null,
+    alert: error ? (
+      <p role="alert" className="mt-1.5 flex items-center gap-1.5 text-[12px] text-bad">
+        <Icon icon={Alert02Icon} size={14} />
+        {error}
+      </p>
+    ) : null,
   };
 }
 
@@ -563,23 +561,37 @@ function NoteField({ refId, note }: { refId: Id<"refs">; note: string | null }) 
   const state = useSaveState();
   const dirty = value !== (note ?? "");
   const form = useRef<HTMLFormElement>(null);
-  // Mod+Enter and then leaving the field would otherwise send the same note twice.
+  const latest = useRef(value);
+  latest.current = value;
+  // One save at a time. A save asked for meanwhile runs after it, with the text as it is then.
   const saving = useRef(false);
-  const save = async () => {
-    if (saving.current) return;
-    const submitted = value;
+  const again = useRef(false);
+  const save = async (): Promise<void> => {
+    if (saving.current) {
+      again.current = true;
+      return;
+    }
+    const submitted = latest.current;
     const decoded = parseClearable(Note)(submitted);
     if (Option.isNone(decoded)) {
       state.done("A note is at most 10,000 characters.");
       return;
     }
     saving.current = true;
-    const failure = failureTag(await update({ refId, note: decoded.value }));
-    saving.current = false;
+    let failure;
+    try {
+      failure = failureTag(await update({ refId, note: decoded.value }));
+    } finally {
+      saving.current = false;
+    }
     state.done(failure);
     // The saved note is trimmed. Text typed while it was saving stays as typed.
     if (failure === null) {
       setValue((current) => (current === submitted ? (decoded.value ?? "") : current));
+    }
+    if (again.current) {
+      again.current = false;
+      if (latest.current !== submitted) await save();
     }
   };
 
@@ -672,7 +684,7 @@ function SourceField({ refId, sourceUrl }: { refId: Id<"refs">; sourceUrl: strin
             state.done(failure);
             if (failure !== null) return;
             setEditing(false);
-            if (decoded.value === null) setDraft("");
+            setDraft(decoded.value ?? "");
           }}
         >
           <input
@@ -686,6 +698,7 @@ function SourceField({ refId, sourceUrl }: { refId: Id<"refs">; sourceUrl: strin
               if (event.key !== "Escape" || !editing) return;
               event.preventDefault();
               setEditing(false);
+              setDraft(sourceUrl ?? "");
               state.clear();
             }}
             className={cn(fieldClass, "h-10")}

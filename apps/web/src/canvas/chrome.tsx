@@ -407,7 +407,7 @@ export function SelectionCluster({
       >
         {none ? "Nothing selected" : `${selected} selected`}
       </p>
-      <div role="toolbar" aria-label="Selection" inert={none} className="contents">
+      <div role="toolbar" aria-label="Selection" inert={none} className="flex items-center gap-0.5">
         <Rule />
         <Tool
           label="Bring to front"

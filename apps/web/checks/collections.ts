@@ -100,6 +100,15 @@ try {
   await cards(page).first().waitFor();
   const libraryRefId = (await cards(page).first().getAttribute("data-ref-id"))!;
 
+  // With no collection yet, the picker opens on its name field, and Escape there must still close it.
+  await card(page, libraryRefId).hover();
+  await card(page, libraryRefId).getByRole("button", { name: "Add to a collection" }).click();
+  const firstPicker = page.getByRole("dialog", { name: "Add to a collection" });
+  await firstPicker.getByLabel("Name a new collection").waitFor();
+  await page.keyboard.press("Escape");
+  await firstPicker.waitFor({ state: "hidden", timeout: 5000 });
+  assert(true, "with no collection yet, Escape closes the Add to a collection picker");
+
   const moodLink = await createOnPage(page, "  Mood  ");
   const moodId = (await moodLink.getAttribute("data-collection-id"))!;
   assert(

@@ -53,7 +53,11 @@ export function AddImagesButton({
 }) {
   const pick = usePickImages();
   return (
-    <Button size="lg" className={cn(fold && "compact:w-11 compact:px-0", className)} onClick={pick}>
+    <Button
+      size="lg"
+      className={cn(fold && "compact:w-11 compact:px-0!", className)}
+      onClick={pick}
+    >
       <Icon icon={PlusSignIcon} size={18} />
       <span className={cn(fold && "compact:sr-only")}>Add images</span>
     </Button>

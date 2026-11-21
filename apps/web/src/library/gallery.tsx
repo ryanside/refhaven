@@ -251,7 +251,7 @@ function PickerBody({ refId }: { refId: Id<"refs"> }) {
             label="Name a new collection"
             autoFocus={making}
             fieldClassName="bg-sunken"
-            cancel={() => setMaking(false)}
+            {...(collections.length > 0 ? { cancel: () => setMaking(false) } : {})}
             created={(collectionId) => {
               setMaking(false);
               void addRefs({ collectionId, refIds: [refId] });

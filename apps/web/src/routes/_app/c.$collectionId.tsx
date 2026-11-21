@@ -76,9 +76,12 @@ function CollectionTitle({
   // Enter and then leaving the field would otherwise send the name twice.
   const saving = useRef(false);
   const refocus = useRef(false);
+  // A rename that answers after its field was closed leaves no alert and does not close a newer one.
+  const session = useRef(0);
 
   /** Leaves the field. Focus that was in it goes back to Rename. */
   const close = () => {
+    session.current += 1;
     refocus.current = document.activeElement === field.current;
     setDraft(null);
     setError(null);
@@ -95,8 +98,14 @@ function CollectionTitle({
       return;
     }
     saving.current = true;
-    const renamed = await rename({ collectionId, name: trimmed });
-    saving.current = false;
+    const started = session.current;
+    let renamed;
+    try {
+      renamed = await rename({ collectionId, name: trimmed });
+    } finally {
+      saving.current = false;
+    }
+    if (session.current !== started) return;
     if (Result.isFailure(renamed)) {
       setError(nameRefusal(renamed.failure._tag));
       return;
@@ -154,7 +163,7 @@ function CollectionTitle({
                 close();
               }
             }}
-            className="h-8 max-w-[28vw] min-w-40 rounded-full bg-sunken px-3 font-[600] tracking-[-0.012em] outline-none [field-sizing:content] focus:shadow-[inset_0_0_0_1.5px_var(--ink)]"
+            className="h-8 max-w-[28vw] min-w-20 rounded-full bg-sunken px-3 font-[600] tracking-[-0.012em] outline-none [field-sizing:content] focus:shadow-[inset_0_0_0_1.5px_var(--ink)]"
           />
         )}
         <Rule />
