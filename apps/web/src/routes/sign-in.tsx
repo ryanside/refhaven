@@ -15,18 +15,49 @@ export const Route = createFileRoute("/sign-in")({
   component: SignIn,
 });
 
+type SignInResult = Awaited<ReturnType<ReturnType<typeof useSignInWithUsernamePasskey>["signIn"]>>;
+type PasskeyCode = Extract<SignInResult, { userError: unknown }>["userError"]["error"];
+
+const passkeyMessages: Record<PasskeyCode, string> = {
+  PROTOCOL_ERROR: "The sign-in could not finish. Try again.",
+  UNKNOWN_CREDENTIAL:
+    "This passkey is not registered here. Choose another, or enter a new username.",
+  CHALLENGE_EXPIRED: "The passkey request timed out. Try again.",
+  CEREMONY_ABORTED: "The passkey request was cancelled.",
+  PASSKEY_ALREADY_REGISTERED: "This passkey is already registered. Sign in with its username.",
+  WEBAUTHN_UNSUPPORTED: "This browser cannot use passkeys.",
+  OTHER_ERROR: "Something went wrong with the passkey. Try again.",
+  ALREADY_PENDING: "A passkey request is already open.",
+  USERNAME_TOO_SHORT: "This username is too short.",
+  USERNAME_TOO_LONG: "This username is too long.",
+  USERNAME_HAS_SURROUNDING_WHITESPACE: "Remove the spaces around the username.",
+  USERNAME_HAS_INVALID_CHARACTERS: "This username has characters that are not allowed.",
+  USERNAME_TAKEN: "This username is taken. Try another.",
+};
+
+/** Autofill starts on its own when the page opens, so a failure the person did not cause stays quiet. */
+const quietAutofill = new Set<PasskeyCode>([
+  "CEREMONY_ABORTED",
+  "OTHER_ERROR",
+  "WEBAUTHN_UNSUPPORTED",
+]);
+
 function SignIn() {
   const { isAuthenticated } = useConvexAuth();
   const { signIn, pending, autofill } = useSignInWithUsernamePasskey(api.session);
   const [username, setUsername] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<PasskeyCode | null>(null);
   const button = useRef<HTMLButtonElement>(null);
 
   if (isAuthenticated) {
     return <Navigate to="/library" />;
   }
 
-  const shownError = error ?? autofill.lastError?.error ?? null;
+  const autofillError =
+    autofill.lastError && !quietAutofill.has(autofill.lastError.error)
+      ? autofill.lastError.error
+      : null;
+  const shownError = error ?? autofillError;
 
   return (
     <div className="min-h-svh">
@@ -87,7 +118,7 @@ function SignIn() {
           {shownError ? (
             <p role="alert" className="mt-4 flex items-center gap-2 text-[14px] text-bad">
               <Icon icon={Alert02Icon} size={16} />
-              {shownError}
+              {passkeyMessages[shownError]}
             </p>
           ) : (
             <p className="mt-5 text-[13px] text-ink-2">

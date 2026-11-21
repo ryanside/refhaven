@@ -39,4 +39,4 @@ Preconditions:
 - The passkey lives in the virtual device of one browser instance. A second browser cannot sign in to the first one's username.
 - The submit button reads `Waiting for your passkey…` and is disabled while the ceremony runs.
 - Visiting `/sign-in` while signed in redirects to `/library`. Sign out first to drive sign-in again.
-- A failed ceremony shows its error code in an element with `role="alert"`.
+- A failed ceremony shows a sentence for its error code, not the code, in an element with `role="alert"`. Passkey autofill starts on its own when the page opens; when it fails without the visitor doing anything (cancelled, unsupported, or no passkey), the page shows no alert. `apps/web/checks/auth.ts` proves this in a browser with no passkey device.
