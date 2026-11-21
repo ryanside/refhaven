@@ -27,7 +27,7 @@ Each collection opens as its canvas: its images on a free canvas, with a layout,
 
 ## How to get to it (user POV)
 
-- Choose a collection's link in the sidebar. `/c/{collectionId}` with no `view` is its canvas.
+- Choose a collection's link on the library's shelf or in the `Collections` menu. `/c/{collectionId}` with no `view` is its canvas.
 - Choose `Canvas` on a collection's gallery, or open `/c/{collectionId}?view=canvas` directly.
 - Choose `Gallery` on the canvas to see the same collection as a gallery, at `/c/{collectionId}?view=gallery`.
 - `/library` is a gallery only, with no `Canvas` link. `/library?view=canvas` shows the gallery too, and keeps `view` in the URL.

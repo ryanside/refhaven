@@ -4,7 +4,7 @@ import { daysLeft, trashDays } from "@refhaven/backend/trash";
 import { Button } from "@refhaven/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
 import { Gallery, galleryPage } from "@/library/gallery";
-import { PageHeader } from "@/page-header";
+import { TopBar } from "@/shell/top-bar";
 
 export const Route = createFileRoute("/_app/trash")({
   component: Trash,
@@ -17,8 +17,9 @@ function Trash() {
 
   return (
     <>
-      <PageHeader title="Trash" />
-      <div className="flex flex-col gap-4 p-6">
+      <TopBar />
+      <main className="flex flex-col gap-4 px-gutter pt-[84px] pb-16">
+        <h1>Trash</h1>
         <p>Images in the trash are deleted for good {trashDays} days after they were deleted.</p>
         <Gallery
           items={items}
@@ -37,7 +38,7 @@ function Trash() {
             </>
           )}
         />
-      </div>
+      </main>
     </>
   );
 }

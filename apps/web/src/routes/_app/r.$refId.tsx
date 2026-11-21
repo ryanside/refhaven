@@ -13,7 +13,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { useId, useMemo, useState } from "react";
 import { useRefUrls } from "@/library/use-ref-urls";
-import { PageHeader } from "@/page-header";
+import { TopBar } from "@/shell/top-bar";
 
 export const Route = createFileRoute("/_app/r/$refId")({
   component: RefPage,
@@ -45,8 +45,8 @@ const failureTag = (result: Result.Result<unknown, { readonly _tag: string }>) =
 function NotFound() {
   return (
     <>
-      <PageHeader title="Image" />
-      <p className="p-6">Image not found.</p>
+      <TopBar />
+      <main className="px-gutter pt-[84px]">Image not found.</main>
     </>
   );
 }
@@ -56,8 +56,7 @@ function RefPage() {
   return QueryResult.match(useQuery(refs.public.ref.get, { refId }), {
     onLoading: () => (
       <>
-        <PageHeader title="Image" />
-        <p className="p-6">Loading…</p>
+        <TopBar />
       </>
     ),
     onFailure: () => <NotFound />,
@@ -76,8 +75,9 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
 
   return (
     <>
-      <PageHeader title={details.fileName} />
-      <div className="flex flex-col gap-4 p-6">
+      <TopBar />
+      <main className="flex flex-col gap-4 px-gutter pt-[84px] pb-16">
+        <h1>{details.fileName}</h1>
         <img
           // Every image load is a CORS request, as in the gallery.
           crossOrigin="anonymous"
@@ -187,7 +187,7 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
             ))}
           </ul>
         </section>
-      </div>
+      </main>
     </>
   );
 }

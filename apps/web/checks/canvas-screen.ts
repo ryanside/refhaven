@@ -131,8 +131,15 @@ export const waitForCanvas = async (page: Page, count: number) => {
   await settle(page);
 };
 
+// The save tray floats over the canvas and shows each saved file's own picture, which a search for
+// an image's color would find too. A screenshot that measures the canvas leaves it out.
+const canvasOnly = '[data-testid="save-tray"] { visibility: hidden !important; }';
+
 export const screenshot = async (page: Page, name?: string) => {
-  const buffer = await page.screenshot(evidence && name ? { path: `${evidence}/${name}` } : {});
+  const buffer = await page.screenshot({
+    style: canvasOnly,
+    ...(evidence && name ? { path: `${evidence}/${name}` } : {}),
+  });
   return PNG.sync.read(buffer);
 };
 

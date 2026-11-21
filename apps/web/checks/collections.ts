@@ -100,7 +100,7 @@ try {
   await page.waitForURL(`${appUrl}/c/${moodId}`);
   await page.getByRole("heading", { name: "Mood" }).waitFor();
   await page.getByTestId("canvas").waitFor();
-  const viewLinks = page.locator("header nav").getByRole("link");
+  const viewLinks = page.getByRole("navigation", { name: "View" }).getByRole("link");
   assert(
     (await viewLinks.allTextContents()).join() === "Canvas,Gallery" &&
       (await viewLinks.first().getAttribute("aria-current")) === "page" &&
@@ -392,17 +392,17 @@ try {
   await second.page.getByText("Collection not found.").waitFor();
   assert(true, "the first user's collection page shows the second user a not-found line");
 
-  // On a narrow window the sidebar is a sheet that only the title bar's button opens.
+  // On a narrow window the top bar folds the pages into a sheet that its Menu button opens.
   await second.page.setViewportSize({ width: 600, height: 800 });
   const library = second.page.getByRole("link", { name: "Library", exact: true });
   const hiddenAtFirst = !(await library.isVisible());
-  await second.page.getByRole("button", { name: "Toggle Sidebar" }).click();
+  await second.page.getByRole("button", { name: "Menu" }).click();
   await library.click();
   await second.page.waitForURL(`${appUrl}/library`);
   await library.waitFor({ state: "hidden" });
   assert(
     hiddenAtFirst,
-    "on a narrow window the not-found page still has the button that opens the sidebar, and following its Library link closes it",
+    "on a narrow window the not-found page still has the button that opens the menu, and following its Library link closes it",
   );
 
   // The theme. A page with nothing stored follows the system, which is light here.
@@ -420,7 +420,7 @@ try {
     );
   const choose = async (name: string) => {
     await themed.getByRole("button", { name: "Theme" }).click();
-    await themed.getByRole("menuitem", { name, exact: true }).click();
+    await themed.getByRole("menuitemradio", { name, exact: true }).click();
   };
   const atFirst = await theme();
   await choose("Dark");

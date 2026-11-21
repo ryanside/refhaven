@@ -1,10 +1,10 @@
 # Collections
 
-A collection is a named set of images in the library. In the sidebar, on every page, the user makes a collection and sees each one as a link. On `/library` the user adds an image to one from the image's card. `/c/{collectionId}` opens the collection as its canvas. Its gallery, at `/c/{collectionId}?view=gallery`, shows the collection's images in the same grid as the library, with a rename form and the same file picker. An image saved there goes into the library and into the collection. An image is in a collection exactly when it is on the collection's canvas, so removing it from either view takes it out of the collection. It stays in the library and in its other collections. Each user sees only their own collections.
+A collection is a named set of images in the library. On `/library` the shelf above the images shows each collection as a link with its pile and count, and ends in a `New collection` field. The top bar's `Collections` menu lists them on every page and makes one too. On `/library` the user adds an image to one from the image's card. `/c/{collectionId}` opens the collection as its canvas. Its gallery, at `/c/{collectionId}?view=gallery`, shows the collection's images in the same grid as the library, with a rename form and the same file picker. An image saved there goes into the library and into the collection. An image is in a collection exactly when it is on the collection's canvas, so removing it from either view takes it out of the collection. It stays in the library and in its other collections. Each user sees only their own collections.
 
 ## Sub-features
 
-- `collections-create` makes a collection from the `New collection` form in the sidebar and lists it there.
+- `collections-create` makes a collection from the `New collection` field on the library's shelf and lists it there.
 - `collections-open` opens a collection's link to `/c/{collectionId}`, which shows its name and its canvas, and `Gallery` shows its images as cards.
 - `collections-upload` saves a picked file on a collection's page into the library and into the collection.
 - `collections-add` adds a library image to a collection from the card's `Add to collection` list.
@@ -16,8 +16,8 @@ A collection is a named set of images in the library. In the sidebar, on every p
 
 ## How to get to it (user POV)
 
-- Use the `Collections` section of the sidebar, on any app page. Sign-in lands on `/library`.
-- Choose a collection's link in the sidebar to open `/c/{collectionId}`.
+- Use the shelf on `/library`, or the `Collections` menu in the top bar on any app page. Sign-in lands on `/library`.
+- Choose a collection's link on the shelf or in the `Collections` menu to open `/c/{collectionId}`.
 - Choose `Canvas` or `Gallery` on a collection's page to switch its view. The canvas comes first and is the default.
 - Choose a card's `Add to collection` list on `/library`. It shows only when the user has a collection.
 

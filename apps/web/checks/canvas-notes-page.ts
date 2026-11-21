@@ -235,7 +235,7 @@ try {
   // On the dark page the canvas is dark, and black text would not show there.
   const chooseTheme = async (name: string) => {
     await page.getByRole("button", { name: "Theme" }).click();
-    await page.getByRole("menuitem", { name, exact: true }).click();
+    await page.getByRole("menuitemradio", { name, exact: true }).click();
   };
   await chooseTheme("Dark");
   const lightOnDark = await until(

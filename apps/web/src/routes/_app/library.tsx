@@ -6,8 +6,9 @@ import { NativeSelect, NativeSelectOption } from "@refhaven/ui/components/native
 import { createFileRoute } from "@tanstack/react-router";
 import { FilteredGallery, GalleryFilters, isFiltered } from "@/library/filters";
 import { type CardAction, Gallery, galleryPage } from "@/library/gallery";
-import { SaveImages } from "@/library/save-images";
-import { PageHeader } from "@/page-header";
+import { AddImagesButton, SaveScope } from "@/library/save-images";
+import { Shelf } from "@/library/shelf";
+import { TopBar } from "@/shell/top-bar";
 import { validateGallerySearch } from "@/view";
 
 export const Route = createFileRoute("/_app/library")({
@@ -17,10 +18,10 @@ export const Route = createFileRoute("/_app/library")({
 
 function Library() {
   return (
-    <>
-      <PageHeader title="Library" />
+    <SaveScope target={{ name: "Library" }}>
+      <TopBar action={<AddImagesButton />} />
       <LibraryGallery />
-    </>
+    </SaveScope>
   );
 }
 
@@ -67,15 +68,15 @@ function LibraryGallery() {
   );
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <SaveImages />
+    <main className="flex flex-col gap-4 px-gutter pt-[84px] pb-16">
+      <Shelf />
       <GalleryFilters {...filters} />
       {isFiltered(filters) ? (
         <FilteredGallery filters={filters} action={action} />
       ) : (
         <WholeLibrary action={action} />
       )}
-    </div>
+    </main>
   );
 }
 

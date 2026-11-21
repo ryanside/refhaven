@@ -47,7 +47,7 @@ import {
 import { useHotkeys } from "@tanstack/react-hotkeys";
 import * as Result from "effect/Result";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { type PlaceAt, SaveImages } from "@/library/save-images";
+import { AddImagesButton, type PlaceAt, SaveScope } from "@/library/save-images";
 import { type Action, keymap } from "./keymap";
 import { boxFor, createNoteTextures, noteFont, noteInk, noteTextureKey } from "./notes";
 import { type Need, type Sign, createTextureLoader, textureKey } from "./textures";
@@ -106,7 +106,13 @@ const idle = (store: SceneStore) =>
   });
 
 /** A collection's canvas. */
-export function CanvasView({ collectionId }: { collectionId: Id<"collections"> }) {
+export function CanvasView({
+  collectionId,
+  name,
+}: {
+  collectionId: Id<"collections">;
+  name: string;
+}) {
   const [store] = useState(createSceneStore);
   const [history] = useState(createHistory);
   const host = useRef<HTMLDivElement>(null);
@@ -458,26 +464,32 @@ export function CanvasView({ collectionId }: { collectionId: Id<"collections"> }
   }, [store, urls]);
 
   return (
-    <div className="flex min-h-0 flex-1">
-      {/* The content is laid over the column, so its height never adds to the page's. It scrolls. */}
-      <div data-testid="canvas-panel" className="relative w-80 shrink-0 border-r">
-        <div className="absolute inset-0 flex flex-col gap-2 overflow-y-auto p-3">
-          <SaveImages collectionId={collectionId} placeAt={placeAt} />
-          <EditButtons store={store} history={history} actions={actions} />
-          <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
-          <GroupButtons store={store} actions={actions} />
-          <Readout store={store} />
-          {problem ? <p role="alert">{problem}</p> : null}
+    <SaveScope target={{ collectionId, name }} placeAt={placeAt} veil="canvas">
+      <main className="fixed inset-0 flex">
+        {/* The content is laid over the column, so its height never adds to the page's. It scrolls. */}
+        <div data-testid="canvas-panel" className="relative w-80 shrink-0 border-r pt-[68px]">
+          <div className="absolute inset-0 top-[68px] flex flex-col gap-2 overflow-y-auto p-3">
+            <AddImagesButton size="md" className="self-start" />
+            <EditButtons store={store} history={history} actions={actions} />
+            <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
+            <GroupButtons store={store} actions={actions} />
+            <Readout store={store} />
+            {problem ? <p role="alert">{problem}</p> : null}
+          </div>
         </div>
-      </div>
-      <div className="relative flex-1 overflow-hidden">
-        <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
-        <div ref={outlines} className="pointer-events-none absolute inset-0" />
-        {draft ? (
-          <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} />
-        ) : null}
-      </div>
-    </div>
+        <div className="relative flex-1 overflow-hidden">
+          <div
+            ref={host}
+            data-testid="canvas"
+            className="absolute inset-0 touch-none select-none"
+          />
+          <div ref={outlines} className="pointer-events-none absolute inset-0" />
+          {draft ? (
+            <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} />
+          ) : null}
+        </div>
+      </main>
+    </SaveScope>
   );
 }
 

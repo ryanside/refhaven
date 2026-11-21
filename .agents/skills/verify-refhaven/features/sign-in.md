@@ -27,9 +27,9 @@ Preconditions:
 - **Guard from the landing page.** Run `await page.goto("http://localhost:3000/")` and `await page.getByRole("link", { name: "Open your library" }).click()`. The URL becomes `/sign-in`.
 - **Sign up.** Fill the username and submit. Run `await page.getByLabel("Username").fill(username)` and `await page.getByRole("button", { name: "Continue with a passkey" }).click()`, then `await page.waitForURL("http://localhost:3000/library")`. `page.getByTestId("username")` shows the username and `page.getByTestId("user-id")` shows an ID.
 - **Session.** Run `await page.reload()`. `page.getByTestId("user-id")` shows the same ID.
-- **Sign out.** Run `await page.getByRole("button", { name: "Sign out" }).click()` and `await page.waitForURL("http://localhost:3000/sign-in")`.
+- **Sign out.** Run `await page.getByTestId("username").click()` to open the account menu, then `await page.getByRole("menuitem", { name: "Sign out" }).click()` and `await page.waitForURL("http://localhost:3000/sign-in")`.
 - **Sign in again.** Repeat the sign-up step with the same username in the same browser. `page.getByTestId("user-id")` shows the same ID as before.
-- **Proof.** Screenshot `/library` after sign-up and after the second sign-in. Confirm the account with `verify.sh rows users 5`, where the newest row's `_id` equals the text of `page.getByTestId("user-id")`. The sidebar shows the username. The ID and the greeting are in the page for the checks, in `hidden` elements.
+- **Proof.** Screenshot `/library` after sign-up and after the second sign-in. Confirm the account with `verify.sh rows users 5`, where the newest row's `_id` equals the text of `page.getByTestId("user-id")`. The account button at the top right shows the username, and its menu holds `Sign out`. The ID and the greeting are in the page for the checks, in `hidden` elements.
 
 `apps/web/checks/auth.ts` runs this journey. `signInWithPasskey(page, username)` in `apps/web/checks/browser.ts` does the sign-up step.
 

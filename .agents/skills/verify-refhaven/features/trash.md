@@ -15,9 +15,9 @@ Each card in the library's grid has a `Delete` button. A deleted image goes to t
 
 ## How to get to it (user POV)
 
-- Choose the `Trash` link in the sidebar.
+- Choose the `Trash` link in the top bar. It shows how many images the trash holds.
 - Open `/trash` directly.
-- Choose the `Library` link in the sidebar to go back.
+- Choose the `Library` link in the top bar to go back.
 
 The `Delete` button exists only on `/library`. A collection's gallery and canvas keep `Remove from collection`, and the canvas has no delete key.
 

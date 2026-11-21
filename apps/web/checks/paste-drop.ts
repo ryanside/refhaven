@@ -49,7 +49,7 @@ try {
   assert(
     (await outcomeOf(page, "red.png")) === "saved" &&
       (await outcomeOf(page, "blue.png")) === "saved" &&
-      (await outcomes(page).allTextContents()).join() === "red.png: saved.,blue.png: saved." &&
+      (await outcomes(page).allTextContents()).join() === "red.png: Saved,blue.png: Saved" &&
       (await libraryNames()).join() === "blue.png,red.png",
     `two dropped images are saved into the library and reported, in the order dropped: ${await libraryNames()}`,
   );

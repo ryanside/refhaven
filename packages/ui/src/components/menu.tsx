@@ -65,9 +65,18 @@ function MenuSubmenuTrigger({ className, ...props }: MenuPrimitive.SubmenuTrigge
 }
 
 /** A choice of one. The chosen item carries a tick at its end. */
-function MenuRadioItem({ className, children, ...props }: MenuPrimitive.RadioItem.Props) {
+function MenuRadioItem({
+  className,
+  children,
+  closeOnClick = true,
+  ...props
+}: MenuPrimitive.RadioItem.Props) {
   return (
-    <MenuPrimitive.RadioItem className={cn(itemClass, "pr-2", className)} {...props}>
+    <MenuPrimitive.RadioItem
+      className={cn(itemClass, "pr-2", className)}
+      closeOnClick={closeOnClick}
+      {...props}
+    >
       {children}
       <MenuPrimitive.RadioItemIndicator className="ml-auto flex">
         <Icon icon={Tick02Icon} size={16} className="text-ink!" />

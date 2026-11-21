@@ -34,7 +34,8 @@ try {
     "the session survives a page reload",
   );
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByTestId("username").click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await page.waitForURL(`${appUrl}/sign-in`);
   assert(true, "sign-out returns to /sign-in");
 

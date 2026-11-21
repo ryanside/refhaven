@@ -10,7 +10,7 @@ Each image has its own page at `/r/{refId}`. It shows the image large as its 204
 - `ref-note` saves a note, and an empty note clears it.
 - `ref-source` saves a source and shows it as a link. Only an http or https URL is accepted, and an empty source clears it.
 - `ref-tags` adds and removes tags. "Mood", " mood ", and "MOOD" are one tag, `mood`. The field suggests the user's tags.
-- `ref-collections` lists the collections the image is in, each a link to `/c/{collectionId}`. The sidebar links every collection too, so find these inside `page.getByRole("main")`.
+- `ref-collections` lists the collections the image is in, each a link to `/c/{collectionId}`. The library's shelf and the `Collections` menu link collections too, so find these inside `page.getByRole("main")`.
 - `ref-trash` deletes the image with `Delete` and brings it back with `Restore`. Its note, source, and tags stay.
 - `ref-private` shows another user's image, or a missing one, as `Image not found.`
 
