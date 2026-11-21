@@ -104,16 +104,16 @@ function MainNav() {
   );
 }
 
-/** How many images are in the trash, up to the first page, once it is known. */
+/** How many images are in the trash, up to the first page, once it is known and not zero. */
 function useTrashCount() {
   const items = usePaginatedQuery(refs.public.library.trash, {}, { initialNumItems: 60 });
-  if (PaginatedQueryResult.isLoadingFirstPage(items)) return null;
+  if (PaginatedQueryResult.isLoadingFirstPage(items) || items.results.length === 0) return null;
   const more =
     PaginatedQueryResult.isCanLoadMore(items) || PaginatedQueryResult.isLoadingMore(items);
   return `${items.results.length}${more ? "+" : ""}`;
 }
 
-/** Trash and its count, on every page, an empty trash's 0 included. */
+/** Trash and its count, on every page. An empty trash shows no count. */
 function TrashLink() {
   const count = useTrashCount();
   const described = useId();

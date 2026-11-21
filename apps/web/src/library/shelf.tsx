@@ -26,7 +26,7 @@ export function Shelf() {
     <section aria-labelledby="shelf-heading">
       <h2
         id="shelf-heading"
-        className="flex items-baseline gap-2 text-[14px] font-[580] tracking-[-0.012em]"
+        className="flex items-baseline gap-2 text-[18px] leading-6 font-[600] tracking-[-0.02em]"
       >
         Collections
         <span className="font-[450] text-ink-3 num">{collections.length || null}</span>
@@ -86,7 +86,7 @@ function NewShelfItem() {
       )}
     >
       <span aria-hidden className="grid h-[76px] w-[108px] shrink-0 place-items-center">
-        <span className="grid h-[68px] w-[52px] place-items-center rounded-[3px] border-[1.5px] border-dashed border-ink-4 text-ink-3">
+        <span className="grid h-[68px] w-24 place-items-center rounded-[6px] border-[1.5px] border-dashed border-ink-4 text-ink-3">
           <Icon icon={PlusSignIcon} size={16} />
         </span>
       </span>

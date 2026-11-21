@@ -37,7 +37,7 @@ function Trash() {
     <>
       <TopBar />
       <main className="px-gutter pt-[92px] pb-28">
-        <h1 className="flex items-baseline gap-2.5 text-[28px] leading-[34px] font-[620] tracking-[-0.03em]">
+        <h1 className="flex items-baseline gap-2 text-[18px] leading-6 font-[600] tracking-[-0.02em]">
           Trash
           {count > 0 ? (
             <span className="font-[450] text-ink-3 num">

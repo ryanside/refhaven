@@ -104,7 +104,7 @@ function ImagesHeading({ filters, count }: { filters: Filters; count: string | n
     <div className="flex min-h-7 items-center gap-3">
       <h2
         id="images-heading"
-        className="flex items-baseline gap-2 text-[14px] font-[580] tracking-[-0.012em]"
+        className="flex items-baseline gap-2 text-[18px] leading-6 font-[600] tracking-[-0.02em]"
       >
         All images
         {isFiltered(filters) ? null : <span className="font-[450] text-ink-3 num">{count}</span>}

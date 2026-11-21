@@ -237,7 +237,7 @@ function Breadcrumb({ origin, fileName }: { origin: Origin; fileName: string }) 
   );
 }
 
-/** A round button on an edge of the image's stage that steps to a neighbor. */
+/** A round button 24 px outside an edge of the image that steps to a neighbor. */
 function StepButton({ side, onClick }: { side: "previous" | "next"; onClick: () => void }) {
   const label = side === "previous" ? "Previous image" : "Next image";
   return (
@@ -248,8 +248,8 @@ function StepButton({ side, onClick }: { side: "previous" | "next"; onClick: () 
         aria-label={label}
         onClick={onClick}
         className={cn(
-          "absolute top-[calc(50%+28px)] z-10 -translate-y-1/2 shadow-float",
-          side === "previous" ? "left-4" : "right-4",
+          "absolute top-1/2 z-10 -translate-y-1/2 shadow-float",
+          side === "previous" ? "-left-16 max-[900px]:left-3" : "-right-16 max-[900px]:right-3",
         )}
       >
         <Icon icon={side === "previous" ? ArrowLeft01Icon : ArrowRight01Icon} size={18} />
@@ -281,21 +281,23 @@ function RefDetails({
       <TopBar center={<Breadcrumb origin={steps.origin} fileName={details.fileName} />} />
       <main className="min-h-svh bg-canvas">
         <div className="fixed inset-y-0 right-[calc(408px+var(--gutter))] left-0 flex items-center justify-center px-16 pt-[84px] pb-7 max-[900px]:relative max-[900px]:px-gutter">
-          <div className="image-edge flex max-w-full shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.25)]">
-            <RetryingImg
-              // Every image load is a CORS request, as in the gallery.
-              crossOrigin="anonymous"
-              src={display}
-              alt={details.fileName}
-              width={details.width}
-              height={details.height}
-              className="max-h-[calc(100svh-112px)] w-auto max-w-full object-contain"
-            />
+          <div className="relative flex max-w-full">
+            <div className="image-edge flex max-w-full shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.25)]">
+              <RetryingImg
+                // Every image load is a CORS request, as in the gallery.
+                crossOrigin="anonymous"
+                src={display}
+                alt={details.fileName}
+                width={details.width}
+                height={details.height}
+                className="max-h-[calc(100svh-112px)] w-auto max-w-full object-contain"
+              />
+            </div>
+            {steps.previous ? (
+              <StepButton side="previous" onClick={() => step(steps.previous)} />
+            ) : null}
+            {steps.next ? <StepButton side="next" onClick={() => step(steps.next)} /> : null}
           </div>
-          {steps.previous ? (
-            <StepButton side="previous" onClick={() => step(steps.previous)} />
-          ) : null}
-          {steps.next ? <StepButton side="next" onClick={() => step(steps.next)} /> : null}
         </div>
         <aside
           aria-label="Image details"

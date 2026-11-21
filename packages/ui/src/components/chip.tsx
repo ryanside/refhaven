@@ -6,7 +6,8 @@ const chipVariants = cva(
   {
     variants: {
       tone: {
-        quiet: "bg-sunken text-ink hover:bg-hover",
+        quiet:
+          "bg-sunken text-ink hover:bg-hover dark:bg-hover dark:shadow-[inset_0_0_0_1px_var(--line)] dark:hover:shadow-[inset_0_0_0_1px_var(--line-2)]",
         active: "bg-ink text-page",
         outline: "text-ink-2 shadow-[inset_0_0_0_1px_var(--line-2)] hover:bg-sunken hover:text-ink",
       },
