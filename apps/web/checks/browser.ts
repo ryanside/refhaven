@@ -4,6 +4,19 @@ import { chromium, type Page } from "playwright";
 
 export const appUrl = process.env.APP_URL ?? "http://localhost:3000";
 
+// A run signs up test users and saves images that are never deleted, and on Convex Cloud every
+// read and write counts toward the plan. So the checks run on a local backend unless asked not to.
+const backend = process.env.CONVEX_URL;
+if (
+  backend &&
+  !["127.0.0.1", "localhost"].includes(new URL(backend).hostname) &&
+  process.env.REFHAVEN_CLOUD_CHECKS !== "1"
+) {
+  throw new Error(
+    `CONVEX_URL is ${backend}, a cloud deployment. Run the checks on a local backend (see the README), or set REFHAVEN_CLOUD_CHECKS=1 to run them there anyway.`,
+  );
+}
+
 export function convexUrl(): string {
   const url = process.env.CONVEX_URL;
   if (!url) {
@@ -11,6 +24,9 @@ export function convexUrl(): string {
   }
   return url;
 }
+
+/** Picks out the backend's WebSocket, for a check that holds its messages back. */
+export const backendSocket = (url: URL) => url.host === new URL(convexUrl()).host;
 
 export function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -53,6 +69,15 @@ export function consoleWatch() {
 export async function openPageWithPasskeyDevice(args: string[] = []) {
   const browser = await chromium.launch({ args });
   const context = await browser.newContext();
+  // The virtual device answers passkey autofill the moment a page asks, which no person's browser
+  // does, so on a fast backend autofill signs in before the button is pressed. With autofill off,
+  // every sign-in goes through the button.
+  await context.addInitScript(() => {
+    if (typeof PublicKeyCredential === "undefined") return;
+    Object.defineProperty(PublicKeyCredential, "isConditionalMediationAvailable", {
+      value: async () => false,
+    });
+  });
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");

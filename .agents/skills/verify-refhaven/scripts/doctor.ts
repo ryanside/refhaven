@@ -25,8 +25,10 @@ const deployment =
       .catch(() => ""),
   )?.[1] ?? "";
 report(
-  deployment.startsWith("dev:"),
-  `the backend targets a dev deployment (${deployment || "no .env.local"})`,
+  deployment.startsWith("local:") ? true : deployment.startsWith("dev:") ? "warn" : false,
+  deployment.startsWith("dev:")
+    ? `the backend targets ${deployment}, a cloud dev deployment, where every run counts toward the Convex plan`
+    : `the backend targets a local deployment (${deployment || "no .env.local"})`,
 );
 
 const listener = (await run(["lsof", "-nP", "-iTCP:3000", "-sTCP:LISTEN", "-t"])).stdout.split(

@@ -6,7 +6,7 @@ This repository is early. You can sign in with a passkey, save images into your 
 
 ## Run it locally
 
-You need [Bun](https://bun.sh) 1.4 and a [Convex](https://www.convex.dev) account.
+You need [Bun](https://bun.sh) 1.4, a [Convex](https://www.convex.dev) account, and an R2 bucket set up as [docs/decisions.md](docs/decisions.md#r2) says.
 
 1. Install the dependencies.
 
@@ -14,19 +14,27 @@ You need [Bun](https://bun.sh) 1.4 and a [Convex](https://www.convex.dev) accoun
    bun install
    ```
 
-2. If `packages/backend/.env.local` does not exist yet, create a Convex dev deployment. The command writes that file.
+2. Give the checkout its own local Convex backend. It runs on your machine, keeps its data in `packages/backend/.convex`, and counts nothing toward your Convex plan. The command writes `packages/backend/.env.local`, or switches an existing one to the local backend. The team and project are in your Convex dashboard's URL.
 
    ```sh
-   cd packages/backend && bunx convex dev --once
+   cd packages/backend && bunx convex dev --configure existing --team <team> --project <project> --dev-deployment local --once
    ```
 
-3. Start everything from the repository root.
+3. Once per project, set the four R2 variables as the project's defaults for dev deployments, from a file in `.env` format. Every new local backend starts with them. A backend made before then takes them with `bunx convex env set --from-file <file>` while `bun dev` runs.
+
+   ```sh
+   cd packages/backend && bunx convex env default set --type dev --from-file <file>
+   ```
+
+4. Start everything from the repository root.
 
    ```sh
    bun dev
    ```
 
-`bun dev` starts three processes: the web app on http://localhost:3000, `convex dev`, and `confect dev`. All three run under Bun, and a process list shows them as `node`. The web app reads the Convex URL from `packages/backend/.env.local`.
+`bun dev` starts three processes: the web app on http://localhost:3000, `convex dev`, and `confect dev`. All three run under Bun, and a process list shows them as `node`. `convex dev` also runs the local backend. The web app reads the Convex URL from `packages/backend/.env.local`. Each checkout has its own local backend, and a second one takes the next free ports, but only one web app runs at a time, because passkeys and the bucket's CORS policy are bound to http://localhost:3000.
+
+To work against the cloud dev deployment instead, run step 2 with `--dev-deployment cloud`.
 
 ## Check your work
 
@@ -37,7 +45,7 @@ You need [Bun](https://bun.sh) 1.4 and a [Convex](https://www.convex.dev) accoun
 | `bun run format` | Formats the code with Oxfmt. |
 | `bun run test` | Runs the unit tests. |
 
-The browser checks need `bun dev` running. Run them from `apps/web`. Most of them sign up a new test user in the dev deployment through a virtual passkey device in headless Chromium.
+The browser checks need `bun dev` running. Run them from `apps/web`. Most of them sign up a new test user in the local backend through a virtual passkey device in headless Chromium. They refuse a cloud deployment, because each run leaves its test users and images behind, and on Convex Cloud every read and write counts toward the plan. Set `REFHAVEN_CLOUD_CHECKS=1` to run them there anyway.
 
 | Command | What it checks |
 |---|---|

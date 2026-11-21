@@ -45,7 +45,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 
 - Open a pull request for anything beyond a simple, high-confidence change. Push a simple, high-confidence change straight to `main`.
 - Whoever opens a pull request watches it and merges it once CI is green. Merge a stack bottom-up with merge commits, so the branches above need no rebase.
-- CI runs the typecheck, lint, the format check, and the unit tests on `main` and on every pull request. The browser checks need the dev deployment and R2, so they run locally, through the `verify-refhaven` skill.
+- CI runs the typecheck, lint, the format check, and the unit tests on `main` and on every pull request. The browser checks need a Convex backend and R2, so they run locally, on the checkout's local backend (I3), through the `verify-refhaven` skill.
 
 ### R2
 
@@ -96,7 +96,7 @@ Each rule below comes from a bug or a wrong assumption already hit in this repo.
 | C18 | Export is a zip with `manifest.json` and the original files. | Later |
 | I7 | One helper resolves the caller's workspace, and every function uses it. It is the `RequireWorkspace` middleware. Scopes join it with API keys. | Built, lock |
 | I5 | The CLI and agents call a Confect HTTP API inside Convex, which runs the same functions as the browser. | Planned |
-| I6 | Background jobs use Convex's scheduler and cron. `search.backfill` schedules its next page with the scheduler. `confect/crons.ts` declares the two daily jobs of C15: `trash.purge` at 09:00 UTC and `trash.sweep` at 09:30 UTC. Neither passes an argument, which means the real clock and every workspace. Convex runs one run of a job at a time. `convex dev` pushes the jobs to the dev deployment like any function, so they run there for real. | Built |
+| I6 | Background jobs use Convex's scheduler and cron. `search.backfill` schedules its next page with the scheduler. `confect/crons.ts` declares the two daily jobs of C15: `trash.purge` at 09:00 UTC and `trash.sweep` at 09:30 UTC. Neither passes an argument, which means the real clock and every workspace. Convex runs one run of a job at a time. `convex dev` pushes the jobs to the deployment like any function, so they run there for real, in a local backend too. | Built |
 
 ## Storage and images
 
@@ -205,10 +205,11 @@ Known gaps in the upload path:
 |---|---|---|
 | K3 | The license is AGPL-3.0. | Built |
 | K6 | Lint with Oxlint and format with Oxfmt. A lefthook pre-commit runs both on staged files. | Built |
-| K7 | Unit tests use Vitest and cover pure logic. The browser checks in `apps/web/checks` cover the function rules against the dev deployment. `convex-test` is not set up. | Built |
+| K7 | Unit tests use Vitest and cover pure logic. The browser checks in `apps/web/checks` cover the function rules against a local backend (I3). `convex-test` is not set up. | Built |
 | K5 | The Effect language service for TypeScript 7 is the `@effect/tsgo` package. The backend's and the web app's `typecheck` run `effect-tsgo tsc`, its build of the same compiler, so `bun run typecheck` and CI fail on an Effect that is neither yielded nor assigned and on a `yield` without `*` in an Effect generator. Plain `tsc` accepts both, and the first is a call that silently does nothing. The plugin entry in `tsconfig.base.json` turns it on and keeps its suggestions out of the output. Nothing in `node_modules` is patched, so `convex dev` and an editor still run the stock compiler and show none of this. Each release supports a fixed list of TypeScript versions: before a TypeScript upgrade, move to a release that lists the new one. | Built |
-| K8 | `bun dev` runs the web app's Vite server, `convex dev`, and `confect dev` under Bun, through `bun --bun` in the three `dev` scripts. Without the flag Bun hands each to Node, because its launcher asks for Node. Bun runs them behind a stand-in named `node`, so a process list shows that name. Convex functions never run on Bun: they run in Convex's own runtime, in Convex's cloud. Node is still used by `vite build`, and by the `bunx convex` calls in the checks and in the verify script. The built web server's runtime comes with its host (I2), and is not chosen here. | Built |
+| K8 | `bun dev` runs the web app's Vite server, `convex dev`, and `confect dev` under Bun, through `bun --bun` in the three `dev` scripts. Without the flag Bun hands each to Node, because its launcher asks for Node. Bun runs them behind a stand-in named `node`, so a process list shows that name. Convex functions never run on Bun: they run in Convex's own runtime, in the local backend or in Convex's cloud. Node is still used by `vite build`, and by the `bunx convex` calls in the checks and in the verify script. The built web server's runtime comes with its host (I2), and is not chosen here. | Built |
 | I1 | The backend runs on Convex Cloud. Only a dev deployment exists. | Built |
+| I3 | Development and the browser checks run on a local Convex backend, one per checkout, made with `convex dev --dev-deployment local`. It keeps its data in `packages/backend/.convex` and counts nothing toward the Convex plan. The checks and the `verify-refhaven` skill refuse a cloud deployment unless `REFHAVEN_CLOUD_CHECKS=1`, because each run leaves test users and images behind, and on Convex Cloud every read and write counts toward the plan. The cloud dev deployment stays for a run on Convex Cloud itself. | Built |
 | I2 | The web app is hosted on Vercel and deployed by its Git deploys. The backend is deployed with `convex deploy`. | Planned |
 
 ## Room kept for later

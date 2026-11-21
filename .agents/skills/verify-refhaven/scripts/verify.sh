@@ -25,7 +25,35 @@ run_dir() {
   echo "$CACHE/$1"
 }
 
-# Another checkout whose `convex dev` pushes to the same dev deployment would overwrite this one's functions.
+# The command that gives this checkout its own local backend, with the team and project named in
+# the main checkout's .env.local when it names them.
+local_backend_command() {
+  local main slugs
+  main="$(git worktree list --porcelain | sed -n '1s/^worktree //p')/packages/backend/.env.local"
+  slugs=$(sed -n 's/^.*# team: \([^,]*\), project: \([^ ]*\).*$/--team \1 --project \2/p' "$ENV_FILE" "$main" 2>/dev/null | head -1)
+  echo "cd packages/backend && bunx convex dev --configure existing ${slugs:---team <team> --project <project>} --dev-deployment local --once"
+}
+
+# Every run writes test users and images that stay. On Convex Cloud each read and write counts
+# toward the plan, so the skill drives a local backend unless REFHAVEN_CLOUD_CHECKS=1.
+require_local() {
+  [ -f "$ENV_FILE" ] || die "packages/backend/.env.local is missing. Give this checkout a local backend:
+  $(local_backend_command)"
+  local deployment
+  deployment=$(deployment_of "$ENV_FILE")
+  case "$deployment" in
+  local:*) ;;
+  dev:*)
+    [ "${REFHAVEN_CLOUD_CHECKS:-}" = 1 ] || die "CONVEX_DEPLOYMENT is $deployment, a cloud dev deployment. Give this checkout a local backend:
+  $(local_backend_command)
+Or set REFHAVEN_CLOUD_CHECKS=1 to drive the cloud deployment anyway."
+    ;;
+  *) die "CONVEX_DEPLOYMENT is not a dev deployment. This skill never drives production." ;;
+  esac
+}
+
+# Another checkout running `convex dev` for the same deployment would push its own functions to a
+# cloud one, or hold the ports of a local one.
 other_writer() {
   local pid cwd
   for pid in $(pgrep -f "bin/convex dev" 2>/dev/null || true); do
@@ -40,16 +68,10 @@ other_writer() {
 }
 
 cmd_up() {
-  [ -f "$ENV_FILE" ] || die "packages/backend/.env.local is missing. In a git worktree, copy it from the main checkout:
-  cp \"\$(git worktree list --porcelain | sed -n '1s/^worktree //p')/packages/backend/.env.local\" packages/backend/.env.local
-On a machine with no Convex project yet, run: cd packages/backend && bunx convex dev --once"
-  case "$(deployment_of "$ENV_FILE")" in
-  dev:*) ;;
-  *) die "CONVEX_DEPLOYMENT is not a dev deployment. This skill never drives production." ;;
-  esac
+  require_local
   local writer
   if writer=$(other_writer); then
-    die "the checkout at ${writer%/packages/backend} is running 'convex dev' against the same dev deployment. Two checkouts cannot push to it at once. Ask the operator which one to stop."
+    die "the checkout at ${writer%/packages/backend} is running 'convex dev' for the same deployment. Two checkouts cannot run it at once. Ask the operator which one to stop."
   fi
   [ -d "$ROOT/node_modules" ] || (cd "$ROOT" && bun install)
 
@@ -127,11 +149,13 @@ cmd_drive() {
 
 cmd_rows() {
   [ -n "${1:-}" ] || die "usage: verify.sh rows <table> [limit]"
+  require_local
   (cd "$BACKEND" && bunx convex data "$1" --limit "${2:-50}" --format jsonLines)
 }
 
 # `convex logs` streams until stopped, so this reads the recent history and stops its own process.
 cmd_logs() {
+  require_local
   (cd "$BACKEND" && exec bunx convex logs --history "${1:-40}" --success) &
   local pid=$!
   sleep 8

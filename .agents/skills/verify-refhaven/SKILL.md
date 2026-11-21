@@ -1,13 +1,15 @@
 ---
 name: verify-refhaven
-description: Launch refhaven's web app (TanStack Start on http://localhost:3000 against the Convex dev deployment) and drive it in headless Chromium with a virtual passkey device to prove a change works. Use when asked to verify, demo, screenshot, or reproduce refhaven behavior in the real app, or when a change to apps/web or packages/backend needs runtime evidence.
+description: Launch refhaven's web app (TanStack Start on http://localhost:3000 against the checkout's local Convex backend) and drive it in headless Chromium with a virtual passkey device to prove a change works. Use when asked to verify, demo, screenshot, or reproduce refhaven behavior in the real app, or when a change to apps/web or packages/backend needs runtime evidence.
 ---
 
 # Verify refhaven
 
 Run every command from the root of the checkout you are verifying. `H=.agents/skills/verify-refhaven/scripts/verify.sh`.
 
-refhaven runs as **one instance per machine**. A passkey is bound to `http://localhost:3000`, and the R2 bucket's CORS policy lists that origin only, so the web app cannot move to another port. The backend is one shared Convex dev deployment, and `convex dev` pushes the checkout's functions to it. Runs stay apart by user: each drive signs up a new username and sees only its own workspace.
+refhaven runs as **one instance per machine**. A passkey is bound to `http://localhost:3000`, and the R2 bucket's CORS policy lists that origin only, so the web app cannot move to another port. The backend is a local Convex backend that keeps its data in the checkout, under `packages/backend/.convex`, and `convex dev` pushes the checkout's functions to it. Runs stay apart by user: each drive signs up a new username and sees only its own workspace.
+
+The skill refuses a cloud deployment, because every run writes test users and images that stay, and on Convex Cloud every read and write counts toward the plan. Set `REFHAVEN_CLOUD_CHECKS=1` only when the operator asks for a run on the cloud dev deployment.
 
 The web UI is the only surface. The CLI and the MCP server do not exist yet.
 
@@ -21,7 +23,8 @@ It prints `ready: run=<run> url=http://localhost:3000 mode=<started|reused> evid
 
 - `mode=reused` means a dev server from this checkout already owns port 3000, usually the operator's own `bun dev`. The run drives it and never stops it.
 - `mode=started` means the run started `bun dev` itself. Ready means the page answers 200, `convex dev` has pushed the functions, and `confect dev` has finished codegen. Allow up to three minutes.
-- `up` stops with an error when another process owns port 3000, or when another checkout runs `convex dev` against the same deployment. Report the error to the operator. It names the path that holds the instance.
+- `up` stops with an error when another process owns port 3000, or when another checkout runs `convex dev` for the same deployment. Report the error to the operator. It names the path that holds the instance.
+- `up` stops with an error when the checkout has no local backend yet, and prints the command that makes one. Run it. The new backend takes the R2 variables from the project's defaults, which the README sets up.
 
 The dev server hot-reloads the web app and re-pushes the backend on every save. Before you drive a backend change, run `$H doctor <run>`. It waits up to 20 seconds for the push and fails when a backend file is newer than the last push.
 
@@ -33,7 +36,7 @@ No seed data is needed. A drive signs up its own user through the real sign-in p
 $H doctor [run]
 ```
 
-Read-only. It checks that the backend targets a dev deployment, that port 3000 is served from this checkout, that `/` and `/sign-in` answer 200, that the deployment has exactly this checkout's functions by name, that the last push is newer than every backend file, that the deployment has the R2 variables, and that headless Chromium starts. The push check needs the dev server's log, so it only warns unless you name a run whose `up` printed `mode=started`. Run it first whenever anything looks off. Drive only when it ends with `doctor: healthy`.
+Read-only. It checks that the backend targets a local deployment (a cloud dev deployment is a warning), that port 3000 is served from this checkout, that `/` and `/sign-in` answer 200, that the deployment has exactly this checkout's functions by name, that the last push is newer than every backend file, that the deployment has the R2 variables, and that headless Chromium starts. The push check needs the dev server's log, so it only warns unless you name a run whose `up` printed `mode=started`. Run it first whenever anything looks off. Drive only when it ends with `doctor: healthy`.
 
 ## Drive
 
@@ -95,13 +98,13 @@ $H down <run>
 
 It stops the dev server only when this run started it. It interrupts the process tree it recorded at launch, waits until every process in it has exited, and fails if port 3000 is still in use. It removes the run's scratch directory and prints the evidence path it kept. Run `down` after every failed attempt too.
 
-Test users, their images, and their R2 objects stay in the dev deployment. Only `check:purge` deletes data, the images of its own test user.
+Test users, their images, and their R2 objects stay in the local backend and the bucket. Only `check:purge` deletes data, the images of its own test user. Deleting `packages/backend/.convex` while nothing runs clears the local backend, but not its objects in R2.
 
 ## Gotchas
 
 - Open `http://localhost:3000`, never `127.0.0.1:3000`. The passkey and the R2 CORS policy are bound to the `localhost` origin.
-- The dev deployment is shared and keeps every earlier run's data. Assert on the run's own user and workspace, never on a table's total row count.
+- The local backend keeps every earlier run's data. Assert on the run's own user and workspace, never on a table's total row count.
 - Each username is a new account. Reuse one username inside a script to sign in again with the same passkey. The passkey lives in that browser instance only.
-- A fresh git worktree has no `packages/backend/.env.local`. `up` prints the copy command.
+- A fresh git worktree has no `packages/backend/.env.local`, and its local backend starts empty. `up` prints the command that makes one.
 - `convex dev` type-checks before it pushes. A type error leaves the old functions deployed, and `doctor` then reports the functions that differ.
 - `convex dev` can miss a save that changes only files under `confect/`. `doctor` compares function names, not code, so it stays healthy. After a backend change, wait for a new `Convex functions ready!` line in the run's `dev.log`. If none comes, touch the group's file under `packages/backend/convex/`.
