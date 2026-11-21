@@ -139,6 +139,36 @@ try {
     "renaming on the page shows the trimmed new name on the page and on the library's card",
   );
 
+  // The page steps through the list it was opened from: here the library, newest first.
+  await card(page, small).locator("img").click();
+  await page.waitForURL(`${appUrl}/r/${small}`);
+  await page.getByRole("heading", { name: "small.png" }).waitFor();
+  const crumbFromLibrary = await page
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .getByRole("link")
+    .textContent();
+  const previousAtFirst = await page.getByRole("button", { name: "Previous image" }).count();
+  await page.keyboard.press("ArrowRight");
+  await page.waitForURL(`${appUrl}/r/${large}`);
+  await page.getByRole("heading", { name: "renamed.png" }).waitFor();
+  const nextAtLast = await page.getByRole("button", { name: "Next image" }).count();
+  await page.keyboard.press("ArrowRight");
+  await Bun.sleep(300);
+  const stayedAtLast = page.url() === `${appUrl}/r/${large}`;
+  await page.getByRole("button", { name: "Previous image" }).click();
+  await page.waitForURL(`${appUrl}/r/${small}`);
+  await page.getByRole("button", { name: "Next image" }).click();
+  await page.waitForURL(`${appUrl}/r/${large}`);
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForURL(`${appUrl}/r/${small}`);
+  await page.keyboard.press("Escape");
+  await page.waitForURL(`${appUrl}/library`);
+  await card(page, small).waitFor();
+  assert(
+    crumbFromLibrary === "Library" && previousAtFirst === 0 && nextAtLast === 0 && stayedAtLast,
+    "opened from the library, the breadcrumb leads to Library, → and Next image step to the next image in the library's order and ← and Previous image back, neither goes past an end, and Escape returns to the library",
+  );
+
   await card(page, large).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${large}`);
   await submit(page, "Note", "Save note", "Studied for the rim light.");
@@ -272,9 +302,18 @@ try {
   await page.getByRole("link", { name: "Gallery" }).click();
   await card(page, large).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${large}`);
+  await page.getByRole("heading", { name: "renamed.png" }).waitFor();
+  const crumbFromBoard = await page
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .getByRole("link")
+    .textContent();
+  await page.keyboard.press("Escape");
+  await page.waitForURL(`${appUrl}/c/${board}?view=gallery`);
+  await card(page, large).locator("img").click();
+  await page.waitForURL(`${appUrl}/r/${large}`);
   assert(
-    true,
-    "the collection's link opens /c/{collectionId}, and the card on its gallery links back here",
+    crumbFromBoard === "Board",
+    "the collection's link opens /c/{collectionId}, the card on its gallery links back here with a breadcrumb that leads to the collection, and Escape returns to its gallery",
   );
 
   // The page renews its session while it runs, and a client takes the token it holds now.

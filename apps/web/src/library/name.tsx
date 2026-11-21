@@ -9,14 +9,14 @@ export const splitName = (fileName: string): readonly [string, string] => {
 
 /**
  * A file name as a title or a caption shows it, without its image extension. The extension stays in
- * the text, out of sight, so a screen reader and a copy read the whole name.
+ * the line of text at no size, so a screen reader and a copy read the whole name as one word.
  */
 export function ShownName({ fileName }: { fileName: string }) {
   const [stem, extension] = splitName(fileName);
   return (
     <>
       {stem}
-      {extension ? <span className="sr-only">{extension}</span> : null}
+      {extension ? <span className="text-[0px]">{extension}</span> : null}
     </>
   );
 }

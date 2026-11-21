@@ -1,7 +1,8 @@
 import type { Ref } from "@confect/core";
-import { QueryResult, useMutation, useQuery } from "@confect/react";
+import { QueryResult, useMutation, usePaginatedQuery, useQuery } from "@confect/react";
 import {
   Alert02Icon,
+  ArrowLeft01Icon,
   ArrowRight01Icon,
   ArrowTurnBackwardIcon,
   ArrowUpRight01Icon,
@@ -22,14 +23,21 @@ import { Icon } from "@refhaven/ui/components/icon";
 import { fieldClass } from "@refhaven/ui/components/input";
 import { Tooltip } from "@refhaven/ui/components/tooltip";
 import { cn } from "@refhaven/ui/lib/utils";
-import { ErrorComponent, Link, createFileRoute } from "@tanstack/react-router";
+import {
+  ErrorComponent,
+  Link,
+  createFileRoute,
+  useNavigate,
+  useRouter,
+} from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Pile, useCollectionCover } from "@/collections/pile";
-import { CollectionPicker } from "@/library/gallery";
-import { openedFrom } from "@/library/origin";
+import { CollectionPicker, galleryPage } from "@/library/gallery";
+import { ShownName } from "@/library/name";
+import { type Origin, libraryOrigin, openedFrom, rememberOpened } from "@/library/origin";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { NotFound } from "@/shell/not-found";
 import { TopBar, pillClass } from "@/shell/top-bar";
@@ -69,73 +77,225 @@ function ImageNotFound() {
   );
 }
 
+/** The list the page steps through, and its place in it. */
+type Steps = {
+  readonly origin: Origin;
+  readonly order: ReadonlyArray<Id<"refs">>;
+  readonly previous: Id<"refs"> | undefined;
+  readonly next: Id<"refs"> | undefined;
+};
+
+/**
+ * Where the page of `refId` came from and its neighbors there: the list it was opened from, or
+ * the library's first page when it was opened by its link.
+ */
+function useSteps(refId: Id<"refs">): Steps {
+  const opened = openedFrom(refId);
+  const library = usePaginatedQuery(refs.public.library.list, opened ? "skip" : {}, galleryPage);
+  const order = opened?.order ?? library.results.map((item) => item.refId);
+  const at = order.indexOf(refId);
+  return {
+    origin: opened?.origin ?? libraryOrigin,
+    order,
+    previous: at > 0 ? order[at - 1] : undefined,
+    next: at >= 0 ? order[at + 1] : undefined,
+  };
+}
+
 function RefPage() {
   const refId = Route.useParams().refId as Id<"refs">;
-  return QueryResult.match(useQuery(refs.public.ref.get, { refId }), {
+  const steps = useSteps(refId);
+  const { previous, next } = steps;
+  // The neighbors' details and display copies load ahead, so a step shows its image at once.
+  useQuery(refs.public.ref.get, previous ? { refId: previous } : "skip");
+  useQuery(refs.public.ref.get, next ? { refId: next } : "skip");
+  const details = useQuery(refs.public.ref.get, { refId });
+  // An image that is not found, or not the user's, is never signed.
+  const found = QueryResult.isSuccess(details);
+  const shown = useMemo(
+    () => (found ? [refId, ...(previous ? [previous] : []), ...(next ? [next] : [])] : []),
+    [found, refId, previous, next],
+  );
+  const display = useRefUrls(shown, "display");
+  const ahead = [previous, next].map((neighbor) =>
+    neighbor ? display.get(neighbor)?.url : undefined,
+  );
+  usePreload(ahead);
+  useStepKeys(refId, steps);
+
+  return QueryResult.match(details, {
     onLoading: () => <TopBar />,
     onFailure: () => <ImageNotFound />,
-    onSuccess: (details) => <RefDetails key={refId} refId={refId} details={details} />,
+    onSuccess: (details) => (
+      <RefDetails
+        key={refId}
+        refId={refId}
+        details={details}
+        display={display.get(refId)?.url}
+        steps={steps}
+      />
+    ),
   });
 }
 
-/** "Library / name", or the collection's name when its gallery opened this page. */
-function Breadcrumb({ refId, fileName }: { refId: Id<"refs">; fileName: string }) {
-  const [opened] = useState(() => openedFrom(refId)?.origin);
-  const from = opened?.kind === "collection" ? opened : null;
-  const crumbClass =
-    "flex h-8 max-w-48 shrink-0 items-center truncate rounded-full px-3 font-[520] text-ink-2 hover:bg-hover hover:text-ink";
+/** Loads each image into the browser's cache, as the page's own image asks for it. */
+function usePreload(urls: ReadonlyArray<string | undefined>) {
+  const key = urls.join(" ");
+  useEffect(() => {
+    for (const url of key.split(" ").filter(Boolean)) {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.src = url;
+    }
+  }, [key]);
+}
+
+/** Steps to a neighbor in place of this page, so going back still leaves for the list. */
+function useStep(steps: Steps) {
+  const navigate = useNavigate();
+  return (refId: Id<"refs"> | undefined) => {
+    if (!refId) return;
+    rememberOpened(refId, steps.origin, steps.order);
+    void navigate({ to: "/r/$refId", params: { refId }, replace: true });
+  };
+}
+
+/** Back to where the page was opened from: the list itself when it opened this page. */
+function useLeave(refId: Id<"refs">, origin: Origin) {
+  const router = useRouter();
+  const navigate = useNavigate();
+  return () => {
+    if (openedFrom(refId)) router.history.back();
+    else void navigate(originLink(origin));
+  };
+}
+
+const originLink = (origin: Origin) =>
+  origin.kind === "collection"
+    ? ({
+        to: "/c/$collectionId",
+        params: { collectionId: origin.collectionId },
+        search: { view: "gallery" },
+      } as const)
+    : origin.kind === "trash"
+      ? ({ to: "/trash" } as const)
+      : ({ to: "/library" } as const);
+
+/**
+ * ← and → step through the list, and Escape goes back to it, unless a field or an open menu has
+ * the keys.
+ */
+function useStepKeys(refId: Id<"refs">, steps: Steps) {
+  const step = useStep(steps);
+  const leave = useLeave(refId, steps.origin);
+  const keys = useRef({ step, leave, steps });
+  keys.current = { step, leave, steps };
+  useEffect(() => {
+    const press = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest(
+          "input, textarea, select, [contenteditable], [role=dialog], [role=menu], [role=listbox]",
+        )
+      ) {
+        return;
+      }
+      const { step, leave, steps } = keys.current;
+      if (event.key === "ArrowLeft") step(steps.previous);
+      else if (event.key === "ArrowRight") step(steps.next);
+      else if (event.key === "Escape") leave();
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener("keydown", press);
+    return () => window.removeEventListener("keydown", press);
+  }, []);
+}
+
+/** "Library / name", or the trash or the collection the page was opened from. */
+function Breadcrumb({ origin, fileName }: { origin: Origin; fileName: string }) {
   return (
-    <nav aria-label="Breadcrumb" className={cn(pillClass, "min-w-0 gap-1 pr-4 pl-1.5")}>
-      {from ? (
-        <Link
-          to="/c/$collectionId"
-          params={{ collectionId: from.collectionId }}
-          search={{ view: "gallery" }}
-          className={crumbClass}
-        >
-          {from.name}
-        </Link>
-      ) : (
-        <Link to="/library" className={crumbClass}>
-          Library
-        </Link>
-      )}
-      <span aria-hidden className="text-ink-4">
+    <nav aria-label="Breadcrumb" className={cn(pillClass, "min-w-0 gap-0.5 pr-4 pl-1.5")}>
+      <Link
+        {...originLink(origin)}
+        className="flex h-8 max-w-48 shrink-0 items-center truncate rounded-full px-3 font-[520] text-ink-2 transition-colors duration-150 hover:bg-hover hover:text-ink"
+      >
+        {origin.kind === "collection" ? origin.name : origin.kind === "trash" ? "Trash" : "Library"}
+      </Link>
+      <span aria-hidden className="px-0.5 text-ink-4">
         /
       </span>
-      <span aria-current="page" className="min-w-0 truncate pl-1.5 font-[560]">
-        {fileName}
+      <span aria-current="page" className="max-w-[28vw] min-w-0 truncate pl-1.5 font-[580]">
+        <ShownName fileName={fileName} />
       </span>
     </nav>
   );
 }
 
-function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details }) {
+/** A round button on an edge of the image's stage that steps to a neighbor. */
+function StepButton({ side, onClick }: { side: "previous" | "next"; onClick: () => void }) {
+  const label = side === "previous" ? "Previous image" : "Next image";
+  return (
+    <Tooltip label={label} shortcut={side === "previous" ? "←" : "→"}>
+      <Button
+        variant="glass"
+        size="icon-lg"
+        aria-label={label}
+        onClick={onClick}
+        className={cn(
+          "absolute top-[calc(50%+28px)] z-10 -translate-y-1/2 shadow-float",
+          side === "previous" ? "left-4" : "right-4",
+        )}
+      >
+        <Icon icon={side === "previous" ? ArrowLeft01Icon : ArrowRight01Icon} size={18} />
+      </Button>
+    </Tooltip>
+  );
+}
+
+function RefDetails({
+  refId,
+  details,
+  display,
+  steps,
+}: {
+  refId: Id<"refs">;
+  details: Details;
+  display: string | undefined;
+  steps: Steps;
+}) {
   const refIds = useMemo(() => [refId], [refId]);
-  const display = useRefUrls(refIds, "display").get(refId)?.url;
   const original = useRefUrls(refIds, "original").get(refId)?.url;
   const remove = useMutation(refs.public.library.remove);
   const restore = useMutation(refs.public.library.restore);
+  const step = useStep(steps);
   const trashed = details.deletedAt !== null;
 
   return (
     <>
-      <TopBar center={<Breadcrumb refId={refId} fileName={details.fileName} />} />
+      <TopBar center={<Breadcrumb origin={steps.origin} fileName={details.fileName} />} />
       <main className="min-h-svh bg-canvas">
-        <div className="fixed inset-y-0 right-[calc(408px+var(--gutter))] left-0 flex items-center justify-center px-12 pt-[84px] pb-7 max-[900px]:static max-[900px]:px-gutter">
-          <RetryingImg
-            // Every image load is a CORS request, as in the gallery.
-            crossOrigin="anonymous"
-            src={display}
-            alt={details.fileName}
-            width={details.width}
-            height={details.height}
-            className="max-h-[calc(100svh-112px)] w-auto max-w-full object-contain shadow-[0_0_0_1px_var(--edge),0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.25)]"
-          />
+        <div className="fixed inset-y-0 right-[calc(408px+var(--gutter))] left-0 flex items-center justify-center px-16 pt-[84px] pb-7 max-[900px]:relative max-[900px]:px-gutter">
+          <div className="image-edge flex max-w-full shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.25)]">
+            <RetryingImg
+              // Every image load is a CORS request, as in the gallery.
+              crossOrigin="anonymous"
+              src={display}
+              alt={details.fileName}
+              width={details.width}
+              height={details.height}
+              className="max-h-[calc(100svh-112px)] w-auto max-w-full object-contain"
+            />
+          </div>
+          {steps.previous ? (
+            <StepButton side="previous" onClick={() => step(steps.previous)} />
+          ) : null}
+          {steps.next ? <StepButton side="next" onClick={() => step(steps.next)} /> : null}
         </div>
         <aside
           aria-label="Image details"
-          className="fixed top-[68px] right-(--gutter) bottom-(--gutter) z-20 flex w-[408px] flex-col overflow-hidden rounded-[24px] bg-surface shadow-float max-[900px]:static max-[900px]:mx-gutter max-[900px]:mb-gutter max-[900px]:w-auto"
+          className="fixed top-[68px] right-(--gutter) z-20 flex max-h-[calc(100svh-68px-var(--gutter))] w-[408px] flex-col overflow-hidden rounded-[24px] bg-surface shadow-float max-[900px]:static max-[900px]:mx-gutter max-[900px]:mb-gutter max-[900px]:max-h-none max-[900px]:w-auto"
         >
           {trashed ? (
             <div className="flex items-center gap-3 border-b border-line bg-sunken py-3 pr-3 pl-5">
@@ -147,7 +307,7 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
               </Button>
             </div>
           ) : null}
-          <div className="flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-2">
+          <div className="min-h-0 overflow-y-auto overscroll-contain px-6 pt-6 pb-2">
             <fieldset disabled={trashed} className="contents">
               <NameField refId={refId} fileName={details.fileName} />
               <NoteField refId={refId} note={details.note} />
@@ -181,6 +341,8 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
               )}
             </Section>
             <dl className="mt-6 grid grid-cols-[64px_1fr] gap-x-3 gap-y-1.5 border-t border-line pt-5 pb-4 text-[13px]">
+              <dt className="text-ink-2">File</dt>
+              <dd className="break-all">{details.fileName}</dd>
               <dt className="text-ink-2">Size</dt>
               <dd className="num">
                 {details.width} × {details.height} px, {Math.ceil(details.byteSize / 1024)} KB
@@ -301,7 +463,7 @@ function NameField({ refId, fileName }: { refId: Id<"refs">; fileName: string })
     return (
       <div className="flex items-start gap-2">
         <h1 className="min-w-0 flex-1 text-[20px] leading-7 font-[620] tracking-[-0.022em] break-words">
-          {fileName}
+          <ShownName fileName={fileName} />
         </h1>
         <Tooltip label="Rename">
           <Button
