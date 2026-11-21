@@ -50,12 +50,15 @@ export function TopBar({
   action?: ReactNode;
 }) {
   return (
-    <header className="pointer-events-none fixed inset-x-0 top-0 z-30 grid h-[68px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-gutter">
+    // A narrow window moves the middle to a second row, under the places and the account.
+    <header className="pointer-events-none fixed inset-x-0 top-0 z-30 grid h-[68px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-gutter max-[719px]:h-auto max-[719px]:grid-cols-[auto_minmax(0,1fr)] max-[719px]:gap-y-2 max-[719px]:py-3">
       <div className="flex min-w-0 items-center">
         <MainNav />
       </div>
-      <div className="pointer-events-auto flex min-w-0 justify-center">{center}</div>
-      <div className="flex min-w-0 items-center justify-end gap-2">
+      <div className="pointer-events-auto flex min-w-0 justify-center max-[719px]:order-3 max-[719px]:col-span-2 max-[719px]:justify-start max-[719px]:empty:hidden">
+        {center}
+      </div>
+      <div className="flex min-w-0 items-center justify-end gap-2 max-[719px]:order-2">
         <div className={pillClass}>
           <ThemeMenu />
           <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line-2 max-[719px]:hidden" />

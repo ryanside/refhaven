@@ -216,7 +216,11 @@ function useStepKeys(refId: Id<"refs">, steps: Steps) {
 /** "Library / name", or the trash or the collection the page was opened from. */
 function Breadcrumb({ origin, fileName }: { origin: Origin; fileName: string }) {
   return (
-    <nav aria-label="Breadcrumb" className={cn(pillClass, "min-w-0 gap-0.5 pr-4 pl-1.5")}>
+    // A narrow window has no room for it beside the menu and the account. The panel names the image.
+    <nav
+      aria-label="Breadcrumb"
+      className={cn(pillClass, "min-w-0 gap-0.5 pr-4 pl-1.5 max-[719px]:hidden")}
+    >
       <Link
         {...originLink(origin)}
         className="flex h-8 max-w-48 shrink-0 items-center truncate rounded-full px-3 font-[520] text-ink-2 transition-colors duration-150 hover:bg-hover hover:text-ink"
