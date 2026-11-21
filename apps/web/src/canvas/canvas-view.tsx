@@ -485,18 +485,30 @@ export function CanvasView({
 
   return (
     <SaveScope target={{ collectionId, name }} placeAt={placeAt} veil="canvas">
-      <TopBar center={title} action={<AddImagesButton fold />} />
-      <main className="fixed inset-0 overflow-hidden bg-canvas">
-        <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
-        <div ref={outlines} className="pointer-events-none absolute inset-0" />
-        {draft ? (
-          <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} />
-        ) : null}
-      </main>
-      <ZoomCluster store={store} />
-      <Dock store={store} history={history} actions={actions} color={noteColor} recolor={recolor} />
-      <SelectionCluster store={store} actions={actions} />
-      {problem ? <Problem close={() => setProblem(undefined)}>{problem}</Problem> : null}
+      <div className="on-canvas contents">
+        <TopBar center={title} action={<AddImagesButton fold />} />
+        <main className="fixed inset-0 overflow-hidden bg-canvas">
+          <div
+            ref={host}
+            data-testid="canvas"
+            className="absolute inset-0 touch-none select-none"
+          />
+          <div ref={outlines} className="pointer-events-none absolute inset-0" />
+          {draft ? (
+            <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} />
+          ) : null}
+        </main>
+        <ZoomCluster store={store} />
+        <Dock
+          store={store}
+          history={history}
+          actions={actions}
+          color={noteColor}
+          recolor={recolor}
+        />
+        <SelectionCluster store={store} actions={actions} />
+        {problem ? <Problem close={() => setProblem(undefined)}>{problem}</Problem> : null}
+      </div>
     </SaveScope>
   );
 }

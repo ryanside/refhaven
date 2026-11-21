@@ -72,6 +72,14 @@
   color-scheme: dark;
 }
 
+/* On the dark canvas, the floating chrome stands on a lighter surface with a hairline edge. */
+.dark .on-canvas {
+  --glass: rgb(48 48 46 / 0.94);
+  --surface: #30302e;
+  --float: 0 0 0 1px rgb(255 255 255 / 0.08), 0 8px 24px -6px rgb(0 0 0 / 0.55);
+  --float-lg: 0 0 0 1px rgb(255 255 255 / 0.08), 0 18px 44px -10px rgb(0 0 0 / 0.7);
+}
+
 @theme inline {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --color-page: var(--page);

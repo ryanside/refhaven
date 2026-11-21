@@ -1,5 +1,6 @@
 import {
   Alert02Icon,
+  ArrowDown01Icon,
   Cancel01Icon,
   CenterFocusIcon,
   FolderRemoveIcon,
@@ -35,9 +36,9 @@ import { pillClass } from "@/shell/top-bar";
 import type { Action } from "./keymap";
 import { noteInk } from "./notes";
 
-/** The bands the floating chrome covers: the top bar above, and the tools below. */
-export const chromeInsets = { top: 68, bottom: 84 } as const;
-const fitMargin = 40;
+/** The bands the floating chrome covers: the top bar's pills above, and the dock below. */
+export const chromeInsets = { top: 56, bottom: 76 } as const;
+const fitMargin = 56;
 
 /**
  * Shows every item in the part of the view the chrome leaves open, centered, at no more than 100%.
@@ -306,7 +307,7 @@ function Swatch({ color, className }: { color: NoteColor; className?: string }) 
     <span
       aria-hidden
       className={cn(
-        "block size-3.5 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.12)]",
+        "block size-[18px] rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.12)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.16)]",
         className,
       )}
       style={{ background: noteInk(color) }}
@@ -327,9 +328,13 @@ function NoteColorPicker({
       <Tooltip label="Note color">
         <PopoverTrigger
           aria-label={`Note color: ${colorNames[color]}`}
-          className="grid h-10 w-9 place-items-center rounded-r-full rounded-l-none pr-1 hover:bg-hover aria-expanded:bg-hover"
+          className="flex h-10 items-center gap-1 rounded-r-full pr-2.5 pl-1.5 text-ink-3 transition-colors duration-150 hover:bg-hover hover:text-ink-2 aria-expanded:bg-hover"
         >
-          <Swatch color={color} className="ring-2 ring-surface ring-offset-0" />
+          <Swatch
+            color={color}
+            className="size-5 shadow-[0_0_0_2px_var(--surface),0_0_0_3px_var(--line-2)] dark:shadow-[0_0_0_2px_var(--surface),0_0_0_3px_rgb(255_255_255/0.22)]"
+          />
+          <Icon icon={ArrowDown01Icon} size={12} />
         </PopoverTrigger>
       </Tooltip>
       <PopoverContent side="top" align="center" sideOffset={14} className="p-2">
@@ -347,7 +352,7 @@ function NoteColorPicker({
               }}
               className="grid size-9 place-items-center rounded-full hover:bg-hover aria-checked:shadow-[inset_0_0_0_1.5px_var(--ink)]"
             >
-              <Swatch color={name} className="size-[18px]" />
+              <Swatch color={name} />
             </button>
           ))}
         </div>
@@ -357,8 +362,9 @@ function NoteColorPicker({
 }
 
 /**
- * The arranging tools at the bottom right, beside how many items are selected. They are off until
- * something is selected. The status also carries the camera for the checks.
+ * The arranging tools at the bottom right, with how many items are selected. They show only while
+ * something is selected, and stay in the page, off, while nothing is. The count also carries the
+ * camera for the checks.
  */
 export function SelectionCluster({
   store,
@@ -380,7 +386,12 @@ export function SelectionCluster({
     <div
       role="toolbar"
       aria-label="Selection"
-      className={cn(pillClass, "fixed right-(--gutter) bottom-[26px] z-30")}
+      inert={none}
+      className={cn(
+        pillClass,
+        "fixed right-(--gutter) bottom-[26px] z-30 origin-bottom-right transition-[opacity,translate,scale] duration-200 ease-out",
+        none && "pointer-events-none translate-y-1.5 scale-[0.97] opacity-0",
+      )}
     >
       <p
         data-testid="canvas-readout"
@@ -390,13 +401,11 @@ export function SelectionCluster({
         data-camera-y={camera.y}
         data-selected={selected}
         aria-live="polite"
-        className={cn(
-          "px-2.5 text-[13px] whitespace-nowrap num max-[1180px]:sr-only",
-          none ? "text-ink-2" : "font-[540] text-ink",
-        )}
+        className="pr-1 pl-2.5 text-[13px] font-[560] whitespace-nowrap text-ink num"
       >
         {none ? "Nothing selected" : `${selected} selected`}
       </p>
+      <Rule />
       <Tool
         label="Bring to front"
         shortcut="]"

@@ -269,7 +269,7 @@ try {
   );
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type("Zebra and a longer line of text");
-  await click(at({ x: 350, y: 400 }));
+  await click(at({ x: 350, y: 300 }));
   note = (await until(
     noteIn,
     (found) => found?.text === "Zebra and a longer line of text",
@@ -594,7 +594,7 @@ try {
   calls = applied.length;
   await page.getByRole("button", { name: "Add note" }).click();
   await editor.waitFor();
-  await click(at({ x: 350, y: 400 }));
+  await click(at({ x: 350, y: 300 }));
   assert(
     (await editor.count()) === 0 && applied.length === calls && (await readout(page)).items === 4,
     "a new note left with no text is never made",
@@ -604,7 +604,7 @@ try {
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.press("Backspace");
   await page.keyboard.type("   ");
-  await click(at({ x: 350, y: 400 }));
+  await click(at({ x: 350, y: 300 }));
   await items(3);
   assert(
     (await noteIn(key)) === undefined &&
