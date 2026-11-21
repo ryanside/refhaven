@@ -6,8 +6,9 @@ import type { Page } from "playwright";
 import {
   appUrl,
   assert,
-  clientFor,
+  backendSocket,
   type Carried,
+  clientFor,
   consoleWatch,
   openPageWithPasskeyDevice,
   send,
@@ -521,7 +522,7 @@ try {
   const slow = await page.context().newPage();
   watchConsole(slow);
   await slow.setViewportSize(canvasViewport);
-  await slow.routeWebSocket(/convex\.cloud/, (socket) => {
+  await slow.routeWebSocket(backendSocket, (socket) => {
     const server = socket.connectToServer();
     socket.onMessage((message) => server.send(message));
     server.onMessage((message) => setTimeout(() => socket.send(message), 1200));

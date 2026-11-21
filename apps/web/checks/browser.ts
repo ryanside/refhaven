@@ -25,6 +25,9 @@ export function convexUrl(): string {
   return url;
 }
 
+/** Picks out the backend's WebSocket, for a check that holds its messages back. */
+export const backendSocket = (url: URL) => url.host === new URL(convexUrl()).host;
+
 export function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(`FAIL ${message}`);
@@ -66,6 +69,15 @@ export function consoleWatch() {
 export async function openPageWithPasskeyDevice(args: string[] = []) {
   const browser = await chromium.launch({ args });
   const context = await browser.newContext();
+  // The virtual device answers passkey autofill the moment a page asks, which no person's browser
+  // does, so on a fast backend autofill signs in before the button is pressed. With autofill off,
+  // every sign-in goes through the button.
+  await context.addInitScript(() => {
+    if (typeof PublicKeyCredential === "undefined") return;
+    Object.defineProperty(PublicKeyCredential, "isConditionalMediationAvailable", {
+      value: async () => false,
+    });
+  });
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
