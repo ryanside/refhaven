@@ -28,6 +28,16 @@ const shownRefIds = (page: Page) =>
   );
 const collectionLinks = (page: Page) => page.locator("[data-collection-id]");
 
+const addOnCard = async (page: Page, refId: string, name: string) => {
+  await card(page, refId).hover();
+  await card(page, refId).getByRole("button", { name: "Add to a collection" }).click();
+  await page
+    .getByRole("dialog", { name: "Add to a collection" })
+    .getByRole("button", { name, exact: true })
+    .click();
+  await page.keyboard.press("Escape");
+};
+
 const save = async (page: Page, name: string, buffer: Buffer) => {
   const outcomes = page.locator('[role="status"] li');
   const reported = await outcomes.count();
@@ -90,6 +100,15 @@ try {
   await cards(page).first().waitFor();
   const libraryRefId = (await cards(page).first().getAttribute("data-ref-id"))!;
 
+  // With no collection yet, the picker opens on its name field, and Escape there must still close it.
+  await card(page, libraryRefId).hover();
+  await card(page, libraryRefId).getByRole("button", { name: "Add to a collection" }).click();
+  const firstPicker = page.getByRole("dialog", { name: "Add to a collection" });
+  await firstPicker.getByLabel("Name a new collection").waitFor();
+  await page.keyboard.press("Escape");
+  await firstPicker.waitFor({ state: "hidden", timeout: 5000 });
+  assert(true, "with no collection yet, Escape closes the Add to a collection picker");
+
   const moodLink = await createOnPage(page, "  Mood  ");
   const moodId = (await moodLink.getAttribute("data-collection-id"))!;
   assert(
@@ -100,16 +119,16 @@ try {
   await page.waitForURL(`${appUrl}/c/${moodId}`);
   await page.getByRole("heading", { name: "Mood" }).waitFor();
   await page.getByTestId("canvas").waitFor();
-  const viewLinks = page.locator("header nav").getByRole("link");
+  const viewLinks = page.getByRole("navigation", { name: "View" }).getByRole("link");
   assert(
     (await viewLinks.allTextContents()).join() === "Canvas,Gallery" &&
       (await viewLinks.first().getAttribute("aria-current")) === "page" &&
-      (await page.getByText("Nothing saved yet.").count()) === 0,
+      (await page.getByText("Nothing in this collection yet.").count()) === 0,
     `the collection's link opens /c/${moodId}, which shows its name and its canvas, with the Canvas link first and marked as the current view`,
   );
   await page.getByRole("link", { name: "Gallery" }).click();
   await page.waitForURL(`${appUrl}/c/${moodId}?view=gallery`);
-  await page.getByText("Nothing saved yet.").waitFor();
+  await page.getByText("Nothing in this collection yet.").waitFor();
   assert(
     (await page.getByTestId("canvas").count()) === 0 &&
       (await viewLinks.last().getAttribute("aria-current")) === "page",
@@ -139,7 +158,7 @@ try {
     "the image uploaded in the collection also shows in the library",
   );
 
-  await card(page, libraryRefId).getByLabel("Add to collection").selectOption({ label: "Mood" });
+  await addOnCard(page, libraryRefId, "Mood");
   await until(
     async () => (await members(moodId)).includes(libraryRefId),
     "choosing a collection on a card adds the image to it",
@@ -173,9 +192,7 @@ try {
   await page.goto(`${appUrl}/library`);
   const sketchLink = await createOnPage(page, "Sketches");
   const sketchId = (await sketchLink.getAttribute("data-collection-id"))!;
-  await card(page, libraryRefId)
-    .getByLabel("Add to collection")
-    .selectOption({ label: "Sketches" });
+  await addOnCard(page, libraryRefId, "Sketches");
   await until(
     async () => (await members(sketchId)).includes(libraryRefId),
     "choosing a second collection on a card adds the image to it",
@@ -241,9 +258,32 @@ try {
   await owner.mutation(api.collections.removeRefs, inMood([libraryRefId]));
 
   await page.goto(`${appUrl}/c/${moodId}?view=gallery`);
-  await page.getByLabel("Collection name").fill("  Mood board ");
   await page.getByRole("button", { name: "Rename" }).click();
+  await page.getByLabel("Collection name").fill("  Mood board ");
+  await page.getByLabel("Collection name").press("Enter");
   await page.getByRole("heading", { name: "Mood board" }).waitFor();
+  const focusedAfterRename = await page.evaluate(() =>
+    document.activeElement?.getAttribute("aria-label"),
+  );
+  await page.getByRole("button", { name: "Rename" }).click();
+  const nameField = page.getByLabel("Collection name");
+  await nameField.fill("x".repeat(101));
+  await nameField.press("Enter");
+  const refusal = page.getByRole("alert").filter({ hasText: "A name is 1 to 100 characters." });
+  await refusal.waitFor();
+  await nameField.blur();
+  await Bun.sleep(300);
+  const keptAfterBlur = (await nameField.isVisible()) && (await refusal.count()) === 1;
+  await nameField.press("Escape");
+  await page.getByRole("heading", { name: "Mood board" }).waitFor();
+  assert(
+    focusedAfterRename === "Rename" &&
+      keptAfterBlur &&
+      (await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))) ===
+        "Rename" &&
+      (await owner.query(api.collections.list, {})).some(({ name }) => name === "Mood board"),
+    "saving a new name with Enter or leaving it with Escape puts focus back on Rename, and a refused name stays in the field with its reason when the field loses focus, and saves nothing",
+  );
   await card(page, uploadedRefId).locator("img").waitFor();
   await page.waitForFunction(() =>
     [...document.querySelectorAll<HTMLImageElement>("[data-ref-id] img")].every(
@@ -253,6 +293,52 @@ try {
   if (evidence) {
     await page.screenshot({ path: `${evidence}/03-collection-page.png`, fullPage: true });
   }
+
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("button", { name: "Collections" })
+    .click();
+  const finder = page.getByRole("dialog", { name: "Collections" });
+  await finder.getByRole("button", { name: "New collection" }).click();
+  await finder.getByLabel("New collection").fill("Never made");
+  await finder.getByLabel("New collection").press("Escape");
+  await finder.getByRole("button", { name: "New collection" }).waitFor();
+  const finderKept = await finder.isVisible();
+  await page.keyboard.press("Escape");
+  await finder.waitFor({ state: "hidden" });
+  assert(
+    finderKept &&
+      !(await owner.query(api.collections.list, {})).some(({ name }) => name === "Never made"),
+    "Escape in the Collections menu's new collection field leaves the field and keeps the menu, a dialog named Collections, open, and a second Escape closes it",
+  );
+
+  // The top bar's left, center, and right parts, each the span of what it shows.
+  const barParts = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll("header > div")].map((part) => {
+        const boxes = [...part.querySelectorAll("*")]
+          .filter((element) => !element.closest('[role="alert"]'))
+          .map((element) => element.getBoundingClientRect())
+          .filter((box) => box.width > 1 && box.height > 1);
+        return {
+          left: Math.min(...boxes.map((box) => box.left)),
+          right: Math.max(...boxes.map((box) => box.right)),
+        };
+      }),
+    );
+  const crowded: Array<string> = [];
+  for (const width of [768, 900, 1024, 1180, 1280, 1496]) {
+    await page.setViewportSize({ width, height: 800 });
+    const [left, center, right] = await barParts();
+    if (left!.right > center!.left || center!.right > right!.left || right!.right > width) {
+      crowded.push(`${width}: ${JSON.stringify({ left, center, right })}`);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  assert(
+    crowded.length === 0,
+    `on a collection's page the top bar's nav, title, and account and Add images never overlap, from 768 to 1496 px wide: ${crowded.join("; ")}`,
+  );
   await page.goto(`${appUrl}/library`);
   await page.locator(`[data-collection-id="${moodId}"]`).getByText("Mood board").waitFor();
   assert(
@@ -294,6 +380,12 @@ try {
   const other = await clientFor(second.page);
   const foreign = moodId as Id<"collections">;
   const own = await other.mutation(api.collections.create, { name: "Mine" });
+  await second.page.getByRole("main").getByRole("link", { name: "Mine", exact: true }).waitFor();
+  assert(
+    (await second.page.getByText("Nothing saved yet.").count()) === 1 &&
+      (await second.page.getByRole("heading", { name: "Collections" }).count()) === 1,
+    "a library with a collection and no images shows its shelf above the drop zone",
+  );
   const calls = {
     rename: outcome(
       other.mutation(api.collections.rename, { collectionId: foreign, name: "Taken" }),
@@ -392,17 +484,16 @@ try {
   await second.page.getByText("Collection not found.").waitFor();
   assert(true, "the first user's collection page shows the second user a not-found line");
 
-  // On a narrow window the sidebar is a sheet that only the title bar's button opens.
   await second.page.setViewportSize({ width: 600, height: 800 });
   const library = second.page.getByRole("link", { name: "Library", exact: true });
   const hiddenAtFirst = !(await library.isVisible());
-  await second.page.getByRole("button", { name: "Toggle Sidebar" }).click();
+  await second.page.getByRole("button", { name: "Menu" }).click();
   await library.click();
   await second.page.waitForURL(`${appUrl}/library`);
   await library.waitFor({ state: "hidden" });
   assert(
     hiddenAtFirst,
-    "on a narrow window the not-found page still has the button that opens the sidebar, and following its Library link closes it",
+    "on a narrow window the not-found page still has the button that opens the menu, and following its Library link closes it",
   );
 
   // The theme. A page with nothing stored follows the system, which is light here.
@@ -420,7 +511,7 @@ try {
     );
   const choose = async (name: string) => {
     await themed.getByRole("button", { name: "Theme" }).click();
-    await themed.getByRole("menuitem", { name, exact: true }).click();
+    await themed.getByRole("menuitemradio", { name, exact: true }).click();
   };
   const atFirst = await theme();
   await choose("Dark");

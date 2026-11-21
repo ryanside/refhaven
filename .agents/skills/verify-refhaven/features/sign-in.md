@@ -27,9 +27,9 @@ Preconditions:
 - **Guard from the landing page.** Run `await page.goto("http://localhost:3000/")` and `await page.getByRole("link", { name: "Open your library" }).click()`. The URL becomes `/sign-in`.
 - **Sign up.** Fill the username and submit. Run `await page.getByLabel("Username").fill(username)` and `await page.getByRole("button", { name: "Continue with a passkey" }).click()`, then `await page.waitForURL("http://localhost:3000/library")`. `page.getByTestId("username")` shows the username and `page.getByTestId("user-id")` shows an ID.
 - **Session.** Run `await page.reload()`. `page.getByTestId("user-id")` shows the same ID.
-- **Sign out.** Run `await page.getByRole("button", { name: "Sign out" }).click()` and `await page.waitForURL("http://localhost:3000/sign-in")`.
+- **Sign out.** Run `await page.getByTestId("username").click()` to open the account menu, then `await page.getByRole("menuitem", { name: "Sign out" }).click()` and `await page.waitForURL("http://localhost:3000/sign-in")`.
 - **Sign in again.** Repeat the sign-up step with the same username in the same browser. `page.getByTestId("user-id")` shows the same ID as before.
-- **Proof.** Screenshot `/library` after sign-up and after the second sign-in. Confirm the account with `verify.sh rows users 5`, where the newest row's `_id` equals the text of `page.getByTestId("user-id")`. The sidebar shows the username. The ID and the greeting are in the page for the checks, in `hidden` elements.
+- **Proof.** Screenshot `/library` after sign-up and after the second sign-in. Confirm the account with `verify.sh rows users 5`, where the newest row's `_id` equals the text of `page.getByTestId("user-id")`. The account button at the top right shows the username, shortened under 1180 px wide and left to its initial under 1000 px, and its menu holds `Sign out`. The ID and the greeting are in the page for the checks, in `hidden` elements.
 
 `apps/web/checks/auth.ts` runs this journey. `signInWithPasskey(page, username)` in `apps/web/checks/browser.ts` does the sign-up step.
 
@@ -39,4 +39,4 @@ Preconditions:
 - The passkey lives in the virtual device of one browser instance. A second browser cannot sign in to the first one's username.
 - The submit button reads `Waiting for your passkey…` and is disabled while the ceremony runs.
 - Visiting `/sign-in` while signed in redirects to `/library`. Sign out first to drive sign-in again.
-- A failed ceremony shows its error code in an element with `role="alert"`.
+- A failed ceremony shows a sentence for its error code, not the code, in an element with `role="alert"`. Passkey autofill starts on its own when the page opens; when it fails without the visitor doing anything (cancelled, unsupported, or no passkey), the page shows no alert. `apps/web/checks/auth.ts` proves this in a browser with no passkey device.

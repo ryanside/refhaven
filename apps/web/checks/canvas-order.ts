@@ -1,7 +1,13 @@
 import { api } from "@refhaven/backend/api";
 import { type Point, boundsOf } from "@refhaven/scene";
 import type { Page } from "playwright";
-import { assert, consoleWatch, openPageWithPasskeyDevice, signInWithPasskey } from "./browser";
+import {
+  assert,
+  cardNamed,
+  consoleWatch,
+  openPageWithPasskeyDevice,
+  signInWithPasskey,
+} from "./browser";
 import {
   canvasViewport,
   type Item,
@@ -112,10 +118,7 @@ try {
     .nth(2)
     .waitFor({ timeout: 60_000 });
   const refIdOf = async (name: Color) =>
-    (await page
-      .locator("[data-ref-id]")
-      .filter({ hasText: `${name}.png` })
-      .getAttribute("data-ref-id"))!;
+    (await cardNamed(page, `${name}.png`).getAttribute("data-ref-id"))!;
   const refs = {
     red: await refIdOf("red"),
     green: await refIdOf("green"),

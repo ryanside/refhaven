@@ -26,8 +26,11 @@ export function useRefUrls(refIds: ReadonlyArray<Id<"refs">>, role: ImageRole) {
   const convex = useConvex();
   const [signed, setSigned] = useState<SignedUrls>(new Map());
   const [recheck, setRecheck] = useState(0);
+  // A new array of the same IDs, as a render makes, must not sign them again.
+  const wanted = refIds.join(" ");
 
   useEffect(() => {
+    const refIds = wanted === "" ? [] : (wanted.split(" ") as Array<Id<"refs">>);
     const now = Date.now();
     const toSign = refIdsToSign(refIds, signed, now);
     let current = true;
@@ -61,7 +64,7 @@ export function useRefUrls(refIds: ReadonlyArray<Id<"refs">>, role: ImageRole) {
       current = false;
       clearTimeout(timer);
     };
-  }, [convex, refIds, role, signed, recheck]);
+  }, [convex, wanted, role, signed, recheck]);
 
   return signed;
 }

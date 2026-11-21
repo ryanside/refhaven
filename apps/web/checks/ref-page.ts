@@ -52,10 +52,21 @@ const shownTags = (page: Page) =>
     .locator("[data-tag]")
     .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-tag")).join());
 const alert = (page: Page, text: string) => page.getByRole("alert").filter({ hasText: text });
+/** The `Saved` a field shows by its label after a save. */
+const savedBy = (page: Page, label: string) =>
+  page.locator("h2").filter({ hasText: label }).getByText("Saved", { exact: true });
+const crumb = (page: Page) =>
+  page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link").textContent();
 
-/** Fills a field and submits its form. */
+const editButtons: Record<string, string> = { Name: "Rename", Source: "Edit source" };
+
 const submit = async (page: Page, label: string, button: string, value: string) => {
-  await page.getByLabel(label, { exact: true }).fill(value);
+  const field = page.getByLabel(label, { exact: true });
+  const edit = editButtons[label];
+  if (edit && !(await field.isVisible())) {
+    await page.getByRole("button", { name: edit, exact: true }).click();
+  }
+  await field.fill(value);
   await page.getByRole("button", { name: button, exact: true }).click();
 };
 
@@ -82,7 +93,7 @@ try {
   await card(page, large).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${large}`);
   const image = page.locator("main img");
-  await page.getByRole("heading", { name: "large.png" }).waitFor();
+  await page.getByRole("heading", { name: "large", exact: true }).waitFor();
   await imagesLoaded(page);
   const shown = await image.evaluate((element: HTMLImageElement) => ({
     width: element.naturalWidth,
@@ -97,17 +108,18 @@ try {
   const blobId = (await refRow(large))?.blobs.original;
   const blob = (await rows("blobs")).find((row) => row._id === blobId);
   assert(
-    (await page.getByText("3000 × 2000 px").count()) === 1 &&
+    (await page.getByText("large.png", { exact: true }).count()) === 1 &&
+      (await page.getByText("3000 × 2000 px").count()) === 1 &&
       (await page.getByText("image/png", { exact: true }).count()) === 1 &&
       (await original.getAttribute("target")) === "_blank" &&
       new URL((await original.getAttribute("href"))!).pathname.endsWith(
         `/o/${blob?.sha256}/${blob?.upload}`,
       ),
-    "the page shows the pixel size and the type, and a link that opens the original in a new tab",
+    "the page shows the whole file name, the pixel size, and the type, and a link that opens the original in a new tab",
   );
 
   await submit(page, "Name", "Save name", "  renamed.png ");
-  await page.getByRole("heading", { name: "renamed.png" }).waitFor();
+  await page.getByRole("heading", { name: "renamed", exact: true }).waitFor();
   for (const [label, fileName] of [
     ["an empty name", ""],
     ["a name of 256 characters", "x".repeat(256)],
@@ -121,11 +133,59 @@ try {
     await submit(page, "Name", "Save name", "renamed.png");
     await alert(page, "A name is").waitFor({ state: "detached" });
   }
-  await page.getByRole("link", { name: "Library", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Library", exact: true })
+    .click();
   await card(page, large).waitFor();
   assert(
-    (await card(page, large).locator("p").textContent()) === "renamed.png",
+    (await card(page, large).locator("p").textContent()) === "renamed" &&
+      (await card(page, large).locator("img").getAttribute("alt")) === "renamed.png",
     "renaming on the page shows the trimmed new name on the page and on the library's card",
+  );
+
+  await card(page, small).locator("img").click();
+  await page.waitForURL(`${appUrl}/r/${small}`);
+  await page.getByRole("heading", { name: "small", exact: true }).waitFor();
+  const crumbFromLibrary = await page
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .getByRole("link")
+    .textContent();
+  const previousAtFirst = await page.getByRole("button", { name: "Previous image" }).count();
+  await page.keyboard.press("ArrowRight");
+  await page.waitForURL(`${appUrl}/r/${large}`);
+  await page.getByRole("heading", { name: "renamed", exact: true }).waitFor();
+  const nextAtLast = await page.getByRole("button", { name: "Next image" }).count();
+  await page.keyboard.press("ArrowRight");
+  await Bun.sleep(300);
+  const stayedAtLast = page.url() === `${appUrl}/r/${large}`;
+  await page.getByRole("button", { name: "Previous image" }).click();
+  await page.waitForURL(`${appUrl}/r/${small}`);
+  await page.getByRole("button", { name: "Next image" }).click();
+  await page.waitForURL(`${appUrl}/r/${large}`);
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForURL(`${appUrl}/r/${small}`);
+  await page.keyboard.press("Escape");
+  await page.waitForURL(`${appUrl}/library`);
+  await card(page, small).waitFor();
+  assert(
+    crumbFromLibrary === "Library" && previousAtFirst === 0 && nextAtLast === 0 && stayedAtLast,
+    "opened from the library, the breadcrumb leads to Library, → and Next image step to the next image in the library's order and ← and Previous image back, neither goes past an end, and Escape returns to the library",
+  );
+
+  // Opened by its link the page has no list behind it in the history, as in a new tab.
+  await page.goto("about:blank");
+  await page.goto(`${appUrl}/r/${small}`);
+  await page.getByRole("button", { name: "Next image" }).waitFor();
+  await page.keyboard.press("ArrowRight");
+  await page.waitForURL(`${appUrl}/r/${large}`);
+  await page.getByRole("heading", { name: "renamed", exact: true }).waitFor();
+  await page.keyboard.press("Escape");
+  await page.waitForURL(`${appUrl}/library`);
+  await card(page, small).waitFor();
+  assert(
+    true,
+    "opened by its link, the page steps through the library, and Escape after a step opens the library instead of leaving the app",
   );
 
   await card(page, large).locator("img").click();
@@ -160,6 +220,26 @@ try {
     'the open form follows a note set to the text "null" in another tab, and then cleared',
   );
 
+  await savedBy(page, "Note").waitFor({ state: "detached" });
+  await noteField.fill("Typed before the save");
+  await noteField.press("ControlOrMeta+Enter");
+  await page.keyboard.type(", and during it.");
+  await savedBy(page, "Note").waitFor();
+  const keptWhileSaving = await noteField.inputValue();
+  await until(
+    async () => (await refRow(large))?.note === "Typed before the save",
+    "Mod+Enter saves the note",
+  );
+  await noteField.blur();
+  await until(
+    async () => (await refRow(large))?.note === "Typed before the save, and during it.",
+    "leaving the field saves the rest",
+  );
+  assert(
+    keptWhileSaving === "Typed before the save, and during it.",
+    `text typed while the note saves stays in the field, and leaving the field saves it: ${keptWhileSaving}`,
+  );
+
   const source = "https://example.com/a?b=c";
   await submit(page, "Source", "Save source", source);
   const sourceLink = page.getByTestId("source");
@@ -175,13 +255,48 @@ try {
     await submit(page, "Source", "Save source", bad);
     await alert(page, "A source is an http or https link").waitFor();
     assert(
-      (await refRow(large))?.sourceUrl === source &&
-        (await sourceLink.getAttribute("href")) === source,
+      (await refRow(large))?.sourceUrl === source,
       `the source ${JSON.stringify(bad)} is refused on the page with an alert and writes nothing`,
     );
     await submit(page, "Source", "Save source", source);
     await alert(page, "A source is").waitFor({ state: "detached" });
+    assert(
+      (await sourceLink.getAttribute("href")) === source,
+      "saving a good source takes the alert away and shows the source",
+    );
   }
+
+  await savedBy(page, "Source").waitFor({ state: "detached" });
+  await submit(page, "Source", "Save source", "not a url");
+  await alert(page, "A source is").waitFor();
+  await page.getByLabel("Source", { exact: true }).press("Escape");
+  await sourceLink.waitFor();
+  const savedAfterRefusal = await savedBy(page, "Source").count();
+  const alertsAfterRefusal = await alert(page, "A source is").count();
+  await page.getByRole("button", { name: "Edit source", exact: true }).click();
+  await page.getByLabel("Source", { exact: true }).fill("https://example.com/unsaved");
+  await page.getByLabel("Source", { exact: true }).press("Escape");
+  await sourceLink.waitFor();
+  assert(
+    savedAfterRefusal === 0 &&
+      alertsAfterRefusal === 0 &&
+      (await savedBy(page, "Source").count()) === 0 &&
+      (await sourceLink.getAttribute("href")) === source &&
+      (await refRow(large))?.sourceUrl === source,
+    "Escape leaves an edit of the source, a refused one too, with the link as it was, no alert, no Saved, and nothing written",
+  );
+
+  const elsewhere = "https://example.org/elsewhere";
+  await submit(page, "Source", "Save source", "not a url");
+  await alert(page, "A source is").waitFor();
+  await owner.mutation(api.ref.update, { refId: large, sourceUrl: elsewhere });
+  await alert(page, "A source is").waitFor({ state: "detached" });
+  await page.getByLabel("Source", { exact: true }).press("Escape");
+  await sourceLink.waitFor();
+  assert(
+    (await sourceLink.getAttribute("href")) === elsewhere,
+    "a source changed in another tab takes away the alert of a refused edit here, and the link shows the new source",
+  );
   await submit(page, "Source", "Save source", "");
   await sourceLink.waitFor({ state: "detached" });
   assert(
@@ -259,14 +374,31 @@ try {
   await page.getByRole("link", { name: "Gallery" }).click();
   await card(page, large).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${large}`);
+  await page.getByRole("heading", { name: "renamed", exact: true }).waitFor();
+  const crumbFromBoard = await crumb(page);
+  await page.keyboard.press("Escape");
+  await page.waitForURL(`${appUrl}/c/${board}?view=gallery`);
+  await card(page, large).hover();
+  await page.getByRole("button", { name: "More for renamed.png" }).click();
+  await page.getByRole("menuitem", { name: "Open" }).click();
+  await page.waitForURL(`${appUrl}/r/${large}`);
+  await page.getByRole("heading", { name: "renamed", exact: true }).waitFor();
+  const crumbFromMenu = await crumb(page);
+  // Opened with the library's order, the image would have small.png before it.
+  await Bun.sleep(1000);
+  const stepsFromMenu = await page.getByRole("button", { name: /^(Previous|Next) image$/ }).count();
+  await page.keyboard.press("Escape");
+  await page.waitForURL(`${appUrl}/c/${board}?view=gallery`);
+  await card(page, large).locator("img").click();
+  await page.waitForURL(`${appUrl}/r/${large}`);
   assert(
-    true,
-    "the collection's link opens /c/{collectionId}, and the card on its gallery links back here",
+    crumbFromBoard === "Board" && crumbFromMenu === "Board" && stepsFromMenu === 0,
+    "the collection's link opens /c/{collectionId}, the card on its gallery and its menu's Open link back here with a breadcrumb that leads to the collection and steps through the collection alone, and Escape returns to its gallery",
   );
 
   // The page renews its session while it runs, and a client takes the token it holds now.
   owner = await clientFor(page);
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Move to trash", exact: true }).click();
   await page.getByRole("button", { name: "Restore", exact: true }).waitFor();
   const trashed = await owner.query(api.ref.get, { refId: large });
   const editsInTrash = {
@@ -280,13 +412,13 @@ try {
     typeof trashed.deletedAt === "number" &&
       (await page.getByText("This image is in the trash.").count()) === 1 &&
       Object.values(editsInTrash).every((result) => result === "RefNotFound"),
-    `Delete on the page moves the image to the trash and shows Restore, get still answers, and update, addTags, and removeTags fail with RefNotFound: ${JSON.stringify(editsInTrash)}`,
+    `Move to trash on the page moves the image to the trash and shows Restore, get still answers, and update, addTags, and removeTags fail with RefNotFound: ${JSON.stringify(editsInTrash)}`,
   );
   await page.goto(`${appUrl}/trash`);
   await card(page, large).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${large}`);
   await page.getByRole("button", { name: "Restore", exact: true }).click();
-  await page.getByRole("button", { name: "Delete", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Move to trash", exact: true }).waitFor();
   const restored = await owner.query(api.ref.get, { refId: large });
   assert(
     restored.deletedAt === null &&
@@ -394,7 +526,7 @@ try {
   await second.page.goto(`${appUrl}/r/${large}`);
   await second.page.getByText("Image not found.").waitFor();
   assert(
-    (await second.page.getByText("renamed.png").count()) === 0,
+    (await second.page.getByText("renamed").count()) === 0,
     "the first user's image page shows the second user only Image not found.",
   );
 

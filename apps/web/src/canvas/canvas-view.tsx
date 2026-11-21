@@ -2,8 +2,6 @@ import { QueryResult, useMutation, useQuery } from "@confect/react";
 import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
 import type { Renderer } from "@refhaven/renderer";
-import { Button } from "@refhaven/ui/components/button";
-import { NativeSelect, NativeSelectOption } from "@refhaven/ui/components/native-select";
 import { createPixiRenderer } from "@refhaven/renderer/pixi";
 import {
   addEntry,
@@ -18,7 +16,6 @@ import {
   groupEntry,
   type Handle,
   handles,
-  type History,
   type ImageRole,
   imageRole,
   type ItemOp,
@@ -26,7 +23,6 @@ import {
   maxNoteText,
   type NoteAdd,
   type NoteColor,
-  noteColors,
   noteEntry,
   noteType,
   patchEntry,
@@ -46,10 +42,19 @@ import {
 } from "@refhaven/scene";
 import { useHotkeys } from "@tanstack/react-hotkeys";
 import * as Result from "effect/Result";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { type PlaceAt, SaveImages } from "@/library/save-images";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { AddImagesButton, type PlaceAt, SaveScope } from "@/library/save-images";
+import { TopBar } from "@/shell/top-bar";
+import { Dock, Problem, SelectionCluster, ZoomCluster, fitToView } from "./chrome";
 import { type Action, keymap } from "./keymap";
-import { boxFor, createNoteTextures, noteFont, noteInk, noteTextureKey } from "./notes";
+import { boxFor, createNoteTextures, noteFont, noteInkStyle, noteTextureKey } from "./notes";
 import { type Need, type Sign, createTextureLoader, textureKey } from "./textures";
 
 /** A change list longer than this is replaced by a new snapshot. */
@@ -106,7 +111,15 @@ const idle = (store: SceneStore) =>
   });
 
 /** A collection's canvas. */
-export function CanvasView({ collectionId }: { collectionId: Id<"collections"> }) {
+export function CanvasView({
+  collectionId,
+  name,
+  title,
+}: {
+  collectionId: Id<"collections">;
+  name: string;
+  title: ReactNode;
+}) {
   const [store] = useState(createSceneStore);
   const [history] = useState(createHistory);
   const host = useRef<HTMLDivElement>(null);
@@ -118,6 +131,7 @@ export function CanvasView({ collectionId }: { collectionId: Id<"collections"> }
   const urls = useMutation(refs.public.library.urls);
   const [base, setBase] = useState<Base>();
   const snapshotting = useRef(false);
+  const framed = useRef(false);
 
   const takeSnapshot = useCallback(async () => {
     if (snapshotting.current) return;
@@ -129,6 +143,10 @@ export function CanvasView({ collectionId }: { collectionId: Id<"collections"> }
         return;
       }
       if (store.loadSnapshot(opened.success)) {
+        if (!framed.current) {
+          framed.current = true;
+          fitToView(store);
+        }
         setBase({ canvasId: opened.success.canvasId, rev: opened.success.rev });
       }
     } finally {
@@ -417,13 +435,14 @@ export function CanvasView({ collectionId }: { collectionId: Id<"collections"> }
   const placeAt = useCallback<PlaceAt>(
     (at) => {
       const box = host.current!.getBoundingClientRect();
-      // A drop beside the canvas, as on its panel, starts at the center of the view, as a paste does.
+      const under = at === null ? null : document.elementFromPoint(at.x, at.y);
       const onCanvas =
         at !== null &&
         at.x >= box.left &&
         at.x <= box.right &&
         at.y >= box.top &&
-        at.y <= box.bottom;
+        at.y <= box.bottom &&
+        (under === null || host.current!.contains(under) || outlines.current!.contains(under));
       const point = onCanvas
         ? { x: at.x - box.left, y: at.y - box.top }
         : { x: box.width / 2, y: box.height / 2 };
@@ -458,137 +477,32 @@ export function CanvasView({ collectionId }: { collectionId: Id<"collections"> }
   }, [store, urls]);
 
   return (
-    <div className="flex min-h-0 flex-1">
-      {/* The content is laid over the column, so its height never adds to the page's. It scrolls. */}
-      <div data-testid="canvas-panel" className="relative w-80 shrink-0 border-r">
-        <div className="absolute inset-0 flex flex-col gap-2 overflow-y-auto p-3">
-          <SaveImages collectionId={collectionId} placeAt={placeAt} />
-          <EditButtons store={store} history={history} actions={actions} />
-          <NoteButtons store={store} color={noteColor} addNote={addNote} recolor={recolor} />
-          <GroupButtons store={store} actions={actions} />
-          <Readout store={store} />
-          {problem ? <p role="alert">{problem}</p> : null}
-        </div>
+    <SaveScope target={{ collectionId, name }} placeAt={placeAt} surface="canvas">
+      <div className="on-canvas contents">
+        <TopBar center={title} action={<AddImagesButton fold />} />
+        <main className="fixed inset-0 overflow-hidden bg-canvas">
+          <div
+            ref={host}
+            data-testid="canvas"
+            className="absolute inset-0 touch-none select-none"
+          />
+          <div ref={outlines} className="pointer-events-none absolute inset-0" />
+          {draft ? (
+            <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} />
+          ) : null}
+        </main>
+        <ZoomCluster store={store} />
+        <Dock
+          store={store}
+          history={history}
+          actions={actions}
+          color={noteColor}
+          recolor={recolor}
+        />
+        <SelectionCluster store={store} actions={actions} />
+        {problem ? <Problem close={() => setProblem(undefined)}>{problem}</Problem> : null}
       </div>
-      <div className="relative flex-1 overflow-hidden">
-        <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
-        <div ref={outlines} className="pointer-events-none absolute inset-0" />
-        {draft ? (
-          <NoteEditor key={draft.key} store={store} draft={draft} done={commitNote} />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function EditButtons({
-  store,
-  history,
-  actions,
-}: {
-  store: SceneStore;
-  history: History;
-  actions: Record<Action, () => void>;
-}) {
-  const { selected } = useSyncExternalStore(store.subscribe, store.summary);
-  const { canUndo, canRedo } = useSyncExternalStore(history.subscribe, history.summary);
-  return (
-    <>
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.remove}>
-          Remove from collection
-        </Button>
-        <Button variant="outline" size="sm" disabled={!canUndo} onClick={actions.undo}>
-          Undo
-        </Button>
-        <Button variant="outline" size="sm" disabled={!canRedo} onClick={actions.redo}>
-          Redo
-        </Button>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={selected === 0}
-          onClick={actions.bringToFront}
-        >
-          Bring to front
-        </Button>
-        <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.sendToBack}>
-          Send to back
-        </Button>
-      </div>
-    </>
-  );
-}
-
-function GroupButtons({
-  store,
-  actions,
-}: {
-  store: SceneStore;
-  actions: Record<Action, () => void>;
-}) {
-  const canGroup = useSyncExternalStore(
-    store.subscribe,
-    () => groupEntry(store.selected(), "") !== null,
-  );
-  const canUngroup = useSyncExternalStore(store.subscribe, () =>
-    store.selected().some((item) => item.group),
-  );
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" disabled={!canGroup} onClick={actions.group}>
-        Group
-      </Button>
-      <Button variant="outline" size="sm" disabled={!canUngroup} onClick={actions.ungroup}>
-        Ungroup
-      </Button>
-    </div>
-  );
-}
-
-/** The one color the selected notes share, or "" when none is selected or they differ. */
-const selectedColor = (store: SceneStore) => {
-  const selection = store.selection();
-  const colors = new Set(
-    store
-      .items()
-      .flatMap((item) => (item.kind === "note" && selection.has(item.key) ? [item.color] : [])),
-  );
-  return colors.size === 1 ? [...colors][0]! : "";
-};
-
-function NoteButtons({
-  store,
-  color,
-  addNote,
-  recolor,
-}: {
-  store: SceneStore;
-  color: NoteColor;
-  addNote: () => void;
-  recolor: (color: NoteColor) => void;
-}) {
-  const shared = useSyncExternalStore(store.subscribe, () => selectedColor(store));
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" onClick={addNote}>
-        Add note
-      </Button>
-      <NativeSelect
-        size="sm"
-        aria-label="Note color"
-        value={shared || color}
-        onChange={(event) => recolor(event.target.value as NoteColor)}
-      >
-        {noteColors.map((name) => (
-          <NativeSelectOption key={name} value={name}>
-            {name[0]!.toUpperCase() + name.slice(1)}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
-    </div>
+    </SaveScope>
   );
 }
 
@@ -641,7 +555,7 @@ function NoteEditor({
           finish(text);
         }
       }}
-      className="absolute resize-none overflow-hidden bg-transparent outline outline-primary"
+      className="absolute resize-none overflow-hidden bg-transparent outline outline-selection"
       style={{
         left: corner.x,
         top: corner.y,
@@ -651,28 +565,11 @@ function NoteEditor({
         padding: noteType.padding * unit,
         font: noteFont(noteType.size * unit),
         lineHeight: `${noteType.lineHeight * unit}px`,
-        color: noteInk(draft.color),
+        color: noteInkStyle(draft.color),
         transform: `rotate(${draft.rotation}rad)`,
         transformOrigin: "0 0",
       }}
     />
-  );
-}
-
-function Readout({ store }: { store: SceneStore }) {
-  const { items, selected, camera } = useSyncExternalStore(store.subscribe, store.summary);
-  return (
-    <p
-      data-testid="canvas-readout"
-      data-items={items}
-      data-zoom={camera.zoom * 100}
-      data-camera-x={camera.x}
-      data-camera-y={camera.y}
-      data-selected={selected}
-    >
-      {items} items, {Math.round(camera.zoom * 100)}%, at {Math.round(camera.x)},{" "}
-      {Math.round(camera.y)}, {selected} selected
-    </p>
   );
 }
 
@@ -922,7 +819,7 @@ function drawOutlines(
     if (!element) {
       element = document.createElement("div");
       element.dataset.outlineKey = key;
-      element.className = "absolute border-2 border-primary";
+      element.className = "absolute border-2 border-selection";
       layer.appendChild(element);
     }
     place(element, camera, item);
@@ -948,7 +845,7 @@ const grip = (name: Handle | "rotate", left: string, top: string) => {
   const element = document.createElement("div");
   element.dataset.handle = name;
   element.className =
-    "pointer-events-auto absolute size-2.5 -translate-1/2 rounded-full border border-primary bg-background";
+    "pointer-events-auto absolute size-2.5 -translate-1/2 rounded-full border border-selection bg-selection-fill";
   element.style.left = left;
   element.style.top = top;
   return element;
@@ -968,7 +865,7 @@ function drawFrame(layer: HTMLDivElement, store: SceneStore) {
   if (!element) {
     element = document.createElement("div");
     element.dataset.frame = "";
-    element.className = "absolute outline outline-primary";
+    element.className = "absolute outline outline-selection";
     for (const [name, { x, y }] of Object.entries(handles) as Array<[Handle, Point]>) {
       element.append(grip(name, `${(x + 1) * 50}%`, `${(y + 1) * 50}%`));
     }
@@ -989,7 +886,7 @@ function drawMarquee(layer: HTMLDivElement, store: SceneStore) {
   if (!element) {
     element = document.createElement("div");
     element.dataset.marquee = "";
-    element.className = "absolute border border-primary";
+    element.className = "absolute border border-selection";
     layer.append(element);
   }
   const from = worldToScreen(store.camera(), gesture.fromWorld);

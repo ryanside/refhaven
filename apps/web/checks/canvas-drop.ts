@@ -268,13 +268,14 @@ try {
   const itemsBefore = (await main.open()).items.length;
   view = await pageView(page);
   const viewCenter = toWorld(view, centerOf(view.box));
-  const panelBox = (await page.getByTestId("canvas-panel").boundingBox())!;
-  await send(page, "drop", [gray.carried], '[data-testid="canvas-panel"]', centerOf(panelBox));
+  const dockBox = (await page.getByTestId("canvas-dock").boundingBox())!;
+  const onDock = centerOf(dockBox);
+  await send(page, "drop", [gray.carried], '[data-testid="canvas-dock"]', onDock);
   await waitForCanvas(page, itemsBefore + 1);
   const grayItem = itemOf((await main.open()).items, await refIdOf(owner, "gray.png"));
   assert(
-    panelBox.x + panelBox.width <= view.box.x && at(grayItem, viewCenter),
-    `a file dropped on the canvas's panel, which is beside the canvas, lands at the center of the view, ${viewCenter.x.toFixed(1)}, ${viewCenter.y.toFixed(1)}`,
+    onDock.y > view.box.y && onDock.y < view.box.y + view.box.height && at(grayItem, viewCenter),
+    `a file dropped on the canvas's tools, which float over the canvas, lands at the center of the view, ${viewCenter.x.toFixed(1)}, ${viewCenter.y.toFixed(1)}, not under the drop point`,
   );
 
   assertCleanConsole();

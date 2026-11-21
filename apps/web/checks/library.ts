@@ -4,6 +4,7 @@ import { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
 import {
   assert,
+  cardNamed,
   clientFor,
   convexUrl,
   openPageWithPasskeyDevice,
@@ -23,6 +24,11 @@ const bytesAt = async (url: string) => new Uint8Array(await (await fetch(url)).a
 
 const cards = (page: Page) => page.locator("[data-ref-id]");
 const outcomes = (page: Page) => page.locator('[role="status"] li');
+/** The whole file names the cards' images give their links, in order. */
+const imageNames = (page: Page) =>
+  cards(page)
+    .locator("img")
+    .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).alt).join());
 const stamp = Date.now().toString(36);
 
 const anonymous = new ConvexHttpClient(convexUrl());
@@ -52,7 +58,11 @@ try {
     { name: "large.png", mimeType: "image/png", buffer: large },
     { name: "small.png", mimeType: "image/png", buffer: small },
   ]);
-  await outcomes(page).nth(1).waitFor();
+  await outcomes(page).nth(1).locator("img").waitFor();
+  await outcomes(page).first().locator("img").waitFor();
+  const previews = await outcomes(page)
+    .locator("img")
+    .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).src));
   await page.waitForFunction(() => {
     const images = [...document.querySelectorAll<HTMLImageElement>("[data-ref-id] img")];
     return images.length === 2 && images.every((image) => image.complete && image.naturalWidth > 0);
@@ -61,8 +71,95 @@ try {
     await page.screenshot({ path: `${process.env.EVIDENCE}/01-saved.png`, fullPage: true });
   }
   assert(
-    (await cards(page).locator("p").allTextContents()).join() === "small.png,large.png",
-    `two saved images show in the library, newest first, and both load: ${await outcomes(page).allTextContents()}`,
+    (await cards(page).locator("p").allTextContents()).join() === "small,large" &&
+      (await imageNames(page)) === "small.png,large.png",
+    `two saved images show in the library, newest first, each captioned by its name without the extension and named by its whole file name, and both load: ${await outcomes(page).allTextContents()}`,
+  );
+
+  // Tab to a control and read the ring it shows.
+  const ringOn = async (name: string) => {
+    for (let presses = 0; presses < 40; presses++) {
+      await page.keyboard.press("Tab");
+      const ring = await page.evaluate((name) => {
+        const focused = document.activeElement as HTMLElement | null;
+        if (
+          !focused ||
+          (focused.getAttribute("aria-label") ?? focused.textContent?.trim()) !== name
+        ) {
+          return null;
+        }
+        // The ring's band fades in, so read it where it ends.
+        for (const animation of focused.getAnimations()) animation.finish();
+        const style = getComputedStyle(focused);
+        return {
+          visible: focused.matches(":focus-visible"),
+          outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`,
+          shadow: style.boxShadow,
+        };
+      }, name);
+      if (ring) return ring;
+    }
+    throw new Error(`FAIL Tab never reaches ${name}`);
+  };
+  const addRing = await ringOn("Add images");
+  const trashRing = await ringOn("Move to trash");
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  const ink = "solid 2px rgb(23, 23, 21)";
+  assert(
+    addRing.visible &&
+      addRing.outline === ink &&
+      trashRing.visible &&
+      trashRing.outline === ink &&
+      trashRing.shadow.includes("rgb(255, 255, 255) 0px 0px 0px 4px"),
+    `a button reached with Tab shows a 2 px ring of ink, and a glass button over an image shows it on a band of the page's color: ${JSON.stringify([addRing, trashRing])}`,
+  );
+
+  // The faintest text color, used for counts, labels, and placeholders, against each background
+  // it sits on.
+  const faintest = await page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement);
+    const luminance = (name: string) => {
+      const hex = root.getPropertyValue(name).trim().slice(1);
+      const [r, g, b] = [0, 2, 4].map((at) => {
+        const c = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const text = luminance("--ink-3");
+    return Math.min(
+      ...["--page", "--surface", "--sunken", "--hover"].map(
+        (background) => (luminance(background) + 0.05) / (text + 0.05),
+      ),
+    );
+  });
+  assert(
+    faintest >= 4.5,
+    `the faintest text color has a contrast of at least 4.5:1 on the page, a surface, a sunken field, and a hover: ${faintest.toFixed(2)}`,
+  );
+
+  await page.getByTestId("save-tray").waitFor({ state: "hidden" });
+  const previewsAfter = await page.evaluate(
+    (urls) =>
+      Promise.all(
+        urls.map((url) =>
+          fetch(url).then(
+            () => "kept",
+            () => "let go",
+          ),
+        ),
+      ),
+    previews,
+  );
+  assert(
+    previews.length === 2 &&
+      previewsAfter.every((state) => state === "let go") &&
+      (await outcomes(page).count()) === 2 &&
+      (await outcomes(page).evaluateAll((rows) =>
+        rows.every((row) => (row as HTMLElement).hidden),
+      )) &&
+      (await outcomes(page).locator("img").count()) === 0,
+    `once the tray clears itself its lines stay in the list, hidden, with no preview, and the previews' files are let go: ${previewsAfter}`,
   );
 
   const workspaceId = uploads[0]!.split("/")[2];
@@ -89,8 +186,7 @@ try {
   );
 
   const naturalSize = (name: string) =>
-    cards(page)
-      .filter({ hasText: name })
+    cardNamed(page, name)
       .locator("img")
       .evaluate((image: HTMLImageElement) => `${image.naturalWidth}x${image.naturalHeight}`);
   const largeShown = await naturalSize("large.png");
@@ -104,10 +200,7 @@ try {
     `the grid shows the 300 px image at its own size: ${smallShown}`,
   );
 
-  const smallUrl = await cards(page)
-    .filter({ hasText: "small.png" })
-    .locator("img")
-    .getAttribute("src");
+  const smallUrl = await cardNamed(page, "small.png").locator("img").getAttribute("src");
   assert(
     sha256(await bytesAt(smallUrl!)) === sha256(small),
     "an image with no thumbnail serves its original bytes unchanged in the grid",
@@ -343,9 +436,10 @@ try {
       buffer: await pngOf(page, "rgb(90, 90, 90)", 30),
     },
   ]);
-  await page.locator("[data-ref-id]").filter({ hasText: "outer spaces.png" }).waitFor();
+  await cardNamed(page, "outer spaces.png").waitFor();
   assert(
-    (await page.locator("[data-ref-id] p").first().textContent()) === "outer spaces.png",
+    (await cards(page).first().locator("img").getAttribute("alt")) === "outer spaces.png" &&
+      (await cards(page).first().locator("p").textContent()) === "outer spaces",
     "a file whose name has outer spaces is saved under the trimmed name",
   );
 

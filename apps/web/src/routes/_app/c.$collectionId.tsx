@@ -1,16 +1,34 @@
-import { QueryResult, useMutation, usePaginatedQuery, useQuery } from "@confect/react";
+import { PaginatedQueryResult, QueryResult, useMutation, useQuery } from "@confect/react";
+import { FolderRemoveIcon, PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
 import { Button } from "@refhaven/ui/components/button";
-import { createFileRoute } from "@tanstack/react-router";
+import { Icon } from "@refhaven/ui/components/icon";
+import { Tooltip } from "@refhaven/ui/components/tooltip";
+import { cn } from "@refhaven/ui/lib/utils";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import * as Result from "effect/Result";
+import { useRef, useState } from "react";
 import { CanvasView } from "@/canvas/canvas-view";
-import { NameForm } from "@/collections/name-form";
-import { FilteredGallery, GalleryFilters, isFiltered } from "@/library/filters";
-import { type CardAction, Gallery, galleryPage } from "@/library/gallery";
-import { SaveImages } from "@/library/save-images";
-import { PageHeader } from "@/page-header";
-import { ViewLinks, validateCollectionSearch } from "@/view";
+import { isCollectionName, nameRefusal } from "@/collections/new-collection";
+import { shortCount, useCollectionCover, useCollectionMembers } from "@/collections/pile";
+import { EmptyDropZone, PasteKeys } from "@/library/empty";
+import {
+  ClearFilters,
+  FilteredGallery,
+  SearchField,
+  TagChips,
+  isFiltered,
+  matchCount,
+  useFiltered,
+} from "@/library/filters";
+import { Gallery, type Removal } from "@/library/gallery";
+import { OriginContext } from "@/library/origin";
+import { AddImagesButton, SaveScope } from "@/library/save-images";
+import { NotFound } from "@/shell/not-found";
+import { toast } from "@/shell/toast";
+import { Rule, TopBar, pillClass } from "@/shell/top-bar";
+import { type Filters, ViewLinks, validateCollectionSearch } from "@/view";
 
 export const Route = createFileRoute("/_app/c/$collectionId")({
   validateSearch: validateCollectionSearch,
@@ -21,92 +39,237 @@ function CollectionPage() {
   const collectionId = Route.useParams().collectionId as Id<"collections">;
   const collections = useQuery(refs.public.collections.list, {});
 
-  if (!QueryResult.isSuccess(collections)) {
-    return <Outside title="Collection">Loading…</Outside>;
-  }
+  if (!QueryResult.isSuccess(collections)) return <TopBar />;
   const collection = collections.value.find((owned) => owned.collectionId === collectionId);
   if (!collection) {
-    return <Outside title="Collection">Collection not found.</Outside>;
+    return (
+      <NotFound title="Collection not found.">
+        It may have been made by another account, or the link is incomplete.
+      </NotFound>
+    );
   }
   return <Collection key={collectionId} collectionId={collectionId} name={collection.name} />;
 }
 
-/** A page with no collection to show. It keeps the title bar, which is the way to the sidebar. */
-function Outside({ title, children }: { title: string; children: string }) {
-  return (
-    <>
-      <PageHeader title={title} />
-      <p className="p-6">{children}</p>
-    </>
-  );
-}
-
 function Collection({ collectionId, name }: { collectionId: Id<"collections">; name: string }) {
   const { view = "canvas" } = Route.useSearch();
-  return (
-    <>
-      <PageHeader title={name}>
-        <ViewLinks />
-      </PageHeader>
-      {view === "gallery" ? (
-        <CollectionGallery collectionId={collectionId} name={name} />
-      ) : (
-        <CanvasView collectionId={collectionId} />
-      )}
-    </>
+  const title = <CollectionTitle collectionId={collectionId} name={name} />;
+  return view === "gallery" ? (
+    <CollectionGallery collectionId={collectionId} name={name} title={title} />
+  ) : (
+    <CanvasView collectionId={collectionId} name={name} title={title} />
   );
 }
 
-function CollectionGallery({
+function CollectionTitle({
   collectionId,
   name,
 }: {
   collectionId: Id<"collections">;
   name: string;
 }) {
-  const { view: _, ...filters } = Route.useSearch();
   const rename = useMutation(refs.public.collections.rename);
-  const removeRefs = useMutation(refs.public.collections.removeRefs);
-  const action: CardAction = (refId) => (
-    <Button
-      variant="outline"
-      size="sm"
-      className="self-start"
-      onClick={() => void removeRefs({ collectionId, refIds: [refId] })}
-    >
-      Remove from collection
-    </Button>
-  );
+  const cover = useCollectionCover(collectionId);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const field = useRef<HTMLInputElement>(null);
+  // Enter and then leaving the field would otherwise send the name twice.
+  const saving = useRef(false);
+  const refocus = useRef(false);
+  // A rename that answers after its field was closed leaves no alert and does not close a newer one.
+  const session = useRef(0);
+
+  /** Leaves the field. Focus that was in it goes back to Rename. */
+  const close = () => {
+    session.current += 1;
+    refocus.current = document.activeElement === field.current;
+    setDraft(null);
+    setError(null);
+  };
+  const save = async () => {
+    if (draft === null || saving.current) return;
+    const trimmed = draft.trim();
+    if (trimmed === name || trimmed === "") {
+      close();
+      return;
+    }
+    if (!isCollectionName(trimmed)) {
+      setError("A name is 1 to 100 characters.");
+      return;
+    }
+    saving.current = true;
+    const started = session.current;
+    let renamed;
+    try {
+      renamed = await rename({ collectionId, name: trimmed });
+    } finally {
+      saving.current = false;
+    }
+    if (session.current !== started) return;
+    if (Result.isFailure(renamed)) {
+      setError(nameRefusal(renamed.failure._tag));
+      return;
+    }
+    close();
+  };
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <NameForm
-        label="Collection name"
-        submit="Rename"
-        initialName={name}
-        save={async (newName) => {
-          const renamed = await rename({ collectionId, name: newName });
-          return Result.isFailure(renamed) ? renamed.failure._tag : null;
-        }}
-      />
-      <SaveImages collectionId={collectionId} />
-      <GalleryFilters {...filters} />
-      {isFiltered(filters) ? (
-        <FilteredGallery filters={filters} collectionId={collectionId} action={action} />
-      ) : (
-        <Members collectionId={collectionId} action={action} />
-      )}
+    <div className="relative min-w-0">
+      <div className={cn(pillClass, "shrink")}>
+        {draft === null ? (
+          <div className="flex min-w-0 items-center gap-2 pr-0.5 pl-3">
+            <h1 className="max-w-[24vw] truncate font-[600] tracking-[-0.012em]">{name}</h1>
+            {cover.loaded ? <span className="text-ink-3 num">{shortCount(cover)}</span> : null}
+            <Tooltip label="Rename">
+              <Button
+                ref={(button) => {
+                  if (!button || !refocus.current) return;
+                  refocus.current = false;
+                  button.focus();
+                }}
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Rename"
+                className="text-ink-3"
+                onClick={() => setDraft(name)}
+              >
+                <Icon icon={PencilEdit02Icon} size={15} />
+              </Button>
+            </Tooltip>
+          </div>
+        ) : (
+          <input
+            ref={field}
+            aria-label="Collection name"
+            autoFocus
+            value={draft}
+            maxLength={200}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => {
+              setDraft(event.currentTarget.value);
+              setError(null);
+            }}
+            // A refused name stays in the field with its reason until it is edited, so leaving the
+            // field does not send it again.
+            onBlur={() => {
+              if (error === null) void save();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void save();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                close();
+              }
+            }}
+            className="h-8 max-w-[28vw] min-w-20 rounded-full bg-sunken px-3 font-[600] tracking-[-0.012em] outline-none [field-sizing:content] focus:shadow-[inset_0_0_0_1.5px_var(--ink)]"
+          />
+        )}
+        <Rule />
+        <ViewLinks />
+      </div>
+      {error ? (
+        <p
+          role="alert"
+          className="absolute top-full left-1/2 mt-2 -translate-x-1/2 rounded-full bg-surface px-3 py-1.5 text-[12px] whitespace-nowrap text-bad shadow-float"
+        >
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-function Members({
+function CollectionGallery({
   collectionId,
-  action,
+  name,
+  title,
 }: {
   collectionId: Id<"collections">;
-  action: CardAction;
+  name: string;
+  title: React.ReactNode;
 }) {
-  const items = usePaginatedQuery(refs.public.collections.refs, { collectionId }, galleryPage);
-  return <Gallery items={items} action={action} />;
+  const { view: _, ...filters } = Route.useSearch();
+  const members = useCollectionMembers(collectionId);
+  const empty =
+    !isFiltered(filters) &&
+    PaginatedQueryResult.isExhausted(members) &&
+    members.results.length === 0;
+  const removal = useRemoveFromCollection(collectionId, name);
+
+  return (
+    <SaveScope target={{ collectionId, name }}>
+      <TopBar center={title} action={empty ? null : <AddImagesButton fold />} />
+      {empty ? (
+        <EmptyDropZone title="Nothing in this collection yet." className="narrow:top-[132px]">
+          Drop images anywhere on this page, paste them with <PasteKeys />, or pick files. They go
+          into your library too, or add images from the{" "}
+          <Link
+            to="/library"
+            className="text-ink underline decoration-ink-4 underline-offset-[3px]"
+          >
+            Library
+          </Link>
+          .
+        </EmptyDropZone>
+      ) : (
+        <main className="px-gutter pt-[84px] pb-28 narrow:pt-[132px]">
+          <OriginContext value={{ kind: "collection", collectionId, name }}>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5">
+              <SearchField filters={filters} variant="inline" />
+              <div className="min-w-0 flex-1">
+                <TagChips filters={filters} />
+              </div>
+            </div>
+            {isFiltered(filters) ? (
+              <Filtered filters={filters} collectionId={collectionId} removal={removal} />
+            ) : (
+              <div className="mt-5">
+                <Gallery items={members} removal={removal} />
+              </div>
+            )}
+          </OriginContext>
+        </main>
+      )}
+    </SaveScope>
+  );
+}
+
+function Filtered({
+  filters,
+  collectionId,
+  removal,
+}: {
+  filters: Filters;
+  collectionId: Id<"collections">;
+  removal: Removal;
+}) {
+  const result = useFiltered(filters, collectionId);
+  const count = matchCount(result);
+  return (
+    <>
+      <div className="mt-4 mb-4 flex min-h-7 items-center gap-3">
+        {count ? <span className="text-[14px] text-ink-2 num">{count}</span> : null}
+        <ClearFilters />
+      </div>
+      <FilteredGallery result={result} removal={removal} />
+    </>
+  );
+}
+
+function useRemoveFromCollection(collectionId: Id<"collections">, name: string): Removal {
+  const removeRefs = useMutation(refs.public.collections.removeRefs);
+  const addRefs = useMutation(refs.public.collections.addRefs);
+  return {
+    label: "Remove from collection",
+    icon: FolderRemoveIcon,
+    run: (refId) => {
+      void removeRefs({ collectionId, refIds: [refId] });
+      toast(`Removed from ${name}`, {
+        label: "Undo",
+        run: () => void addRefs({ collectionId, refIds: [refId] }),
+      });
+    },
+  };
 }

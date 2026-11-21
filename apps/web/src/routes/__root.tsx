@@ -1,4 +1,4 @@
-import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
+import { HeadContent, Link, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ConvexReactClient } from "convex/react";
 
@@ -18,9 +18,19 @@ export const Route = createRootRouteWithContext<{
     links: [{ rel: "stylesheet", href: appCss }],
   }),
   notFoundComponent: () => (
-    <main className="p-6">
-      <h1>404</h1>
-      <p>The requested page could not be found.</p>
+    <main className="grid min-h-svh place-items-center px-gutter">
+      <div className="grid justify-items-center text-center">
+        <h1 className="text-[28px] leading-[34px] font-[620] tracking-[-0.03em]">
+          Page not found.
+        </h1>
+        <p className="mt-2 text-[15px] text-ink-2">The link may be incomplete.</p>
+        <Link
+          to="/library"
+          className="mt-6 text-[14px] font-[540] underline decoration-ink-4 underline-offset-[3px]"
+        >
+          Open your library
+        </Link>
+      </div>
     </main>
   ),
   shellComponent: RootDocument,

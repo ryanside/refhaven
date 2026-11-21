@@ -1,25 +1,25 @@
 # Trash
 
-Each card in the library's grid has a `Delete` button. A deleted image goes to the trash at `/trash`. It leaves the library, every collection's grid, and every canvas at once, also in other open pages, without a reload. `/trash` lists the deleted images, newest deleted first, each with a `Restore` button. A restored image comes back to the library, to its collections, and to the same place on each canvas. `/trash` says that images there are deleted for good 30 days after they were deleted, and each card shows its days left. A daily job purges an image 30 days after it was deleted, and another sweeps its bytes from R2 a week later. A check runs both on a pretend clock. Each user sees only their own trash.
+Each card in the library's grid has a `Move to trash` button, which shows on hover, and a toast offers `Restore`. A deleted image goes to the trash at `/trash`. It leaves the library, every collection's grid, and every canvas at once, also in other open pages, without a reload. `/trash` lists the deleted images, newest deleted first, each with a `Restore` button. A restored image comes back to the library, to its collections, and to the same place on each canvas. `/trash` says that images there are permanently deleted 30 days after they were moved there, and each card shows its days left. A daily job purges an image 30 days after it was deleted, and another sweeps its bytes from R2 a week later. A check runs both on a pretend clock. Each user sees only their own trash.
 
 ## Sub-features
 
-- `trash-delete` takes an image out of the library with the card's `Delete` button on `/library`.
+- `trash-delete` takes an image out of the library with the card's `Move to trash` button on `/library`.
 - `trash-list` shows the deleted images on `/trash`, newest deleted first, with their thumbnails and no file picker.
 - `trash-empty` shows `The trash is empty.` when nothing is deleted.
 - `trash-everywhere` takes a deleted image out of every collection's grid and every canvas, also in a page that is already open.
 - `trash-restore` brings an image back with the card's `Restore` button on `/trash`, to the library, its collections, and its place on each canvas.
-- `trash-days-left` says on `/trash` that images are deleted for good 30 days after they were deleted, and shows `30 days left` on a card deleted today.
+- `trash-days-left` says on `/trash` that images here are permanently deleted 30 days after you move them here, and shows `30 days left` on a card deleted today.
 - `trash-purge` deletes an image 30 days in the trash with every row that points at it, and its objects in R2 a week later. The same bytes saved again in between are a new upload under new keys, which the sweep leaves. A save that the purge lands inside fails with `UploadNotFound`, and saving again works.
 - `trash-private` refuses another user's image to `library.remove` and `library.restore` with `RefNotFound`.
 
 ## How to get to it (user POV)
 
-- Choose the `Trash` link in the sidebar.
+- Choose the `Trash` link in the top bar, after `Library` and `Collections`. It shows how many images the trash holds, and no count when the trash is empty.
 - Open `/trash` directly.
-- Choose the `Library` link in the sidebar to go back.
+- Choose the `Library` link in the top bar to go back.
 
-The `Delete` button exists only on `/library`. A collection's gallery and canvas keep `Remove from collection`, and the canvas has no delete key.
+The `Move to trash` button on a card exists only on `/library`, and the image page has its own. A collection's gallery and canvas keep `Remove from collection`, and the canvas has no delete key.
 
 ## Driving it with Playwright
 
@@ -28,11 +28,11 @@ Preconditions:
 - `verify.sh doctor` reports that the deployment has the four R2 variables.
 - A new user, signed in with `signInWithPasskey`, who saved images through the Library recipe. For the canvas path, add two to a collection and open its canvas once.
 
-- **Delete.** On `/library`, run `page.locator('[data-ref-id="<refId>"]').getByRole("button", { name: "Delete" }).click()`. The page shows no confirmation. Wait for the card with `waitFor({ state: "detached" })`.
+- **Delete.** On `/library`, hover the card and run `page.locator('[data-ref-id="<refId>"]').getByRole("button", { name: "Move to trash" }).click()`. A `Moved to trash` toast offers `Restore`. Wait for the card with `waitFor({ state: "detached" })`.
 - **List.** Click `page.getByRole("link", { name: "Trash", exact: true })` and wait for `page.getByRole("heading", { name: "Trash" })`. Each deleted image is a card with `data-ref-id`. The latest deleted is first. Wait for the thumbnails as the Library recipe does.
 - **Everywhere.** Before the delete, open the collection's canvas, `/c/{collectionId}`, in a second page with `page.context().newPage()`. Its `page.getByTestId("canvas-readout")` drops `data-items` by one after the delete. The collection's gallery, `/c/{collectionId}?view=gallery`, no longer shows the card.
 - **Restore.** On `/trash`, click the card's `Restore` button. The card leaves `/trash`. Click `Library` and wait for the card. The open canvas page's `data-items` rises by one.
-- **Days left.** On `/trash`, `page.getByText("Images in the trash are deleted for good 30 days after they were deleted.")` shows once, and `page.locator('[data-ref-id="<refId>"]').getByText("30 days left")` shows on a card deleted today.
+- **Days left.** On `/trash`, `page.getByText("Images here are permanently deleted 30 days after you move them here.")` shows once, and `page.locator('[data-ref-id="<refId>"]').getByText("30 days left")` shows on a card deleted today.
 - **Purge.** No page triggers it. Run `bunx convex run trash:purge '{"pretend":{"workspaceId":"<workspaceId>","now":<ms>}}'` from `packages/backend`, then `trash:sweep` the same way, with the run's own workspace from the `workspaceId` of one of its `refs` rows. An open `/trash` drops the purged cards without a reload.
 - **Private.** Call `library.remove` and `library.restore` with the first user's Ref from a second user's `clientFor(page)`. Both fail with `RefNotFound`.
 - **Proof.** Screenshot `/trash` with an image in it. Read `verify.sh rows refs` for the Ref's `deletedAt`, and `verify.sh rows collectionRefs` to see that its membership stays. Read `canvas.changes` through the API from the rev before the delete. It returns the item with a `deletedAt`, and after the restore without one, at the same `x`, `y`, `scale`, and `z`.
@@ -43,7 +43,7 @@ Preconditions:
 
 ## Gotchas
 
-- `Delete` and `Restore` save with no message on the page. Wait for the card to leave, not for text.
+- `Move to trash` shows a toast, and `Restore` saves with no message on the page. Wait for the card to leave, not for text.
 - The Ref keeps its collection memberships and canvas items while it is in the trash. `verify.sh rows` still shows them. Only the readers leave them out.
 - An item removed from a canvas before the delete stays removed after the restore. Count the canvas's items with that in mind.
 - A restored Ref that had an item on a canvas comes back at once, at its old place, through `canvas.changes`. A restored Ref that never had one is placed by the next `open`, beside the layout. `canvas.open` through the API places images.

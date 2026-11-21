@@ -5,6 +5,7 @@ import type { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
 import {
   assert,
+  cardNamed,
   clientFor,
   openPageWithPasskeyDevice,
   outcome,
@@ -36,8 +37,7 @@ const save = async (page: Page, files: Array<{ name: string; buffer: Buffer }>) 
     .waitFor();
   return Promise.all(
     files.map(
-      async ({ name }) =>
-        (await cards(page).filter({ hasText: name }).getAttribute("data-ref-id")) as Id<"refs">,
+      async ({ name }) => (await cardNamed(page, name).getAttribute("data-ref-id")) as Id<"refs">,
     ),
   );
 };

@@ -17,7 +17,10 @@ const refused = "refused";
 const leftAlone = "left alone";
 
 const outcomes = (page: Page) => page.locator('[role="status"] li');
-const cardNames = (page: Page) => page.locator("[data-ref-id] p").allTextContents();
+const cardNames = (page: Page) =>
+  page
+    .locator("[data-ref-id] img")
+    .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).alt));
 const outcomeOf = async (page: Page, name: string) => {
   const line = outcomes(page).filter({ hasText: `${name}:` });
   await line.waitFor();
@@ -49,7 +52,7 @@ try {
   assert(
     (await outcomeOf(page, "red.png")) === "saved" &&
       (await outcomeOf(page, "blue.png")) === "saved" &&
-      (await outcomes(page).allTextContents()).join() === "red.png: saved.,blue.png: saved." &&
+      (await outcomes(page).allTextContents()).join() === "red.png: Saved,blue.png: Saved" &&
       (await libraryNames()).join() === "blue.png,red.png",
     `two dropped images are saved into the library and reported, in the order dropped: ${await libraryNames()}`,
   );
@@ -117,7 +120,7 @@ try {
   await link.click();
   await page.getByRole("heading", { name: "Board" }).waitFor();
   await page.getByRole("link", { name: "Gallery" }).click();
-  await page.getByText("Nothing saved yet.").waitFor();
+  await page.getByText("Nothing in this collection yet.").waitFor();
   const members = async () =>
     (
       await owner.query(api.collections.refs, {

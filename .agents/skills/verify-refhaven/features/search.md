@@ -1,6 +1,6 @@
 # Search and tag filter
 
-The library's gallery and each collection's gallery have a field labelled `Search` and a select labelled `Tag` above the grid. Search finds an image by a word of its name, its note, its source link, or its tags. The Tag select offers `All tags` and the user's tags. Both write to the URL as `q` and `tag`, so a filtered gallery survives a reload and the back button. A filtered gallery shows at most 200 images with the same cards, says so when there are more, and says `No images match.` when none do. A `Clear filters` link brings the whole gallery back. Images in the trash are never found. Each user finds only their own images.
+The library's gallery and each collection's gallery have a field labelled `Search`, in the top bar on `/library` and above the grid on a collection's gallery, and a row of tag chips in a navigation labelled `Tags`. `/` focuses Search from anywhere on the page. Search finds an image by a word of its name, its note, its source link, or its tags. The chips are `All` and the user's tags. The chosen chip has `aria-current="page"`, and choosing it again clears it. Both write to the URL as `q` and `tag`, so a filtered gallery survives a reload and the back button. A filtered gallery shows at most 200 images with the same cards, says so when there are more, and says `No images match.` when none do. A `Clear filters` link brings the whole gallery back. Images in the trash are never found. Each user finds only their own images.
 
 ## Sub-features
 
@@ -16,7 +16,7 @@ The library's gallery and each collection's gallery have a field labelled `Searc
 
 ## How to get to it (user POV)
 
-- Type in `Search` or choose a tag in `Tag` on `/library` or on a collection's gallery, `/c/{collectionId}?view=gallery`.
+- Type in `Search` or choose a tag's chip on `/library` or on a collection's gallery, `/c/{collectionId}?view=gallery`.
 - Open `/library?q=<text>&tag=<name>` or `/c/{collectionId}?view=gallery&q=<text>&tag=<name>` directly. A tag in any case, such as `?tag=Mood`, filters by its lowercase form.
 - Click a tag on an image's page at `/r/{refId}`.
 
@@ -30,7 +30,7 @@ Preconditions:
 - A new user, signed in with `signInWithPasskey`, who saved images through the Library recipe. Give them unambiguous names, notes, sources, and tags, on the image page or through `ref.update` and `ref.addTags`.
 
 - **Search.** Run `page.getByLabel("Search", { exact: true }).pressSequentially("<word>", { delay: 50 })`, or `fill`. The URL changes about 300 ms after the last key. Wait until `new URL(page.url()).searchParams.get("q")` is the trimmed text and the card names, `page.locator("[data-ref-id] p")`, are the expected ones.
-- **Tag.** Run `page.getByLabel("Tag", { exact: true }).selectOption("<name>")`. The URL holds `tag` at once. `selectOption("")` is `All tags`.
+- **Tag.** Run `page.getByRole("navigation", { name: "Tags" }).getByRole("link", { name: "<name>", exact: true }).click()`. The URL holds `tag` at once. The `All` chip clears it.
 - **No match.** `page.getByText("No images match.")` shows and there is no card.
 - **History.** Open `/library` from another page, type twice with a pause, and call `page.goBack()`. The URL is `/library` with no `q`, and the field is empty.
 - **Clear.** Click `page.getByRole("link", { name: "Clear filters" })`. The whole gallery shows and both controls are empty.

@@ -1,4 +1,7 @@
 import { SearchQuery, TagName } from "@refhaven/backend/refFields";
+import { CanvasIcon, GridViewIcon } from "@hugeicons/core-free-icons";
+import { Icon } from "@refhaven/ui/components/icon";
+import { Segmented, segmentClass } from "@refhaven/ui/components/segmented";
 import { Link, useSearch } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -41,26 +44,27 @@ export const validateCollectionSearch = (
 });
 
 const views = [
-  { view: "canvas", label: "Canvas" },
-  { view: "gallery", label: "Gallery" },
+  { view: "canvas", label: "Canvas", icon: CanvasIcon },
+  { view: "gallery", label: "Gallery", icon: GridViewIcon },
 ] as const;
 
 /** Switches a collection's page between its canvas and its gallery, and marks the one it shows. */
 export function ViewLinks() {
   const current = useSearch({ strict: false, select: (search) => search.view ?? "canvas" });
   return (
-    <nav className="flex gap-3">
-      {views.map(({ view, label }) => (
+    <Segmented aria-label="View">
+      {views.map(({ view, label, icon }) => (
         <Link
           key={view}
           to="."
           search={{ view }}
           aria-current={view === current ? "page" : undefined}
-          className={view === current ? "font-medium" : "underline"}
+          className={segmentClass}
         >
-          {label}
+          <Icon icon={icon} size={16} />
+          <span className="tight:sr-only">{label}</span>
         </Link>
       ))}
-    </nav>
+    </Segmented>
   );
 }

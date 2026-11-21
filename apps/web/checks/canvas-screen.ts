@@ -7,7 +7,6 @@ import { PNG } from "pngjs";
 import type { Page } from "playwright";
 import { appUrl, clientFor } from "./browser";
 
-/** A page wide enough for a canvas of 1400 by about 840 pixels, beside the sidebar and the canvas's panel, and under the page's bar. */
 export const canvasViewport = { width: 1976, height: 900 };
 
 type Listed = FunctionReturnType<typeof api.canvas.open>["items"][number];
@@ -131,8 +130,13 @@ export const waitForCanvas = async (page: Page, count: number) => {
   await settle(page);
 };
 
+const canvasOnly = '[data-testid="save-tray"] { visibility: hidden !important; }';
+
 export const screenshot = async (page: Page, name?: string) => {
-  const buffer = await page.screenshot(evidence && name ? { path: `${evidence}/${name}` } : {});
+  const buffer = await page.screenshot({
+    style: canvasOnly,
+    ...(evidence && name ? { path: `${evidence}/${name}` } : {}),
+  });
   return PNG.sync.read(buffer);
 };
 

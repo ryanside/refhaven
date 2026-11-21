@@ -155,11 +155,12 @@ try {
     document.body.dataset.loadedOnce = "yes";
   });
 
-  await page.locator(`[data-ref-id="${a}"]`).getByRole("button", { name: "Delete" }).click();
+  await page.locator(`[data-ref-id="${a}"]`).hover();
+  await page.locator(`[data-ref-id="${a}"]`).getByRole("button", { name: "Move to trash" }).click();
   await page.locator(`[data-ref-id="${a}"]`).waitFor({ state: "detached" });
   assert(
     (await cards(page).count()) === 2,
-    "clicking Delete on a card takes the card out of the library's gallery",
+    "clicking Move to trash on a card takes the card out of the library's gallery",
   );
   await page.getByRole("link", { name: "Trash", exact: true }).click();
   await page.getByRole("heading", { name: "Trash" }).waitFor();

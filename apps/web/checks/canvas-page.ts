@@ -5,6 +5,7 @@ import type { Page, Route } from "playwright";
 import {
   appUrl,
   assert,
+  cardNamed,
   consoleWatch,
   openPageWithPasskeyDevice,
   signInWithPasskey,
@@ -48,6 +49,8 @@ const images = [
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 const colorOf = (item: Item, refs: ReadonlyMap<string, Rgb>) => refs.get(refOf(item))!;
+
+const round = ({ x, y }: Point): Point => ({ x: Math.round(x), y: Math.round(y) });
 
 const drag = async (page: Page, from: Point, by: Point) => {
   await page.mouse.move(from.x, from.y);
@@ -98,9 +101,7 @@ try {
     .waitFor({ timeout: 60_000 });
   const refIds: Array<string> = [];
   for (const { name } of images) {
-    refIds.push(
-      (await page.locator("[data-ref-id]").filter({ hasText: name }).getAttribute("data-ref-id"))!,
-    );
+    refIds.push((await cardNamed(page, name).getAttribute("data-ref-id"))!);
   }
   const refColors = new Map(images.map(({ color }, index) => [refIds[index]!, color as Rgb]));
 
@@ -248,7 +249,9 @@ try {
   );
 
   const before = await main.open();
-  await drag(page, toPage(view, red), { x: 120, y: 60 });
+  // Chrome carries a pointer's position as a 32-bit float, so the drag starts on a whole pixel and
+  // its 120 and 60 px reach the page exactly.
+  await drag(page, round(toPage(view, red)), { x: 120, y: 60 });
   await until(
     () => main.open(),
     (s) => s.rev === before.rev + 1,
@@ -511,10 +514,7 @@ try {
       `FAIL the collection's page saves ${yellow.name}: ${await savedLine.textContent()}`,
     );
   }
-  const yellowRefId = (await page
-    .locator("[data-ref-id]")
-    .filter({ hasText: yellow.name })
-    .getAttribute("data-ref-id"))!;
+  const yellowRefId = (await cardNamed(page, yellow.name).getAttribute("data-ref-id"))!;
   refColors.set(yellowRefId, yellow.color);
   await page.getByRole("link", { name: "Canvas" }).click();
   await page.waitForURL(`${appUrl}/c/${board}?view=canvas`);
@@ -598,18 +598,16 @@ try {
     );
   }
 
-  // More in the panel than the window is high, as after many saved files. The lines are added to
-  // the page by hand, because saving that many files is slow.
   const boxBefore = view.box;
   const tall = await page.evaluate(() => {
-    const panel = document.querySelector('[data-testid="canvas-panel"]')!;
-    const list = panel.querySelector('[role="status"]')!;
+    const tray = document.querySelector('[data-testid="save-tray"]')!;
+    const list = tray.querySelector('[role="status"]')!;
     for (let line = 0; line < 80; line += 1) {
       list.append(
-        Object.assign(document.createElement("li"), { textContent: `file-${line}.png: saved.` }),
+        Object.assign(document.createElement("li"), { textContent: `file-${line}.png: Saved` }),
       );
     }
-    const scroller = [...panel.querySelectorAll("*"), panel].find(
+    const scroller = [...tray.querySelectorAll("*"), tray].find(
       (element) => element.scrollHeight > element.clientHeight + 1,
     );
     return {
@@ -625,7 +623,7 @@ try {
       tall.page === 0 &&
       tall.scrolls &&
       JSON.stringify(boxAfter) === JSON.stringify(boxBefore),
-    `with ${Math.round(tall.content)} px of save results in the panel, the page does not scroll, the panel does, and the canvas keeps its box: ${JSON.stringify(boxAfter)}`,
+    `with ${Math.round(tall.content)} px of save results in the tray, the page does not scroll, the tray does, and the canvas keeps its box: ${JSON.stringify(boxAfter)}`,
   );
 
   assertCleanConsole();

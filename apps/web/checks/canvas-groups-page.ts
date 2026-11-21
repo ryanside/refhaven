@@ -2,7 +2,13 @@ import { api } from "@refhaven/backend/api";
 import type { Id } from "@refhaven/backend/id";
 import type { Point } from "@refhaven/scene";
 import type { Page } from "playwright";
-import { assert, consoleWatch, openPageWithPasskeyDevice, signInWithPasskey } from "./browser";
+import {
+  assert,
+  cardNamed,
+  consoleWatch,
+  openPageWithPasskeyDevice,
+  signInWithPasskey,
+} from "./browser";
 import {
   canvasViewport,
   type PageView,
@@ -93,10 +99,7 @@ try {
     .nth(2)
     .waitFor({ timeout: 60_000 });
   const refIdOf = async (name: string) =>
-    (await page
-      .locator("[data-ref-id]")
-      .filter({ hasText: `${name}.png` })
-      .getAttribute("data-ref-id")) as Id<"refs">;
+    (await cardNamed(page, `${name}.png`).getAttribute("data-ref-id")) as Id<"refs">;
   const [redRef, greenRef, blueRef] = await Promise.all(["red", "green", "blue"].map(refIdOf));
 
   const owner = main.client;
@@ -169,8 +172,7 @@ try {
     await page.mouse.up();
     await settle(page);
   };
-  /** Empty canvas below the row of images. */
-  const empty = round(toPage(view, { x: 550, y: 450 }));
+  const empty = round(toPage(view, { x: 275, y: 380 }));
   const clickEmpty = async () => {
     await click(empty);
     await selectedOn(page, 0);
