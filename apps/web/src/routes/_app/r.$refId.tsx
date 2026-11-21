@@ -33,6 +33,7 @@ import { openedFrom } from "@/library/origin";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { NotFound } from "@/shell/not-found";
 import { TopBar, pillClass } from "@/shell/top-bar";
+import { RetryingImg } from "@/library/retrying-img";
 
 export const Route = createFileRoute("/_app/r/$refId")({
   component: RefPage,
@@ -121,7 +122,7 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
       <TopBar crumb={<Breadcrumb refId={refId} fileName={details.fileName} />} />
       <main className="min-h-svh bg-canvas">
         <div className="fixed inset-y-0 right-[calc(408px+var(--gutter))] left-0 flex items-center justify-center px-12 pt-[84px] pb-7 max-[900px]:static max-[900px]:px-gutter">
-          <img
+          <RetryingImg
             // Every image load is a CORS request, as in the gallery.
             crossOrigin="anonymous"
             src={display}

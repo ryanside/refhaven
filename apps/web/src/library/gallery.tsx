@@ -34,6 +34,7 @@ import { Pile, useCollectionCover } from "@/collections/pile";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { rememberOpened, useOrigin } from "@/library/origin";
 import { useCollections } from "@/shell/collections-menu";
+import { RetryingImg } from "@/library/retrying-img";
 
 export type Item = {
   readonly refId: Id<"refs">;
@@ -189,7 +190,7 @@ function Thumbnail({ item, url }: { item: Item; url: string | undefined }) {
   );
 
   return (
-    <img
+    <RetryingImg
       // Every image load is a CORS request. A response cached from a plain <img> has
       // no CORS headers, and a later canvas load of the same URL would fail on it.
       crossOrigin="anonymous"

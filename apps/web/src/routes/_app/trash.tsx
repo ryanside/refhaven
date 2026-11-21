@@ -11,6 +11,7 @@ import { thumbHashToDataURL } from "thumbhash";
 import { galleryPage } from "@/library/gallery";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { TopBar } from "@/shell/top-bar";
+import { RetryingImg } from "@/library/retrying-img";
 
 export const Route = createFileRoute("/_app/trash")({
   component: Trash,
@@ -168,7 +169,7 @@ function TrashCard({
         className="relative block overflow-hidden rounded-[6px] bg-sunken"
         style={{ height }}
       >
-        <img
+        <RetryingImg
           // Every image load is a CORS request, as in the gallery.
           crossOrigin="anonymous"
           src={url}

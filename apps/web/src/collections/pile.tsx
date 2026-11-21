@@ -4,6 +4,7 @@ import refs from "@refhaven/backend/refs";
 import { cn } from "@refhaven/ui/lib/utils";
 import { useMemo } from "react";
 import { useRefUrls } from "@/library/use-ref-urls";
+import { RetryingImg } from "@/library/retrying-img";
 
 type Print = {
   readonly refId: Id<"refs">;
@@ -77,7 +78,7 @@ export function Pile({
           .map(({ print, pose }) => {
             const edge = (pose.big ? box + 10 * scale : box) / Math.max(print.width, print.height);
             return (
-              <img
+              <RetryingImg
                 key={print.refId}
                 // Every image load is a CORS request, as in the gallery.
                 crossOrigin="anonymous"
