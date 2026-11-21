@@ -4,6 +4,19 @@ import { chromium, type Page } from "playwright";
 
 export const appUrl = process.env.APP_URL ?? "http://localhost:3000";
 
+// A run signs up test users and saves images that are never deleted, and on Convex Cloud every
+// read and write counts toward the plan. So the checks run on a local backend unless asked not to.
+const backend = process.env.CONVEX_URL;
+if (
+  backend &&
+  !["127.0.0.1", "localhost"].includes(new URL(backend).hostname) &&
+  process.env.REFHAVEN_CLOUD_CHECKS !== "1"
+) {
+  throw new Error(
+    `CONVEX_URL is ${backend}, a cloud deployment. Run the checks on a local backend (see the README), or set REFHAVEN_CLOUD_CHECKS=1 to run them there anyway.`,
+  );
+}
+
 export function convexUrl(): string {
   const url = process.env.CONVEX_URL;
   if (!url) {
