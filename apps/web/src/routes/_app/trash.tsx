@@ -27,7 +27,7 @@ function Trash() {
             <>
               <DaysLeft deletedAt={deletedAt.get(refId)!} />
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 className="self-start"
                 onClick={() => void restore({ refIds: [refId] })}

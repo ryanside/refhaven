@@ -495,26 +495,31 @@ function EditButtons({
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.remove}>
+        <Button variant="secondary" size="sm" disabled={selected === 0} onClick={actions.remove}>
           Remove from collection
         </Button>
-        <Button variant="outline" size="sm" disabled={!canUndo} onClick={actions.undo}>
+        <Button variant="secondary" size="sm" disabled={!canUndo} onClick={actions.undo}>
           Undo
         </Button>
-        <Button variant="outline" size="sm" disabled={!canRedo} onClick={actions.redo}>
+        <Button variant="secondary" size="sm" disabled={!canRedo} onClick={actions.redo}>
           Redo
         </Button>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           disabled={selected === 0}
           onClick={actions.bringToFront}
         >
           Bring to front
         </Button>
-        <Button variant="outline" size="sm" disabled={selected === 0} onClick={actions.sendToBack}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={selected === 0}
+          onClick={actions.sendToBack}
+        >
           Send to back
         </Button>
       </div>
@@ -538,10 +543,10 @@ function GroupButtons({
   );
   return (
     <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" disabled={!canGroup} onClick={actions.group}>
+      <Button variant="secondary" size="sm" disabled={!canGroup} onClick={actions.group}>
         Group
       </Button>
-      <Button variant="outline" size="sm" disabled={!canUngroup} onClick={actions.ungroup}>
+      <Button variant="secondary" size="sm" disabled={!canUngroup} onClick={actions.ungroup}>
         Ungroup
       </Button>
     </div>
@@ -573,7 +578,7 @@ function NoteButtons({
   const shared = useSyncExternalStore(store.subscribe, () => selectedColor(store));
   return (
     <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" onClick={addNote}>
+      <Button variant="secondary" size="sm" onClick={addNote}>
         Add note
       </Button>
       <NativeSelect
@@ -641,7 +646,7 @@ function NoteEditor({
           finish(text);
         }
       }}
-      className="absolute resize-none overflow-hidden bg-transparent outline outline-primary"
+      className="absolute resize-none overflow-hidden bg-transparent outline outline-selection"
       style={{
         left: corner.x,
         top: corner.y,
@@ -922,7 +927,7 @@ function drawOutlines(
     if (!element) {
       element = document.createElement("div");
       element.dataset.outlineKey = key;
-      element.className = "absolute border-2 border-primary";
+      element.className = "absolute border-2 border-selection";
       layer.appendChild(element);
     }
     place(element, camera, item);
@@ -948,7 +953,7 @@ const grip = (name: Handle | "rotate", left: string, top: string) => {
   const element = document.createElement("div");
   element.dataset.handle = name;
   element.className =
-    "pointer-events-auto absolute size-2.5 -translate-1/2 rounded-full border border-primary bg-background";
+    "pointer-events-auto absolute size-2.5 -translate-1/2 rounded-full border border-selection bg-selection-fill";
   element.style.left = left;
   element.style.top = top;
   return element;
@@ -968,7 +973,7 @@ function drawFrame(layer: HTMLDivElement, store: SceneStore) {
   if (!element) {
     element = document.createElement("div");
     element.dataset.frame = "";
-    element.className = "absolute outline outline-primary";
+    element.className = "absolute outline outline-selection";
     for (const [name, { x, y }] of Object.entries(handles) as Array<[Handle, Point]>) {
       element.append(grip(name, `${(x + 1) * 50}%`, `${(y + 1) * 50}%`));
     }
@@ -989,7 +994,7 @@ function drawMarquee(layer: HTMLDivElement, store: SceneStore) {
   if (!element) {
     element = document.createElement("div");
     element.dataset.marquee = "";
-    element.className = "absolute border border-primary";
+    element.className = "absolute border border-selection";
     layer.append(element);
   }
   const from = worldToScreen(store.camera(), gesture.fromWorld);

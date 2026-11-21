@@ -59,7 +59,7 @@ export function Gallery<E extends { readonly _tag: string }>({
         <p>{empty}</p>
       ) : null}
       {PaginatedQueryResult.isCanLoadMore(items) ? (
-        <Button variant="outline" className="self-start" onClick={() => items.loadMore(pageSize)}>
+        <Button variant="secondary" className="self-start" onClick={() => items.loadMore(pageSize)}>
           Load more
         </Button>
       ) : null}

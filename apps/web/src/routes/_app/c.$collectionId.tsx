@@ -69,7 +69,7 @@ function CollectionGallery({
   const removeRefs = useMutation(refs.public.collections.removeRefs);
   const action: CardAction = (refId) => (
     <Button
-      variant="outline"
+      variant="secondary"
       size="sm"
       className="self-start"
       onClick={() => void removeRefs({ collectionId, refIds: [refId] })}

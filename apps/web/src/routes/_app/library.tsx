@@ -56,7 +56,7 @@ function LibraryGallery() {
         </NativeSelect>
       )}
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         className="self-start"
         onClick={() => void remove({ refIds: [refId] })}

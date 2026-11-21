@@ -125,7 +125,7 @@ function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <Account />
-        <Button variant="outline" size="sm" onClick={() => void signOut()}>
+        <Button variant="secondary" size="sm" onClick={() => void signOut()}>
           Sign out
         </Button>
       </SidebarFooter>

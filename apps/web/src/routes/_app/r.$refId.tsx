@@ -107,7 +107,7 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
           <>
             <p>This image is in the trash.</p>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               className="self-start"
               onClick={() => void restore({ refIds })}
@@ -117,7 +117,7 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
           </>
         ) : (
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             className="self-start"
             onClick={() => void remove({ refIds })}
@@ -224,7 +224,7 @@ function FieldForm<A>({
     >
       <Label htmlFor={id}>{label}</Label>
       <Field id={id} value={value} onChange={(event) => setValue(event.currentTarget.value)} />
-      <Button type="submit" variant="outline" size="sm" className="self-start">
+      <Button type="submit" variant="secondary" size="sm" className="self-start">
         Save {label.toLowerCase()}
       </Button>
       {error ? <p role="alert">{error}</p> : null}
@@ -250,7 +250,7 @@ function Tags({ refId, tags }: { refId: Id<"refs">; tags: ReadonlyArray<string> 
               {tag}
             </Link>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               aria-label={`Remove the tag ${tag}`}
               onClick={async () => setError(failureTag(await removeTags({ refId, names: [tag] })))}

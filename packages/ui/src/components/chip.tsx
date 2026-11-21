@@ -1,0 +1,20 @@
+import { cva, type VariantProps } from "class-variance-authority";
+
+/** A tag or filter chip. The active one is filled ink. */
+const chipVariants = cva(
+  "inline-flex h-7 shrink-0 items-center gap-1 rounded-full text-[13px] font-[500] whitespace-nowrap transition-[background-color,color] duration-150 select-none",
+  {
+    variants: {
+      tone: {
+        quiet: "bg-sunken text-ink hover:bg-hover",
+        active: "bg-ink text-page",
+        outline: "text-ink-2 shadow-[inset_0_0_0_1px_var(--line-2)] hover:bg-sunken hover:text-ink",
+      },
+    },
+    defaultVariants: { tone: "quiet" },
+  },
+);
+
+type ChipVariants = VariantProps<typeof chipVariants>;
+
+export { chipVariants, type ChipVariants };
