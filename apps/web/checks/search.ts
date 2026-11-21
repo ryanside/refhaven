@@ -74,7 +74,17 @@ const showsFor = (page: Page, q: string | null, tag: string | null, names: strin
   );
 
 const searchField = (page: Page) => page.getByLabel("Search", { exact: true });
-const tagSelect = (page: Page) => page.getByLabel("Tag", { exact: true });
+const tagChips = (page: Page) => page.getByRole("navigation", { name: "Tags" });
+/** Chooses a tag's chip, or All for "". */
+const chooseTag = (page: Page, name: string) =>
+  tagChips(page)
+    .getByRole("link", { name: name === "" ? "All" : name, exact: true })
+    .click();
+/** The chosen tag, or "" while All is chosen. */
+const shownTag = async (page: Page) => {
+  const chosen = await tagChips(page).locator('[aria-current="page"]').textContent();
+  return chosen === "All" ? "" : chosen;
+};
 
 const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
@@ -217,7 +227,7 @@ try {
   await showsFor(page, null, null, everything);
   assert(true, "an empty Search field leaves q out of the URL and shows the whole library");
 
-  await tagSelect(page).selectOption("seascape");
+  await chooseTag(page, "seascape");
   await showsFor(page, null, "seascape", "forest-path.png,quay-night.png");
   await searchField(page).fill("forest");
   await showsFor(page, "forest", "seascape", "forest-path.png");
@@ -231,14 +241,13 @@ try {
   await page.reload();
   await showsFor(page, "forest", "seascape", "forest-path.png");
   assert(
-    (await searchField(page).inputValue()) === "forest" &&
-      (await tagSelect(page).inputValue()) === "seascape",
+    (await searchField(page).inputValue()) === "forest" && (await shownTag(page)) === "seascape",
     "a reload keeps both filters, the fields, and the results",
   );
   await page.getByRole("link", { name: "Clear filters" }).click();
   await showsFor(page, null, null, everything);
   assert(
-    (await searchField(page).inputValue()) === "" && (await tagSelect(page).inputValue()) === "",
+    (await searchField(page).inputValue()) === "" && (await shownTag(page)) === "",
     "Clear filters brings the whole library back and empties both fields",
   );
 
@@ -269,15 +278,15 @@ try {
     "?tag=Seascape shows the seascape images",
   );
   assert(
-    (await tagSelect(page).inputValue()) === "seascape",
+    (await shownTag(page)) === "seascape",
     "a tag typed into the URL as Seascape filters by seascape",
   );
 
   await page.goto(`${appUrl}/c/${board}?view=gallery`);
   await showsFor(page, null, null, "desert-dune.png,quay-night.png");
-  await tagSelect(page).selectOption("seascape");
+  await chooseTag(page, "seascape");
   await showsFor(page, null, "seascape", "quay-night.png");
-  await tagSelect(page).selectOption("");
+  await chooseTag(page, "");
   await searchField(page).fill("dune");
   await showsFor(page, "dune", null, "desert-dune.png");
   await searchField(page).fill("forest");
@@ -342,7 +351,8 @@ try {
 
   await page.goto(`${appUrl}/library?q=pier`);
   await showsFor(page, "pier", null, "pier-morning.png");
-  await cards(page).getByRole("button", { name: "Delete" }).click();
+  await cards(page).hover();
+  await cards(page).getByRole("button", { name: "Move to trash" }).click();
   await showsFor(page, "pier", null, "");
   await page.goto(`${appUrl}/trash`);
   await cards(page).getByRole("button", { name: "Restore" }).click();
@@ -354,7 +364,7 @@ try {
   await page.goto(`${appUrl}/c/${board}?q=pier`);
   await page.locator("canvas").waitFor();
   assert(
-    (await searchField(page).count()) === 0 && (await tagSelect(page).count()) === 0,
+    (await searchField(page).count()) === 0 && (await tagChips(page).count()) === 0,
     "a collection's canvas, which its page opens with no view, shows neither filter",
   );
 

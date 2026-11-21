@@ -1,0 +1,43 @@
+import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
+import { Button } from "@refhaven/ui/components/button";
+import { Icon } from "@refhaven/ui/components/icon";
+import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { TopBar } from "@/shell/top-bar";
+
+/** A page with nothing to show. It keeps the top bar, which is the way to every page. */
+export function NotFound({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <>
+      <TopBar />
+      <main className="grid min-h-svh place-items-center px-gutter pt-[68px] pb-16">
+        <div className="grid justify-items-center text-center">
+          <div aria-hidden className="relative mb-7 h-[124px] w-40">
+            <i
+              className="absolute top-2 left-1/2 -ml-11 h-[116px] w-[88px] origin-bottom rounded-[6px] border-[1.5px] border-dashed border-ink-4"
+              style={{ transform: "translateX(-14px) rotate(-8deg)" }}
+            />
+            <i
+              className="absolute top-2 left-1/2 -ml-11 h-[116px] w-[88px] origin-bottom rounded-[6px] bg-sunken shadow-[inset_0_0_0_1.5px_var(--line-2)]"
+              style={{ transform: "translateX(10px) rotate(5deg)" }}
+            />
+          </div>
+          <h1 className="text-[28px] leading-[34px] font-[620] tracking-[-0.03em]">{title}</h1>
+          <p className="mt-2 max-w-[44ch] text-[15px] leading-[22px] text-pretty text-ink-2">
+            {children}
+          </p>
+          <Button
+            variant="secondary"
+            size="lg"
+            className="mt-7"
+            nativeButton={false}
+            render={<Link to="/library" />}
+          >
+            <Icon icon={ArrowLeft02Icon} size={18} />
+            Back to Library
+          </Button>
+        </div>
+      </main>
+    </>
+  );
+}

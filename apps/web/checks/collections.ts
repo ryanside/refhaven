@@ -28,6 +28,14 @@ const shownRefIds = (page: Page) =>
   );
 const collectionLinks = (page: Page) => page.locator("[data-collection-id]");
 
+/** Puts an image in a collection from its card's Add to a collection picker. */
+const addOnCard = async (page: Page, refId: string, name: string) => {
+  await card(page, refId).hover();
+  await card(page, refId).getByRole("button", { name: "Add to a collection" }).click();
+  await page.getByRole("dialog").getByRole("button", { name, exact: true }).click();
+  await page.keyboard.press("Escape");
+};
+
 const save = async (page: Page, name: string, buffer: Buffer) => {
   const outcomes = page.locator('[role="status"] li');
   const reported = await outcomes.count();
@@ -104,12 +112,12 @@ try {
   assert(
     (await viewLinks.allTextContents()).join() === "Canvas,Gallery" &&
       (await viewLinks.first().getAttribute("aria-current")) === "page" &&
-      (await page.getByText("Nothing saved yet.").count()) === 0,
+      (await page.getByText("Nothing in this collection yet.").count()) === 0,
     `the collection's link opens /c/${moodId}, which shows its name and its canvas, with the Canvas link first and marked as the current view`,
   );
   await page.getByRole("link", { name: "Gallery" }).click();
   await page.waitForURL(`${appUrl}/c/${moodId}?view=gallery`);
-  await page.getByText("Nothing saved yet.").waitFor();
+  await page.getByText("Nothing in this collection yet.").waitFor();
   assert(
     (await page.getByTestId("canvas").count()) === 0 &&
       (await viewLinks.last().getAttribute("aria-current")) === "page",
@@ -139,7 +147,7 @@ try {
     "the image uploaded in the collection also shows in the library",
   );
 
-  await card(page, libraryRefId).getByLabel("Add to collection").selectOption({ label: "Mood" });
+  await addOnCard(page, libraryRefId, "Mood");
   await until(
     async () => (await members(moodId)).includes(libraryRefId),
     "choosing a collection on a card adds the image to it",
@@ -173,9 +181,7 @@ try {
   await page.goto(`${appUrl}/library`);
   const sketchLink = await createOnPage(page, "Sketches");
   const sketchId = (await sketchLink.getAttribute("data-collection-id"))!;
-  await card(page, libraryRefId)
-    .getByLabel("Add to collection")
-    .selectOption({ label: "Sketches" });
+  await addOnCard(page, libraryRefId, "Sketches");
   await until(
     async () => (await members(sketchId)).includes(libraryRefId),
     "choosing a second collection on a card adds the image to it",
@@ -241,8 +247,9 @@ try {
   await owner.mutation(api.collections.removeRefs, inMood([libraryRefId]));
 
   await page.goto(`${appUrl}/c/${moodId}?view=gallery`);
-  await page.getByLabel("Collection name").fill("  Mood board ");
   await page.getByRole("button", { name: "Rename" }).click();
+  await page.getByLabel("Collection name").fill("  Mood board ");
+  await page.getByLabel("Collection name").press("Enter");
   await page.getByRole("heading", { name: "Mood board" }).waitFor();
   await card(page, uploadedRefId).locator("img").waitFor();
   await page.waitForFunction(() =>

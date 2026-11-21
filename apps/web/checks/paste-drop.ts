@@ -117,7 +117,7 @@ try {
   await link.click();
   await page.getByRole("heading", { name: "Board" }).waitFor();
   await page.getByRole("link", { name: "Gallery" }).click();
-  await page.getByText("Nothing saved yet.").waitFor();
+  await page.getByText("Nothing in this collection yet.").waitFor();
   const members = async () =>
     (
       await owner.query(api.collections.refs, {

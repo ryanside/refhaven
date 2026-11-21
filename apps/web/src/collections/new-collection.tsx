@@ -21,12 +21,14 @@ export const nameRefusal = (tag: string) =>
  * before it is sent. `created` hears the new collection's ID.
  */
 export function NewCollectionForm({
+  label = "New collection",
   className,
   fieldClassName,
   autoFocus,
   created,
   cancel,
 }: {
+  label?: string;
   className?: string;
   fieldClassName?: string;
   autoFocus?: boolean;
@@ -55,7 +57,7 @@ export function NewCollectionForm({
     >
       <div className="flex min-w-0 items-center gap-1.5">
         <input
-          aria-label="New collection"
+          aria-label={label}
           placeholder="New collection"
           value={name}
           autoFocus={autoFocus}

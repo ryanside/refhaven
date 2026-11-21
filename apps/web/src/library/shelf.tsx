@@ -3,8 +3,9 @@ import type { Id } from "@refhaven/backend/id";
 import { Icon } from "@refhaven/ui/components/icon";
 import { cn } from "@refhaven/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { NewCollectionForm } from "@/collections/new-collection";
+import { FadeRow } from "@/library/fade-row";
 import { Pile, countLabel, useCollectionCover } from "@/collections/pile";
 import { useCollections } from "@/shell/collections-menu";
 
@@ -15,26 +16,6 @@ import { useCollections } from "@/shell/collections-menu";
  */
 export function Shelf() {
   const collections = useCollections();
-  const row = useRef<HTMLUListElement>(null);
-  const [fade, setFade] = useState({ start: false, end: false });
-
-  useEffect(() => {
-    const element = row.current!;
-    const measure = () =>
-      setFade({
-        start: element.scrollLeft > 1,
-        end: element.scrollLeft + element.clientWidth < element.scrollWidth - 1,
-      });
-    measure();
-    const resize = new ResizeObserver(measure);
-    resize.observe(element);
-    element.addEventListener("scroll", measure, { passive: true });
-    return () => {
-      resize.disconnect();
-      element.removeEventListener("scroll", measure);
-    };
-  }, [collections.length]);
-
   return (
     <section aria-labelledby="shelf-heading">
       <h2
@@ -44,20 +25,16 @@ export function Shelf() {
         Collections
         <span className="font-[450] text-ink-3 num">{collections.length || null}</span>
       </h2>
-      <ul
-        ref={row}
-        className="-mx-2.5 mt-1 flex snap-x scroll-px-2.5 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2.5 [scrollbar-width:none]"
-        style={{
-          maskImage: `linear-gradient(to right, ${fade.start ? "transparent, black 48px" : "black"}, ${fade.end ? "black calc(100% - 48px), transparent" : "black"})`,
-        }}
-      >
-        {collections.map(({ collectionId, name }) => (
-          <ShelfItem key={collectionId} collectionId={collectionId} name={name} />
-        ))}
-        <li className="flex h-24 shrink-0 snap-start items-center gap-2 rounded-[20px] pr-3 pl-2">
-          <NewPrint />
-        </li>
-      </ul>
+      <FadeRow className="-mx-2.5 mt-1 gap-1.5 px-2.5">
+        <ul className="contents">
+          {collections.map(({ collectionId, name }) => (
+            <ShelfItem key={collectionId} collectionId={collectionId} name={name} />
+          ))}
+          <li className="flex h-24 shrink-0 items-center gap-2 rounded-[20px] pr-3 pl-2">
+            <NewPrint />
+          </li>
+        </ul>
+      </FadeRow>
     </section>
   );
 }
@@ -65,7 +42,7 @@ export function Shelf() {
 function ShelfItem({ collectionId, name }: { collectionId: Id<"collections">; name: string }) {
   const cover = useCollectionCover(collectionId);
   return (
-    <li className="relative flex h-24 shrink-0 snap-start items-center gap-3.5 rounded-[20px] pr-6 pl-1 transition-colors duration-150 hover:bg-sunken has-focus-visible:bg-sunken">
+    <li className="relative flex h-24 shrink-0 items-center gap-3.5 rounded-[20px] pr-6 pl-1 transition-colors duration-150 hover:bg-sunken has-focus-visible:bg-sunken">
       <Pile prints={cover.cover} />
       <div className="flex min-w-0 flex-col">
         <Link

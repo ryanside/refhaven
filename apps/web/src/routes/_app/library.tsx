@@ -1,86 +1,123 @@
-import { QueryResult, useMutation, usePaginatedQuery, useQuery } from "@confect/react";
+import { PaginatedQueryResult, useMutation, usePaginatedQuery } from "@confect/react";
+import { Delete02Icon } from "@hugeicons/core-free-icons";
 import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
-import { Button } from "@refhaven/ui/components/button";
-import { NativeSelect, NativeSelectOption } from "@refhaven/ui/components/native-select";
 import { createFileRoute } from "@tanstack/react-router";
-import { FilteredGallery, GalleryFilters, isFiltered } from "@/library/filters";
-import { type CardAction, Gallery, galleryPage } from "@/library/gallery";
+import { EmptyDropZone, PasteKeys } from "@/library/empty";
+import {
+  ClearFilters,
+  FilteredGallery,
+  SearchField,
+  TagChips,
+  isFiltered,
+  matchCount,
+  useFiltered,
+} from "@/library/filters";
+import { Gallery, type Removal, galleryPage } from "@/library/gallery";
 import { AddImagesButton, SaveScope } from "@/library/save-images";
 import { Shelf } from "@/library/shelf";
+import { useNarrow } from "@/shell/narrow";
+import { toast } from "@/shell/toast";
 import { TopBar } from "@/shell/top-bar";
-import { validateGallerySearch } from "@/view";
+import { type Filters, validateGallerySearch } from "@/view";
 
 export const Route = createFileRoute("/_app/library")({
   validateSearch: validateGallerySearch,
   component: Library,
 });
 
+/** Moves an image to the trash, and offers to bring it back. */
+export function useMoveToTrash(): Removal {
+  const remove = useMutation(refs.public.library.remove);
+  const restore = useMutation(refs.public.library.restore);
+  return {
+    label: "Move to trash",
+    icon: Delete02Icon,
+    run: (refId: Id<"refs">) => {
+      void remove({ refIds: [refId] });
+      toast("Moved to trash", { label: "Restore", run: () => void restore({ refIds: [refId] }) });
+    },
+  };
+}
+
 function Library() {
+  // The router keeps search keys it was not asked about, such as an old `view`. Only the filters go on.
+  const { q, tag } = Route.useSearch();
+  const filters: Filters = {
+    ...(q === undefined ? {} : { q }),
+    ...(tag === undefined ? {} : { tag }),
+  };
+  const all = usePaginatedQuery(refs.public.library.list, {}, galleryPage);
+  const empty =
+    !isFiltered(filters) && PaginatedQueryResult.isExhausted(all) && all.results.length === 0;
+  const narrow = useNarrow();
+  const removal = useMoveToTrash();
+  const search = <SearchField filters={filters} variant={narrow ? "inline" : "bar"} />;
+
   return (
     <SaveScope target={{ name: "Library" }}>
-      <TopBar action={<AddImagesButton />} />
-      <LibraryGallery />
+      <TopBar
+        center={empty || narrow ? null : search}
+        action={empty ? null : <AddImagesButton />}
+      />
+      {empty ? (
+        <EmptyDropZone title="Nothing saved yet.">
+          Drop images anywhere on this page, paste them with <PasteKeys />, or pick files.
+        </EmptyDropZone>
+      ) : (
+        <main className="px-gutter pt-[84px] pb-28">
+          {narrow ? <div className="mb-6">{search}</div> : null}
+          <Shelf />
+          <section aria-labelledby="images-heading" className="mt-6">
+            <ImagesHeading
+              filters={filters}
+              count={
+                PaginatedQueryResult.isLoadingFirstPage(all)
+                  ? null
+                  : `${all.results.length}${PaginatedQueryResult.isCanLoadMore(all) || PaginatedQueryResult.isLoadingMore(all) ? "+" : ""}`
+              }
+            />
+            <div className="mt-2.5 mb-4">
+              <TagChips filters={filters} />
+            </div>
+            {isFiltered(filters) ? (
+              <Filtered filters={filters} removal={removal} />
+            ) : (
+              <Gallery items={all} removal={removal} />
+            )}
+          </section>
+        </main>
+      )}
     </SaveScope>
   );
 }
 
-function LibraryGallery() {
-  // The router keeps search keys it was not asked about, such as an old `view`. Only the filters go on.
-  const { q, tag } = Route.useSearch();
-  const filters = { ...(q === undefined ? {} : { q }), ...(tag === undefined ? {} : { tag }) };
-  const collections = useQuery(refs.public.collections.list, {});
-  const addRefs = useMutation(refs.public.collections.addRefs);
-  const remove = useMutation(refs.public.library.remove);
-  const owned = QueryResult.isSuccess(collections) ? collections.value : [];
-  const action: CardAction = (refId) => (
-    <>
-      {owned.length === 0 ? null : (
-        <NativeSelect
-          aria-label="Add to collection"
-          value=""
-          onChange={(event) =>
-            void addRefs({
-              collectionId: event.currentTarget.value as Id<"collections">,
-              refIds: [refId],
-            })
-          }
-        >
-          <NativeSelectOption value="" disabled>
-            Add to collection
-          </NativeSelectOption>
-          {owned.map(({ collectionId, name }) => (
-            <NativeSelectOption key={collectionId} value={collectionId}>
-              {name}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-      )}
-      <Button
-        variant="secondary"
-        size="sm"
-        className="self-start"
-        onClick={() => void remove({ refIds: [refId] })}
-      >
-        Delete
-      </Button>
-    </>
-  );
+function Filtered({ filters, removal }: { filters: Filters; removal: Removal }) {
+  return <FilteredGallery result={useFiltered(filters)} removal={removal} />;
+}
 
+/** "All images 17", or how many match with Clear filters while the gallery is filtered. */
+function ImagesHeading({ filters, count }: { filters: Filters; count: string | null }) {
   return (
-    <main className="flex flex-col gap-4 px-gutter pt-[84px] pb-16">
-      <Shelf />
-      <GalleryFilters {...filters} />
-      {isFiltered(filters) ? (
-        <FilteredGallery filters={filters} action={action} />
-      ) : (
-        <WholeLibrary action={action} />
-      )}
-    </main>
+    <div className="flex min-h-7 items-center gap-3">
+      <h2
+        id="images-heading"
+        className="flex items-baseline gap-2 text-[14px] font-[580] tracking-[-0.012em]"
+      >
+        All images
+        {isFiltered(filters) ? null : <span className="font-[450] text-ink-3 num">{count}</span>}
+      </h2>
+      {isFiltered(filters) ? <FilteredStatus filters={filters} /> : null}
+    </div>
   );
 }
 
-function WholeLibrary({ action }: { action: CardAction }) {
-  const items = usePaginatedQuery(refs.public.library.list, {}, galleryPage);
-  return <Gallery items={items} action={action} />;
+function FilteredStatus({ filters }: { filters: Filters }) {
+  const count = matchCount(useFiltered(filters));
+  return (
+    <>
+      {count ? <span className="text-[14px] text-ink-2 num">{count}</span> : null}
+      <ClearFilters />
+    </>
+  );
 }
