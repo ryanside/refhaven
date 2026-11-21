@@ -62,10 +62,7 @@ function Collection({ collectionId, name }: { collectionId: Id<"collections">; n
   return view === "gallery" ? (
     <CollectionGallery collectionId={collectionId} name={name} title={title} />
   ) : (
-    <>
-      <TopBar center={title} />
-      <CanvasView collectionId={collectionId} name={name} />
-    </>
+    <CanvasView collectionId={collectionId} name={name} title={title} />
   );
 }
 
@@ -183,7 +180,7 @@ function CollectionGallery({
 
   return (
     <SaveScope target={{ collectionId, name }}>
-      <TopBar center={title} action={empty ? null : <AddImagesButton />} />
+      <TopBar center={title} action={empty ? null : <AddImagesButton fold />} />
       {empty ? (
         <EmptyDropZone title="Nothing in this collection yet.">
           Drop images anywhere on this page, paste them with <PasteKeys />, or pick files. They go

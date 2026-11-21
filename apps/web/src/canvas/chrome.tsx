@@ -31,7 +31,6 @@ import {
   worldToScreen,
 } from "@refhaven/scene";
 import { type ReactNode, useState, useSyncExternalStore } from "react";
-import { AddImagesButton } from "@/library/save-images";
 import { pillClass } from "@/shell/top-bar";
 import type { Action } from "./keymap";
 import { noteInk } from "./notes";
@@ -241,8 +240,8 @@ const selectedColor = (store: SceneStore) => {
 };
 
 /**
- * The making tools at the bottom center: Undo and Redo, Note with its color, and Add images. The
- * color applies to the selected notes, or to the next note when none is selected.
+ * The making tools at the bottom center: Undo and Redo, and Note with its color. The color applies
+ * to the selected notes, or to the next note when none is selected.
  */
 export function Dock({
   store,
@@ -298,8 +297,6 @@ export function Dock({
         </Tooltip>
         <NoteColorPicker color={shown} recolor={recolor} />
       </div>
-      <Rule />
-      <AddImagesButton size="md" className="ml-0.5 h-10" />
     </div>
   );
 }

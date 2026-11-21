@@ -60,7 +60,7 @@ function Library() {
         // Search stays on an empty library too, so a field typed into while the library loads
         // is never taken away.
         center={narrow ? null : search}
-        action={empty ? null : <AddImagesButton />}
+        action={empty ? null : <AddImagesButton fold />}
       />
       {empty ? (
         <EmptyDropZone title="Nothing saved yet.">

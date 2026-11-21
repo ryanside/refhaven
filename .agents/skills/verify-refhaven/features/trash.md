@@ -15,7 +15,7 @@ Each card in the library's grid has a `Move to trash` button, which shows on hov
 
 ## How to get to it (user POV)
 
-- Choose the `Trash` link in the top bar. It shows how many images the trash holds.
+- Choose the `Trash` link in the top bar, after `Library` and `Collections`. It shows how many images the trash holds, 0 included.
 - Open `/trash` directly.
 - Choose the `Library` link in the top bar to go back.
 

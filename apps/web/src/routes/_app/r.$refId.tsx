@@ -119,7 +119,7 @@ function RefDetails({ refId, details }: { refId: Id<"refs">; details: Details })
 
   return (
     <>
-      <TopBar crumb={<Breadcrumb refId={refId} fileName={details.fileName} />} />
+      <TopBar center={<Breadcrumb refId={refId} fileName={details.fileName} />} />
       <main className="min-h-svh bg-canvas">
         <div className="fixed inset-y-0 right-[calc(408px+var(--gutter))] left-0 flex items-center justify-center px-12 pt-[84px] pb-7 max-[900px]:static max-[900px]:px-gutter">
           <RetryingImg

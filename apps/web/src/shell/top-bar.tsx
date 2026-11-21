@@ -3,7 +3,6 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import {
   ArrowDown01Icon,
   ComputerIcon,
-  Delete02Icon,
   Logout03Icon,
   Moon02Icon,
   Sun03Icon,
@@ -39,41 +38,39 @@ export const navItemClass =
   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-[520] whitespace-nowrap text-ink-2 transition-[background-color,color] duration-150 hover:text-ink aria-[current=page]:bg-hover aria-[current=page]:text-ink aria-expanded:bg-hover aria-expanded:text-ink data-[current]:bg-hover data-[current]:text-ink [&_svg]:text-ink-3";
 
 /**
- * The bar over every signed-in page: the way around on the left, the page's own control in the
- * middle, and the trash, the theme, the account, and the page's main action on the right.
+ * The bar over every signed-in page: the places on the left, the page's own control in the middle,
+ * and the theme, the account, and the page's main action on the right.
  */
 export function TopBar({
-  crumb,
   center,
   action,
 }: {
-  /** Beside the way around, such as an image's breadcrumb. */
-  crumb?: ReactNode;
   center?: ReactNode;
   /** The page's main action, after the account. */
   action?: ReactNode;
 }) {
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-30 grid h-[68px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-gutter">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center">
         <MainNav />
-        {crumb}
       </div>
       <div className="pointer-events-auto flex min-w-0 justify-center">{center}</div>
       <div className="flex min-w-0 items-center justify-end gap-2">
         <div className={pillClass}>
-          <TrashLink />
           <ThemeMenu />
           <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line-2 max-[719px]:hidden" />
           <AccountMenu />
         </div>
-        {action ? <div className="pointer-events-auto max-[719px]:hidden">{action}</div> : null}
+        {action ? <div className="pointer-events-auto">{action}</div> : null}
       </div>
     </header>
   );
 }
 
-/** The mark, the library, and the collections. A narrow window folds the last two into a menu. */
+/**
+ * The mark and the places: the library, the collections, and the trash. A narrow window folds the
+ * places into a menu.
+ */
 function MainNav() {
   return (
     <nav aria-label="Main" className={pillClass}>
@@ -95,6 +92,7 @@ function MainNav() {
       </Link>
       <div className="contents max-[719px]:hidden">
         <CollectionsMenu />
+        <TrashLink />
       </div>
       <div className="hidden max-[719px]:contents">
         <NarrowMenu />
@@ -103,34 +101,29 @@ function MainNav() {
   );
 }
 
-/** How many images are in the trash, up to the first page. */
+/** How many images are in the trash, up to the first page, once it is known. */
 function useTrashCount() {
   const items = usePaginatedQuery(refs.public.library.trash, {}, { initialNumItems: 60 });
+  if (PaginatedQueryResult.isLoadingFirstPage(items)) return null;
   const more =
     PaginatedQueryResult.isCanLoadMore(items) || PaginatedQueryResult.isLoadingMore(items);
-  return items.results.length === 0 ? null : `${items.results.length}${more ? "+" : ""}`;
+  return `${items.results.length}${more ? "+" : ""}`;
 }
 
+/** Trash and its count, on every page, an empty trash's 0 included. */
 function TrashLink() {
   const count = useTrashCount();
   const described = useId();
   return (
-    <Link
-      to="/trash"
-      className={cn(navItemClass, "max-[719px]:px-2")}
-      aria-describedby={count ? described : undefined}
-    >
-      <Icon icon={Delete02Icon} size={18} />
-      <span className="max-[719px]:sr-only">Trash</span>
+    <Link to="/trash" className={navItemClass} aria-describedby={count ? described : undefined}>
+      Trash
+      <span aria-hidden className="min-w-[1ch] font-[450] text-ink-3 num">
+        {count}
+      </span>
       {count ? (
-        <>
-          <span aria-hidden className="text-ink-3 num max-[719px]:hidden">
-            {count}
-          </span>
-          <span id={described} hidden>
-            {count} {count === "1" ? "image" : "images"}
-          </span>
-        </>
+        <span id={described} hidden>
+          {count} {count === "1" ? "image" : "images"}
+        </span>
       ) : null}
     </Link>
   );

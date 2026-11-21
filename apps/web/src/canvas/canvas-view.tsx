@@ -42,8 +42,16 @@ import {
 } from "@refhaven/scene";
 import { useHotkeys } from "@tanstack/react-hotkeys";
 import * as Result from "effect/Result";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { type PlaceAt, SaveScope } from "@/library/save-images";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { AddImagesButton, type PlaceAt, SaveScope } from "@/library/save-images";
+import { TopBar } from "@/shell/top-bar";
 import { Dock, Problem, SelectionCluster, ZoomCluster, fitToView } from "./chrome";
 import { type Action, keymap } from "./keymap";
 import { boxFor, createNoteTextures, noteFont, noteInk, noteTextureKey } from "./notes";
@@ -106,9 +114,12 @@ const idle = (store: SceneStore) =>
 export function CanvasView({
   collectionId,
   name,
+  title,
 }: {
   collectionId: Id<"collections">;
   name: string;
+  /** The collection's title, in the middle of the top bar. */
+  title: ReactNode;
 }) {
   const [store] = useState(createSceneStore);
   const [history] = useState(createHistory);
@@ -474,6 +485,7 @@ export function CanvasView({
 
   return (
     <SaveScope target={{ collectionId, name }} placeAt={placeAt} veil="canvas">
+      <TopBar center={title} action={<AddImagesButton fold />} />
       <main className="fixed inset-0 overflow-hidden bg-canvas">
         <div ref={host} data-testid="canvas" className="absolute inset-0 touch-none select-none" />
         <div ref={outlines} className="pointer-events-none absolute inset-0" />
