@@ -31,6 +31,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { thumbHashToDataURL } from "thumbhash";
 import { NewCollectionForm, newCollectionButtonClass } from "@/collections/new-collection";
 import { Pile, useCollectionCover } from "@/collections/pile";
+import { galleryPage } from "@/library/page";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { rememberOpened, useOrigin } from "@/library/origin";
 import { useCollections } from "@/shell/collections-menu";
@@ -45,9 +46,6 @@ export type Item = {
   readonly height: number;
   readonly thumbHash: string | null;
 };
-
-const pageSize = 60;
-export const galleryPage = { initialNumItems: pageSize };
 
 /** What a tile's second button does: put the image in the trash, or take it out of a collection. */
 export type Removal = {
@@ -374,7 +372,11 @@ export function Gallery<E extends { readonly _tag: string }>({
       ) : null}
       {PaginatedQueryResult.isCanLoadMore(items) ? (
         <div className="mt-10 flex justify-center">
-          <Button variant="secondary" size="lg" onClick={() => items.loadMore(pageSize)}>
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => items.loadMore(galleryPage.initialNumItems)}
+          >
             Load more
           </Button>
         </div>

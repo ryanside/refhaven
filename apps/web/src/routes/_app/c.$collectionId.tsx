@@ -1,10 +1,4 @@
-import {
-  PaginatedQueryResult,
-  QueryResult,
-  useMutation,
-  usePaginatedQuery,
-  useQuery,
-} from "@confect/react";
+import { PaginatedQueryResult, QueryResult, useMutation, useQuery } from "@confect/react";
 import { FolderRemoveIcon, PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
@@ -16,7 +10,7 @@ import * as Result from "effect/Result";
 import { useState } from "react";
 import { CanvasView } from "@/canvas/canvas-view";
 import { isCollectionName, nameRefusal } from "@/collections/new-collection";
-import { shortCount, useCollectionCover } from "@/collections/pile";
+import { shortCount, useCollectionCover, useCollectionMembers } from "@/collections/pile";
 import { EmptyDropZone, PasteKeys } from "@/library/empty";
 import {
   ClearFilters,
@@ -27,7 +21,7 @@ import {
   matchCount,
   useFiltered,
 } from "@/library/filters";
-import { Gallery, type Removal, galleryPage } from "@/library/gallery";
+import { Gallery, type Removal } from "@/library/gallery";
 import { OriginContext } from "@/library/origin";
 import { AddImagesButton, SaveScope } from "@/library/save-images";
 import { NotFound } from "@/shell/not-found";
@@ -165,7 +159,7 @@ function CollectionGallery({
   title: React.ReactNode;
 }) {
   const { view: _, ...filters } = Route.useSearch();
-  const members = usePaginatedQuery(refs.public.collections.refs, { collectionId }, galleryPage);
+  const members = useCollectionMembers(collectionId);
   const empty =
     !isFiltered(filters) &&
     PaginatedQueryResult.isExhausted(members) &&

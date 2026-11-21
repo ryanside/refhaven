@@ -13,7 +13,8 @@ import {
   matchCount,
   useFiltered,
 } from "@/library/filters";
-import { Gallery, type Removal, galleryPage } from "@/library/gallery";
+import { Gallery, type Removal } from "@/library/gallery";
+import { galleryPage } from "@/library/page";
 import { AddImagesButton, SaveScope } from "@/library/save-images";
 import { Shelf } from "@/library/shelf";
 import { useNarrow } from "@/shell/narrow";

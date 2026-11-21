@@ -74,7 +74,7 @@ export function fitToView(store: SceneStore) {
 }
 
 const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
-const keys = (shortcut: string) =>
+const shortcutLabel = (shortcut: string) =>
   isMac()
     ? shortcut.replace("Mod+", "⌘").replace("Shift+", "⇧")
     : shortcut.replace("Mod+", "Ctrl+");
@@ -95,7 +95,7 @@ function Tool({
   large?: boolean;
 }) {
   return (
-    <Tooltip label={label} shortcut={shortcut === undefined ? undefined : keys(shortcut)}>
+    <Tooltip label={label} shortcut={shortcut === undefined ? undefined : shortcutLabel(shortcut)}>
       <span className="inline-flex">
         <Button
           variant="ghost"

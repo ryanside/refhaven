@@ -24,6 +24,7 @@ import {
 import { cn } from "@refhaven/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId } from "react";
+import { galleryPage } from "@/library/page";
 import { CollectionsMenu } from "@/shell/collections-menu";
 import { Mark } from "@/shell/mark";
 import { NarrowMenu } from "@/shell/narrow-menu";
@@ -91,7 +92,7 @@ function MainNav() {
 }
 
 function useTrashCount() {
-  const items = usePaginatedQuery(refs.public.library.trash, {}, { initialNumItems: 60 });
+  const items = usePaginatedQuery(refs.public.library.trash, {}, galleryPage);
   if (PaginatedQueryResult.isLoadingFirstPage(items) || items.results.length === 0) return null;
   const more =
     PaginatedQueryResult.isCanLoadMore(items) || PaginatedQueryResult.isLoadingMore(items);

@@ -36,7 +36,8 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Pile, shortCount, useCollectionCover } from "@/collections/pile";
-import { CollectionPicker, galleryPage } from "@/library/gallery";
+import { CollectionPicker } from "@/library/gallery";
+import { galleryPage } from "@/library/page";
 import { ShownName } from "@/library/name";
 import { type Origin, libraryOrigin, openedFrom, rememberOpened } from "@/library/origin";
 import { useRefUrls } from "@/library/use-ref-urls";
@@ -101,20 +102,8 @@ function useSteps(refId: Id<"refs">): Steps {
 function RefPage() {
   const refId = Route.useParams().refId as Id<"refs">;
   const steps = useSteps(refId);
-  const { previous, next } = steps;
-  useQuery(refs.public.ref.get, previous ? { refId: previous } : "skip");
-  useQuery(refs.public.ref.get, next ? { refId: next } : "skip");
   const details = useQuery(refs.public.ref.get, { refId });
-  const found = QueryResult.isSuccess(details);
-  const shown = useMemo(
-    () => (found ? [refId, ...(previous ? [previous] : []), ...(next ? [next] : [])] : []),
-    [found, refId, previous, next],
-  );
-  const display = useRefUrls(shown, "display");
-  const ahead = [previous, next].map((neighbor) =>
-    neighbor ? display.get(neighbor)?.url : undefined,
-  );
-  usePreload(ahead);
+  const display = useDisplayCopies(refId, QueryResult.isSuccess(details), steps);
   useStepKeys(refId, steps);
 
   return QueryResult.match(details, {
@@ -130,6 +119,25 @@ function RefPage() {
       />
     ),
   });
+}
+
+/**
+ * The display copies of the image and its neighbors, whose details and pixels load ahead of a
+ * step. Nothing is signed until the page has found the image, so a missing or foreign one gets no
+ * URL.
+ */
+function useDisplayCopies(refId: Id<"refs">, found: boolean, { previous, next }: Steps) {
+  useQuery(refs.public.ref.get, previous ? { refId: previous } : "skip");
+  useQuery(refs.public.ref.get, next ? { refId: next } : "skip");
+  const signable = useMemo(
+    () => (found ? [refId, ...(previous ? [previous] : []), ...(next ? [next] : [])] : []),
+    [found, refId, previous, next],
+  );
+  const display = useRefUrls(signable, "display");
+  usePreload(
+    [previous, next].map((neighbor) => (neighbor ? display.get(neighbor)?.url : undefined)),
+  );
+  return display;
 }
 
 function usePreload(urls: ReadonlyArray<string | undefined>) {
@@ -499,17 +507,23 @@ function NameField({ refId, fileName }: { refId: Id<"refs">; fileName: string })
   );
 }
 
+/** A field's text, which follows a save from another page until the owner edits it here. */
+function useDraft(saved: string) {
+  const [value, setValue] = useState(saved);
+  const last = useRef(saved);
+  useEffect(() => {
+    setValue((current) => (current === last.current ? saved : current));
+    last.current = saved;
+  }, [saved]);
+  return [value, setValue] as const;
+}
+
 function NoteField({ refId, note }: { refId: Id<"refs">; note: string | null }) {
   const update = useMutation(refs.public.ref.update);
   const id = useId();
-  const [value, setValue] = useState(note ?? "");
+  const [value, setValue] = useDraft(note ?? "");
   const state = useSaveState();
   const dirty = value !== (note ?? "");
-  const shown = useRef(note ?? "");
-  useEffect(() => {
-    setValue((current) => (current === shown.current ? (note ?? "") : current));
-    shown.current = note ?? "";
-  }, [note]);
   const form = useRef<HTMLFormElement>(null);
   const save = async () => {
     const decoded = parseClearable(Note)(value);

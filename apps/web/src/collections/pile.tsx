@@ -3,6 +3,7 @@ import type { Id } from "@refhaven/backend/id";
 import refs from "@refhaven/backend/refs";
 import { cn } from "@refhaven/ui/lib/utils";
 import { useMemo } from "react";
+import { galleryPage } from "@/library/page";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { RetryingImg } from "@/library/retrying-img";
 
@@ -12,14 +13,12 @@ type Print = {
   readonly height: number;
 };
 
-const counted = 60;
+/** A collection's images a page at a time, shared by its cover and its gallery. */
+export const useCollectionMembers = (collectionId: Id<"collections">) =>
+  usePaginatedQuery(refs.public.collections.refs, { collectionId }, galleryPage);
 
 export function useCollectionCover(collectionId: Id<"collections">) {
-  const items = usePaginatedQuery(
-    refs.public.collections.refs,
-    { collectionId },
-    { initialNumItems: counted },
-  );
+  const items = useCollectionMembers(collectionId);
   return {
     cover: items.results.slice(0, 3),
     count: items.results.length,
