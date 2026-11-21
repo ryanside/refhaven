@@ -142,7 +142,8 @@ const themes: ReadonlyArray<{ value: Theme; label: string; icon: typeof Sun03Ico
   { value: "system", label: "System", icon: ComputerIcon },
 ];
 
-function ThemeMenu() {
+/** Light, dark, or the system's. The same control on every page, sign-in included. */
+export function ThemeMenu() {
   const { theme, setTheme } = useTheme();
   return (
     <Menu>
