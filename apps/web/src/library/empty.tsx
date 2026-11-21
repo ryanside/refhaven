@@ -46,7 +46,7 @@ export function EmptyDropZone({ title, children }: { title: string; children: Re
     <main className="fixed inset-x-(--gutter) top-20 bottom-(--gutter) grid place-items-center overflow-y-auto rounded-[24px] bg-[color-mix(in_srgb,var(--sunken)_45%,var(--page))]">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[24px] border-[1.5px] border-dashed border-ink-4 opacity-70"
+        className="pointer-events-none absolute inset-0 rounded-[24px] border-[1.5px] border-dashed border-ink-4"
       />
       <div className="relative -mt-6 grid justify-items-center px-6 text-center">
         <EmptyPrints />

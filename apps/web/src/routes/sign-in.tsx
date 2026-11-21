@@ -8,7 +8,7 @@ import { Navigate, createFileRoute } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { useRef, useState } from "react";
 import { Mark } from "@/shell/mark";
-import { ThemeMenu } from "@/shell/top-bar";
+import { ThemeMenu, pillClass } from "@/shell/top-bar";
 
 export const Route = createFileRoute("/sign-in")({
   ssr: false,
@@ -35,7 +35,9 @@ function SignIn() {
           <Mark className="size-6" />
           refhaven
         </span>
-        <ThemeMenu />
+        <div className={pillClass}>
+          <ThemeMenu />
+        </div>
       </header>
       <main className="grid min-h-svh place-items-center px-gutter py-24">
         <div className="-mt-6 grid w-full justify-items-center text-center">
@@ -58,21 +60,20 @@ function SignIn() {
               }
             }}
           >
-            <label className="flex min-w-0 flex-1 flex-col gap-px max-sm:px-3 max-sm:pt-1">
-              <span className="text-[12px] leading-4 font-[560] text-ink-2">Username</span>
-              <input
-                name="username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                autoFocus
-                autoComplete="username webauthn"
-                autoCapitalize="none"
-                spellCheck={false}
-                required
-                readOnly={pending}
-                className="h-[22px] min-w-0 bg-transparent text-[16px] leading-[22px] font-[500] text-ink outline-none read-only:text-ink-2"
-              />
-            </label>
+            <input
+              name="username"
+              aria-label="Username"
+              placeholder="Username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoFocus
+              autoComplete="username webauthn"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+              readOnly={pending}
+              className="h-12 min-w-0 flex-1 bg-transparent text-[16px] font-[500] text-ink outline-none placeholder:font-[450] placeholder:text-ink-2 read-only:text-ink-2 max-sm:px-3"
+            />
             <Button
               ref={button}
               type="submit"
@@ -124,9 +125,6 @@ function Fan() {
           background: "linear-gradient(170deg, #20402f 0%, #163223 100%)",
         }}
       >
-        <span className="absolute top-4 left-3 font-serif text-[44px] leading-none text-[#efe6cf] italic">
-          Aa
-        </span>
         <span className="absolute right-3 bottom-4 left-3 h-px bg-[#efe6cf]/30" />
         <span className="absolute right-3 bottom-7 left-3 h-px bg-[#efe6cf]/20" />
       </div>

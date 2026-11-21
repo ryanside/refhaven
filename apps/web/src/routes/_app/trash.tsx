@@ -6,9 +6,11 @@ import { daysLeft, trashDays } from "@refhaven/backend/trash";
 import { Button } from "@refhaven/ui/components/button";
 import { Icon } from "@refhaven/ui/components/icon";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { thumbHashToDataURL } from "thumbhash";
 import { galleryPage } from "@/library/gallery";
+import { ShownName } from "@/library/name";
+import { rememberOpened } from "@/library/origin";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { TopBar } from "@/shell/top-bar";
 import { RetryingImg } from "@/library/retrying-img";
@@ -46,12 +48,12 @@ function Trash() {
         </h1>
         <p className="mt-2 flex items-center gap-2 text-[15px] leading-[22px] text-ink-2">
           <Icon icon={Clock01Icon} size={16} className="shrink-0 text-ink-3" />
-          Images here are deleted for good {trashDays} days after you delete them.
+          Images here are permanently deleted {trashDays} days after you move them here.
         </p>
         {PaginatedQueryResult.isExhausted(items) && count === 0 ? (
           <EmptyTrash />
         ) : (
-          <JustifiedRows items={items.results} />
+          <TrashGrid items={items.results} />
         )}
         {more ? (
           <div className="mt-10 flex justify-center">
@@ -81,75 +83,28 @@ function EmptyTrash() {
   );
 }
 
-const gap = 12;
-const targetHeight = 300;
-
-/**
- * The images in rows, each at its own aspect ratio, each full row exactly as wide as the page. The
- * last row keeps the target height rather than stretching a few images across the page.
- */
-function JustifiedRows({ items }: { items: ReadonlyArray<Trashed> }) {
-  const element = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const target = element.current!;
-    setWidth(target.clientWidth);
-    const resize = new ResizeObserver(() => setWidth(target.clientWidth));
-    resize.observe(target);
-    return () => resize.disconnect();
-  }, []);
+/** The trashed images at the library's tile size, each with its days left and Restore. */
+function TrashGrid({ items }: { items: ReadonlyArray<Trashed> }) {
   const refIds = useMemo(() => items.map((item) => item.refId), [items]);
   const urls = useRefUrls(refIds, "thumbnail");
-
-  const rows: Array<{ height: number; items: Array<Trashed> }> = [];
-  let row: Array<Trashed> = [];
-  let ratios = 0;
-  for (const item of items) {
-    row.push(item);
-    ratios += item.width / item.height;
-    const fitted = (width - gap * (row.length - 1)) / ratios;
-    if (fitted <= targetHeight) {
-      rows.push({ height: fitted, items: row });
-      row = [];
-      ratios = 0;
-    }
-  }
-  if (row.length > 0) {
-    const fitted = (width - gap * (row.length - 1)) / ratios;
-    rows.push({ height: Math.min(targetHeight * 1.25, fitted), items: row });
-  }
-
   return (
-    <div ref={element} className="mt-7 flex flex-col gap-4">
-      {width === 0
-        ? null
-        : rows.map((line, index) => (
-            <ul key={index} className="flex gap-3">
-              {line.items.map((item) => (
-                <TrashCard
-                  key={item.refId}
-                  item={item}
-                  url={urls.get(item.refId)?.url}
-                  width={(line.height * item.width) / item.height}
-                  height={line.height}
-                />
-              ))}
-            </ul>
-          ))}
-    </div>
+    <ul className="mt-8 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-3 gap-y-6">
+      {items.map((item) => (
+        <TrashCard key={item.refId} item={item} url={urls.get(item.refId)?.url} order={refIds} />
+      ))}
+    </ul>
   );
 }
 
 function TrashCard({
   item,
   url,
-  width,
-  height,
+  order,
 }: {
   item: Trashed;
   url: string | undefined;
-  width: number;
-  height: number;
+  /** The trash's images in order, which the image's page steps through. */
+  order: ReadonlyArray<Id<"refs">>;
 }) {
   const restore = useMutation(refs.public.library.restore);
   const [loaded, setLoaded] = useState(false);
@@ -162,12 +117,12 @@ function TrashCard({
     [item.thumbHash],
   );
   return (
-    <li data-ref-id={item.refId} className="shrink-0" style={{ width }}>
+    <li data-ref-id={item.refId} className="min-w-0">
       <Link
         to="/r/$refId"
         params={{ refId: item.refId }}
-        className="relative block overflow-hidden rounded-[6px] bg-sunken"
-        style={{ height }}
+        onClick={() => rememberOpened(item.refId, { kind: "trash" }, order)}
+        className="image-edge block aspect-[4/3] overflow-hidden rounded-[6px] bg-sunken"
       >
         <RetryingImg
           // Every image load is a CORS request, as in the gallery.
@@ -177,18 +132,16 @@ function TrashCard({
           width={item.width}
           height={item.height}
           onLoad={() => setLoaded(true)}
-          style={loaded ? undefined : { backgroundImage: placeholder, backgroundSize: "100% 100%" }}
-          className="size-full object-cover"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_0_0_1px_var(--edge)]"
+          style={loaded ? undefined : { backgroundImage: placeholder, backgroundSize: "cover" }}
+          className="size-full object-cover object-top"
         />
       </Link>
-      <div className="flex items-center gap-3 pt-2.5 pl-0.5">
+      <div className="mt-2 flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[14px] font-[540]">{item.fileName}</p>
-          <span className="block text-[13px] text-ink-2 num">
+          <p className="truncate text-[13px] leading-[18px] font-[520]">
+            <ShownName fileName={item.fileName} />
+          </p>
+          <span className="block text-[12px] leading-4 text-ink-2 num">
             {days === 1 ? "1 day left" : `${days} days left`}
           </span>
         </div>
@@ -197,7 +150,7 @@ function TrashCard({
           size="sm"
           onClick={() => void restore({ refIds: [item.refId] })}
         >
-          <Icon icon={ArrowTurnBackwardIcon} size={16} />
+          <Icon icon={ArrowTurnBackwardIcon} size={14} />
           Restore
         </Button>
       </div>

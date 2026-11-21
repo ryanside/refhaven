@@ -314,7 +314,7 @@ try {
   await page.screenshot({ path: `${evidence}/01-trash-before-purge.png` });
   assert(
     (await page
-      .getByText("Images here are deleted for good 30 days after you delete them.")
+      .getByText("Images here are permanently deleted 30 days after you move them here.")
       .count()) === 1 &&
       (await card(page, p).getByText("30 days left").count()) === 1 &&
       (await card(page, k).getByText("30 days left").count()) === 1,
