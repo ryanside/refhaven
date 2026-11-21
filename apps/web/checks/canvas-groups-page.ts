@@ -169,7 +169,6 @@ try {
     await page.mouse.up();
     await settle(page);
   };
-  /** Empty canvas below the row of images, and above the tools that float over the canvas's foot. */
   const empty = round(toPage(view, { x: 275, y: 380 }));
   const clickEmpty = async () => {
     await click(empty);

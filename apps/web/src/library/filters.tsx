@@ -127,10 +127,7 @@ export function SearchField({
   );
 }
 
-/**
- * The tags as a row of chips, All first. Choosing one writes the page's `tag`. The chosen chip is
- * filled ink, and choosing it again, or its ×, clears it.
- */
+/** The tags as chips, All first. Choosing one writes the page's `tag`, and choosing it again, or its ×, clears it. */
 export function TagChips({ filters }: { filters: Filters }) {
   const known = useQuery(refs.public.ref.tags, {});
   const { tag } = filters;
@@ -238,7 +235,6 @@ export function FilteredGallery({
   });
 }
 
-/** How many images a filtered set shows: "2 matches", or "200+ matches". */
 export const matchCount = (result: ReturnType<typeof useFiltered>) =>
   QueryResult.isSuccess(result)
     ? `${result.value.items.length}${result.value.more ? "+" : ""} ${result.value.items.length === 1 && !result.value.more ? "match" : "matches"}`

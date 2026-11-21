@@ -602,8 +602,6 @@ try {
     );
   }
 
-  // More in the save tray than the window is high, as after many saved files. The lines are added
-  // to the page by hand, because saving that many files is slow.
   const boxBefore = view.box;
   const tall = await page.evaluate(() => {
     const tray = document.querySelector('[data-testid="save-tray"]')!;

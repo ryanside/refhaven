@@ -6,7 +6,6 @@ import { AddImagesButton } from "@/library/save-images";
 
 const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 
-/** Three empty prints fanned like the piles: the slots a first image fills. */
 export function EmptyPrints() {
   const slot =
     "absolute top-2 left-1/2 -ml-11 grid h-[116px] w-[88px] origin-bottom place-items-center rounded-[6px]";
@@ -27,7 +26,6 @@ export function EmptyPrints() {
   );
 }
 
-/** "paste them with ⌘ V", with the key this machine uses. */
 export function PasteKeys() {
   return (
     <span className="inline-flex translate-y-[-1px] gap-0.5 align-middle">
@@ -37,10 +35,6 @@ export function PasteKeys() {
   );
 }
 
-/**
- * The whole page below the top bar as a dashed drop zone on a faint wash, with the three ways in
- * and Add images as the one action.
- */
 export function EmptyDropZone({ title, children }: { title: string; children: ReactNode }) {
   return (
     <main className="fixed inset-x-(--gutter) top-20 bottom-(--gutter) grid place-items-center overflow-y-auto rounded-[24px] bg-[color-mix(in_srgb,var(--sunken)_45%,var(--page))]">

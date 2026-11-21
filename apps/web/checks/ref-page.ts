@@ -53,10 +53,8 @@ const shownTags = (page: Page) =>
     .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-tag")).join());
 const alert = (page: Page, text: string) => page.getByRole("alert").filter({ hasText: text });
 
-/** The button that turns a shown value back into its field. */
 const editButtons: Record<string, string> = { Name: "Rename", Source: "Edit source" };
 
-/** Fills a field, opening it first when its value is shown instead, and submits its form. */
 const submit = async (page: Page, label: string, button: string, value: string) => {
   const field = page.getByLabel(label, { exact: true });
   const edit = editButtons[label];
@@ -139,7 +137,6 @@ try {
     "renaming on the page shows the trimmed new name on the page and on the library's card",
   );
 
-  // The page steps through the list it was opened from: here the library, newest first.
   await card(page, small).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${small}`);
   await page.getByRole("heading", { name: "small.png" }).waitFor();
@@ -215,7 +212,6 @@ try {
   for (const bad of ["javascript:alert(1)", "data:text/html,x", "ftp://example.com", "not a url"]) {
     await submit(page, "Source", "Save source", bad);
     await alert(page, "A source is an http or https link").waitFor();
-    // Escape leaves the field, which shows the saved source as its link again.
     await page.getByLabel("Source", { exact: true }).press("Escape");
     assert(
       (await refRow(large))?.sourceUrl === source &&

@@ -3,10 +3,7 @@ import { type ComponentProps, useEffect, useState } from "react";
 const attempts = 3;
 const backoffMs = 800;
 
-/**
- * An image that loads again after a failed load, a few times with a growing wait, since a dropped
- * connection would otherwise leave it blank until the page reloads.
- */
+/** An image that loads again after a failed load, a few times with a growing wait. */
 export function RetryingImg({ onError, src, ...props }: ComponentProps<"img">) {
   const [attempt, setAttempt] = useState(0);
   const [waiting, setWaiting] = useState(false);

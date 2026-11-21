@@ -86,7 +86,6 @@ function EmptyTrash() {
   );
 }
 
-/** The trashed images at the library's tile size, each with its days left and Restore. */
 function TrashGrid({ items }: { items: ReadonlyArray<Trashed> }) {
   const refIds = useMemo(() => items.map((item) => item.refId), [items]);
   const urls = useRefUrls(refIds, "thumbnail");
@@ -106,7 +105,6 @@ function TrashCard({
 }: {
   item: Trashed;
   url: string | undefined;
-  /** The trash's images in order, which the image's page steps through. */
   order: ReadonlyArray<Id<"refs">>;
 }) {
   const restore = useMutation(refs.public.library.restore);
@@ -122,7 +120,6 @@ function TrashCard({
         className="image-edge block aspect-[4/3] overflow-hidden rounded-[6px] bg-sunken"
       >
         <RetryingImg
-          // Every image load is a CORS request, as in the gallery.
           crossOrigin="anonymous"
           src={url}
           alt={item.fileName}

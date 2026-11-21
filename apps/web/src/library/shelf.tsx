@@ -8,17 +8,11 @@ import { FadeRow } from "@/library/fade-row";
 import { Pile, countLabel, useCollectionCover } from "@/collections/pile";
 import { useCollections } from "@/shell/collections-menu";
 
-/** Each place on the shelf: a 108 by 76 picture, then a title with one muted line under it. */
 const footprint =
   "relative flex h-24 shrink-0 items-center gap-3.5 rounded-[20px] pr-6 pl-1 transition-colors duration-150 hover:bg-sunken has-focus-visible:bg-sunken";
 const titleClass = "text-[14px] leading-5 font-[580] tracking-[-0.012em]";
 const lineClass = "text-[13px] leading-[18px] text-ink-2 num";
 
-/**
- * The library's shelf: each collection as a pile of its images with its name and count, oldest
- * first, then New collection in the same footprint. It scrolls sideways once it is wider than the
- * page, and fades at the edge it scrolls toward.
- */
 export function Shelf() {
   const collections = useCollections();
   return (
@@ -65,10 +59,6 @@ function ShelfItem({ collectionId, name }: { collectionId: Id<"collections">; na
   );
 }
 
-/**
- * A dashed print where a pile would be, and a title that is the field naming a new collection.
- * A click anywhere on it goes to the field.
- */
 function NewShelfItem() {
   return (
     <li

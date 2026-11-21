@@ -28,7 +28,6 @@ const shownRefIds = (page: Page) =>
   );
 const collectionLinks = (page: Page) => page.locator("[data-collection-id]");
 
-/** Puts an image in a collection from its card's Add to a collection picker. */
 const addOnCard = async (page: Page, refId: string, name: string) => {
   await card(page, refId).hover();
   await card(page, refId).getByRole("button", { name: "Add to a collection" }).click();
@@ -399,7 +398,6 @@ try {
   await second.page.getByText("Collection not found.").waitFor();
   assert(true, "the first user's collection page shows the second user a not-found line");
 
-  // On a narrow window the top bar folds the pages into a sheet that its Menu button opens.
   await second.page.setViewportSize({ width: 600, height: 800 });
   const library = second.page.getByRole("link", { name: "Library", exact: true });
   const hiddenAtFirst = !(await library.isVisible());

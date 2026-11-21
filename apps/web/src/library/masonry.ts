@@ -6,11 +6,8 @@ export type Box = {
   readonly imageHeight: number;
 };
 
-/** The space between columns. */
 const columnGap = 12;
-/** From a caption to the next image below it. */
 const rowGap = 24;
-/** Under each image: a 6 px gap and one 18 px line of caption. */
 export const captionHeight = 24;
 const narrowestColumn = 220;
 /** A very tall image is cut to this many times its width, from the top. */

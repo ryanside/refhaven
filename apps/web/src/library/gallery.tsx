@@ -69,7 +69,6 @@ function useWidth() {
   return [element, width] as const;
 }
 
-/** Images in columns that end level, each near its own aspect ratio, newest at the top left. */
 export function Masonry({ items, removal }: { items: ReadonlyArray<Item>; removal: Removal }) {
   const [list, width] = useWidth();
   const refIds = useMemo(() => items.map((item) => item.refId), [items]);
@@ -105,7 +104,6 @@ function Tile({
   url: string | undefined;
   removal: Removal;
   box: Box;
-  /** The gallery's images in order, which the image's page steps through. */
   order: ReadonlyArray<Id<"refs">>;
 }) {
   const origin = useOrigin();
@@ -168,13 +166,11 @@ function Thumbnail({ item, url }: { item: Item; url: string | undefined }) {
       draggable={false}
       onLoad={() => setLoaded(true)}
       style={loaded ? undefined : { backgroundImage: placeholder, backgroundSize: "cover" }}
-      // An image cut to fit its tile keeps its top, as a page scrolled to its start does.
       className="size-full object-cover object-top"
     />
   );
 }
 
-/** The collections an image is in, read when a picker opens. */
 function useMembership(refId: Id<"refs">) {
   const details = useQuery(refs.public.ref.get, { refId });
   return new Set(
@@ -303,7 +299,6 @@ function PickerRow({
   );
 }
 
-/** ⋯ after the caption: open the image, put it in collections, or the tile's removal. */
 function TileMenu({ item, removal }: { item: Item; removal: Removal }) {
   return (
     <Menu>

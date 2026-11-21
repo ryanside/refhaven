@@ -66,10 +66,6 @@ function Collection({ collectionId, name }: { collectionId: Id<"collections">; n
   );
 }
 
-/**
- * The collection's name, its count, and Rename, beside the Canvas and Gallery views. Rename turns
- * the name into a field: Enter or leaving it saves, and Escape keeps the old name.
- */
 function CollectionTitle({
   collectionId,
   name,
@@ -236,7 +232,6 @@ function Filtered({
   );
 }
 
-/** Takes an image out of the collection, and offers to put it back. */
 function useRemoveFromCollection(collectionId: Id<"collections">, name: string): Removal {
   const removeRefs = useMutation(refs.public.collections.removeRefs);
   const addRefs = useMutation(refs.public.collections.addRefs);

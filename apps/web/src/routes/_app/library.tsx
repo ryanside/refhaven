@@ -56,12 +56,7 @@ function Library() {
 
   return (
     <SaveScope target={{ name: "Library" }}>
-      <TopBar
-        // Search stays on an empty library too, so a field typed into while the library loads
-        // is never taken away.
-        center={narrow ? null : search}
-        action={empty ? null : <AddImagesButton fold />}
-      />
+      <TopBar center={narrow ? null : search} action={empty ? null : <AddImagesButton fold />} />
       {empty ? (
         <EmptyDropZone title="Nothing saved yet.">
           Drop images anywhere on this page, paste them with <PasteKeys />, or pick files.
@@ -98,7 +93,6 @@ function Filtered({ filters, removal }: { filters: Filters; removal: Removal }) 
   return <FilteredGallery result={useFiltered(filters)} removal={removal} />;
 }
 
-/** "All images 17", or how many match with Clear filters while the gallery is filtered. */
 function ImagesHeading({ filters, count }: { filters: Filters; count: string | null }) {
   return (
     <div className="flex min-h-7 items-center gap-3">

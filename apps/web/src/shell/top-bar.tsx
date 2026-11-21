@@ -29,11 +29,9 @@ import { Mark } from "@/shell/mark";
 import { NarrowMenu } from "@/shell/narrow-menu";
 import { type Theme, useTheme } from "@/theme-provider";
 
-/** A floating cluster of the top bar: white glass over whatever scrolls beneath. */
 export const pillClass =
   "glass pointer-events-auto flex h-11 shrink-0 items-center gap-0.5 rounded-full px-1.5 shadow-float";
 
-/** An item of a cluster: ink-2 until hovered, and raised on the hover tone while it is current. */
 export const navItemClass =
   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-[520] whitespace-nowrap text-ink-2 transition-[background-color,color] duration-150 hover:text-ink aria-[current=page]:bg-hover aria-[current=page]:text-ink aria-expanded:bg-hover aria-expanded:text-ink data-[current]:bg-hover data-[current]:text-ink [&_svg]:text-ink-3";
 
@@ -41,20 +39,8 @@ export function Rule({ className }: { className?: string }) {
   return <span aria-hidden className={cn("mx-1 h-5 w-px shrink-0 bg-line-2", className)} />;
 }
 
-/**
- * The bar over every signed-in page: the places on the left, the page's own control in the middle,
- * and the theme, the account, and the page's main action on the right.
- */
-export function TopBar({
-  center,
-  action,
-}: {
-  center?: ReactNode;
-  /** The page's main action, after the account. */
-  action?: ReactNode;
-}) {
+export function TopBar({ center, action }: { center?: ReactNode; action?: ReactNode }) {
   return (
-    // A narrow window moves the middle to a second row, under the places and the account.
     <header className="pointer-events-none fixed inset-x-0 top-0 z-30 grid h-[68px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-gutter narrow:h-auto narrow:grid-cols-[auto_minmax(0,1fr)] narrow:gap-y-2 narrow:py-3">
       <div className="flex min-w-0 items-center">
         <MainNav />
@@ -74,10 +60,6 @@ export function TopBar({
   );
 }
 
-/**
- * The mark and the places: the library, the collections, and the trash. A narrow window folds the
- * places into a menu.
- */
 function MainNav() {
   return (
     <nav aria-label="Main" className={pillClass}>
@@ -108,7 +90,6 @@ function MainNav() {
   );
 }
 
-/** How many images are in the trash, up to the first page, once it is known and not zero. */
 function useTrashCount() {
   const items = usePaginatedQuery(refs.public.library.trash, {}, { initialNumItems: 60 });
   if (PaginatedQueryResult.isLoadingFirstPage(items) || items.results.length === 0) return null;
@@ -117,7 +98,6 @@ function useTrashCount() {
   return `${items.results.length}${more ? "+" : ""}`;
 }
 
-/** Trash and its count, on every page. An empty trash shows no count. */
 function TrashLink() {
   const count = useTrashCount();
   const described = useId();
@@ -142,7 +122,6 @@ const themes: ReadonlyArray<{ value: Theme; label: string; icon: typeof Sun03Ico
   { value: "system", label: "System", icon: ComputerIcon },
 ];
 
-/** Light, dark, or the system's. The same control on every page, sign-in included. */
 export function ThemeMenu() {
   const { theme, setTheme } = useTheme();
   return (
@@ -167,7 +146,6 @@ export function ThemeMenu() {
   );
 }
 
-/** Who is signed in, and Sign out. The greeting and the user's ID are there for the checks, out of sight. */
 function AccountMenu() {
   const me = useQuery(refs.public.users.whoAmI, { greeting: "Hello" });
   const { signOut } = useAuthActions();

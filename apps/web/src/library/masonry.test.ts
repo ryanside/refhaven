@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
 import { arrange, captionHeight, tallest } from "./masonry";
 
-// The sizes of a library of design references, newest first: screenshots, posters, and photos.
 const library = [
   [1080, 1920],
   [1170, 2080],

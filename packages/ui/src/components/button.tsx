@@ -2,10 +2,7 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "cn";
 
-/**
- * Every button is a full pill. `primary` is the one main action of a view, ink on the page.
- * `secondary` is outlined, `ghost` is bare until hovered, and `glass` floats over images.
- */
+/** `primary` is the one main action of a view, and `glass` floats over images. */
 const buttonVariants = cva(
   "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full font-[540] whitespace-nowrap outline-none select-none transition-[background-color,color,box-shadow,scale,opacity] duration-150 ease-out active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {

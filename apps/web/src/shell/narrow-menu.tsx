@@ -24,7 +24,6 @@ import { Mark } from "@/shell/mark";
 const sheetLinkClass =
   "flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-[540] text-ink-2 outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover aria-[current=page]:bg-hover aria-[current=page]:text-ink [&_svg]:text-ink-3";
 
-/** On a narrow window, the way to every page: a sheet from the left that a followed link closes. */
 export function NarrowMenu() {
   const [open, setOpen] = useState(false);
   const { signOut } = useAuthActions();

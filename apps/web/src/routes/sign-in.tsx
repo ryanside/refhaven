@@ -100,10 +100,6 @@ function SignIn() {
   );
 }
 
-/**
- * Five prints fanned like a hand of cards around one pivot: the same motif as a collection's pile.
- * Each is drawn in CSS, since a signed-out page has no images of its own.
- */
 function Fan() {
   const print =
     "absolute top-3 left-1/2 h-[156px] w-[116px] origin-[50%_260%] overflow-hidden rounded-[4px] shadow-print";

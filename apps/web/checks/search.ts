@@ -75,12 +75,10 @@ const showsFor = (page: Page, q: string | null, tag: string | null, names: strin
 
 const searchField = (page: Page) => page.getByLabel("Search", { exact: true });
 const tagChips = (page: Page) => page.getByRole("navigation", { name: "Tags" });
-/** Chooses a tag's chip, or All for "". */
 const chooseTag = (page: Page, name: string) =>
   tagChips(page)
     .getByRole("link", { name: name === "" ? "All" : name, exact: true })
     .click();
-/** The chosen tag, or "" while All is chosen. */
 const shownTag = async (page: Page) => {
   const chosen = await tagChips(page).locator('[aria-current="page"]').textContent();
   return chosen === "All" ? "" : chosen;

@@ -1,6 +1,5 @@
 import { cva } from "class-variance-authority";
 
-/** A tag or filter chip. The active one is filled ink. */
 const chipVariants = cva(
   "inline-flex h-7 shrink-0 items-center gap-1 rounded-full text-[13px] font-[500] whitespace-nowrap transition-[background-color,color] duration-150 select-none",
   {

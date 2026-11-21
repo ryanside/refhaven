@@ -29,7 +29,6 @@ function useRefuseStrayFileDrops() {
   }, []);
 }
 
-/** Every signed-in page. Each draws its own top bar, since the bar's middle and action are the page's. */
 function SignedInLayout() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   useRefuseStrayFileDrops();

@@ -12,13 +12,8 @@ type Print = {
   readonly height: number;
 };
 
-/** How many of a collection's images a shelf or a menu counts before it says "60+". */
 const counted = 60;
 
-/**
- * A collection's newest images for its pile, and how many it holds. The query is the first page of
- * the collection's gallery, so opening the gallery reuses it.
- */
 export function useCollectionCover(collectionId: Id<"collections">) {
   const items = usePaginatedQuery(
     refs.public.collections.refs,
@@ -33,14 +28,12 @@ export function useCollectionCover(collectionId: Id<"collections">) {
   };
 }
 
-/** "7 images", or "60+ images" past what was counted. */
 export const countLabel = ({ count, more }: { count: number; more: boolean }) =>
   more ? `${count}+ images` : count === 1 ? "1 image" : `${count} images`;
 
 export const shortCount = ({ count, more }: { count: number; more: boolean }) =>
   more ? `${count}+` : `${count}`;
 
-// Three prints fanned like photos on a table: the newest in front and upright.
 const poses = [
   { x: 0, y: 0, r: 0, big: true },
   { x: -25, y: 3, r: -9, big: false },
@@ -83,7 +76,6 @@ export function Pile({
             return (
               <RetryingImg
                 key={print.refId}
-                // Every image load is a CORS request, as in the gallery.
                 crossOrigin="anonymous"
                 src={urls.get(print.refId)?.url}
                 alt=""

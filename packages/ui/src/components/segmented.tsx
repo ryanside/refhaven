@@ -1,7 +1,7 @@
 import { cn } from "cn";
 import type * as React from "react";
 
-/** A track of two or more choices, the current one raised. Each item marks itself with `aria-current`. */
+/** Each item marks itself with `aria-current`. */
 function Segmented({ className, ...props }: React.ComponentProps<"nav">) {
   return (
     <nav

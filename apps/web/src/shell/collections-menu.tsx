@@ -19,7 +19,6 @@ export function useCollections(): ReadonlyArray<Collection> {
   return QueryResult.isSuccess(collections) ? collections.value : [];
 }
 
-/** Collections ▾ in the top bar: find one, open it, or make a new one. */
 export function CollectionsMenu() {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
@@ -39,10 +38,7 @@ export function CollectionsMenu() {
   );
 }
 
-/**
- * A field that narrows the collections by name, the list of them, and New collection at its foot.
- * Following a link, or making a collection, which opens it, calls `close`.
- */
+/** Following a link, or making a collection, which opens it, calls `close`. */
 export function CollectionFinder({
   close,
   listClassName,
@@ -114,7 +110,6 @@ export function CollectionFinder({
   );
 }
 
-/** One collection: its pile, its name as the link, and how many images it holds. */
 function CollectionRow({ collectionId, name, close }: Collection & { close: () => void }) {
   const cover = useCollectionCover(collectionId);
   const { pathname } = useLocation();

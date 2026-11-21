@@ -6,7 +6,6 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { TopBar } from "@/shell/top-bar";
 
-/** A page with nothing to show. It keeps the top bar, which is the way to every page. */
 export function NotFound({ title, children }: { title: string; children: ReactNode }) {
   return (
     <>

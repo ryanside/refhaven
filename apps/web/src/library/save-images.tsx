@@ -31,16 +31,13 @@ type ClientPoint = { readonly x: number; readonly y: number };
  */
 export type PlaceAt = (at: ClientPoint | null) => (refId: Id<"refs">) => Promise<void>;
 
-/** Where saved images go: the library, or a collection too. */
 type SaveTarget = {
   readonly collectionId?: Id<"collections"> | undefined;
-  /** Named on the drop veil. */
   readonly name: string;
 };
 
 const PickContext = createContext<() => void>(() => {});
 
-/** Opens the file picker of the page's save scope. */
 const usePickImages = () => useContext(PickContext);
 
 /**
@@ -87,7 +84,6 @@ const outcomeDetail = (outcome: SaveOutcome) =>
 
 const carriesFiles = (event: DragEvent) => event.dataTransfer?.types.includes("Files") ?? false;
 
-/** A tray that clears itself this long after every file of it saved. */
 const clearAfterMs = 4000;
 
 /** A drag stops sending `dragover` when it leaves the window or ends. */
@@ -116,8 +112,6 @@ export function SaveScope({
   const nextKey = useRef(0);
   const [pending, setPending] = useState<ReadonlyArray<Started>>([]);
   const [finished, setFinished] = useState<ReadonlyArray<Finished>>([]);
-  // The finished rows before this index were cleared from the tray. They stay in the list, hidden,
-  // so the list only ever grows.
   const [clearedBefore, setClearedBefore] = useState(0);
   const [dragging, setDragging] = useState(false);
 
@@ -190,7 +184,6 @@ export function SaveScope({
     };
   }, [saveAll]);
 
-  // A tray whose every file saved clears itself. One with a refused file waits to be closed.
   const shown = finished.slice(clearedBefore);
   const allSaved =
     pending.length === 0 &&
@@ -266,7 +259,6 @@ function DropVeil({
   );
 }
 
-/** A file's picture while it saves, from the file itself. */
 function useFilePreview(file: File) {
   const [url, setUrl] = useState<string>();
   useEffect(() => {
@@ -291,11 +283,6 @@ function Preview({ file }: { file: File }) {
   );
 }
 
-/**
- * Each file's outcome, one row per file, at the bottom right. The rows of files still saving sit
- * under the finished ones, apart from the status list, so the list holds outcomes only. The tray
- * shows while any row does.
- */
 function SaveTray({
   finished,
   clearedBefore,

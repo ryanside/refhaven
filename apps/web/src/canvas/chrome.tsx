@@ -36,7 +36,6 @@ import { Rule, pillClass } from "@/shell/top-bar";
 import type { Action } from "./keymap";
 import { noteInk } from "./notes";
 
-/** The bands the floating chrome covers: the top bar's pills above, and the dock below. */
 const chromeInsets = { top: 56, bottom: 76 } as const;
 const fitMargin = 56;
 
@@ -45,7 +44,6 @@ const fitMargin = 56;
  * Nothing happens on an empty canvas.
  */
 export function fitToView(store: SceneStore) {
-  // A store item's width and height already hold its scale.
   const bounds = boundsOf(store.items().map((item) => ({ ...item, scale: 1 })));
   if (!bounds) return;
   const viewport = store.viewport();
@@ -76,16 +74,11 @@ export function fitToView(store: SceneStore) {
 }
 
 const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
-/** A shortcut as this machine writes it: "⌘G" on macOS, "Ctrl+G" elsewhere. */
 const keys = (shortcut: string) =>
   isMac()
     ? shortcut.replace("Mod+", "⌘").replace("Shift+", "⇧")
     : shortcut.replace("Mod+", "Ctrl+");
 
-/**
- * An icon button of a cluster, named by its tooltip with its shortcut. The tooltip hangs on a
- * wrapper, so it still names the tool while the tool is off.
- */
 function Tool({
   label,
   shortcut,
@@ -99,7 +92,6 @@ function Tool({
   icon: IconSvgElement;
   disabled?: boolean;
   onClick: () => void;
-  /** The dock's 40 px size, instead of a cluster's 32 px. */
   large?: boolean;
 }) {
   return (
@@ -120,7 +112,6 @@ function Tool({
   );
 }
 
-/** The zoom level, − and +, and Fit, at the bottom left. The level opens presets and a field. */
 export function ZoomCluster({ store }: { store: SceneStore }) {
   const { camera } = useSyncExternalStore(store.subscribe, store.summary);
   const center = () => {
@@ -238,10 +229,7 @@ const selectedColor = (store: SceneStore) => {
   return colors.size === 1 ? [...colors][0]! : "";
 };
 
-/**
- * The making tools at the bottom center: Undo and Redo, and Note with its color. The color applies
- * to the selected notes, or to the next note when none is selected.
- */
+/** Note's color applies to the selected notes, or to the next note when none is selected. */
 export function Dock({
   store,
   history,
@@ -359,11 +347,6 @@ function NoteColorPicker({
   );
 }
 
-/**
- * The arranging tools at the bottom right, with how many items are selected. They show only while
- * something is selected, and stay in the page, off, while nothing is. The count also carries the
- * camera for the checks.
- */
 export function SelectionCluster({
   store,
   actions,
@@ -444,7 +427,6 @@ export function SelectionCluster({
   );
 }
 
-/** A change that did not go through, over the dock until it is closed. */
 export function Problem({ children, close }: { children: ReactNode; close: () => void }) {
   return (
     <div className="fixed bottom-[92px] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-surface py-1.5 pr-1.5 pl-4 shadow-float-lg">

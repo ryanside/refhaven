@@ -7,10 +7,6 @@
 @source "../../../apps/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
-/*
- * refhaven's tokens. The chrome is ink on white glass, with no accent color: the images supply
- * the color. Each token has a light and a dark value.
- */
 :root {
   --page: #ffffff;
   --surface: #ffffff;
@@ -23,14 +19,12 @@
   --ink-4: #c9c9c3;
   --line: rgb(23 23 21 / 0.08);
   --line-2: rgb(23 23 21 / 0.14);
-  /* The hairline drawn over an image's edge, so a white image keeps its edge on a white page. */
   --edge: rgb(0 0 0 / 0.08);
   --glass: rgb(255 255 255 / 0.86);
   --scrim: rgb(255 255 255 / 0.72);
   --ok: #1d8348;
   --warn: #a8620a;
   --bad: #c5352b;
-  /* The selection's outline and handles on a canvas. Checks measure these pixels. */
   --selection: oklch(0.205 0 0);
   --selection-fill: oklch(1 0 0);
   --float: 0 0 0 1px rgb(23 23 21 / 0.06), 0 1px 2px rgb(23 23 21 / 0.05),
@@ -39,7 +33,6 @@
     0 18px 44px -10px rgb(23 23 21 / 0.22);
   --print: 0 0 0 1px rgb(23 23 21 / 0.08), 0 1px 2px rgb(23 23 21 / 0.1),
     0 6px 14px -4px rgb(23 23 21 / 0.18);
-  /* A thin ring that keeps a small image's edge on a page of the same tone. */
   --print-ring: 0 0 0 1px rgb(23 23 21 / 0.08);
   --gutter: clamp(16px, 2.5vw, 40px);
   color-scheme: light;
@@ -50,7 +43,6 @@
   --surface: #1b1b19;
   --sunken: #171716;
   --hover: #272725;
-  /* Lighter than the page, and far enough from a black note's ink to tell them apart. */
   --canvas: #282826;
   --ink: #f4f4f0;
   --ink-2: #a9a9a3;
@@ -73,7 +65,6 @@
   color-scheme: dark;
 }
 
-/* On the dark canvas, the floating chrome stands on a lighter surface with a hairline edge. */
 .dark .on-canvas {
   --glass: rgb(48 48 46 / 0.94);
   --surface: #30302e;
@@ -115,7 +106,6 @@
   -webkit-backdrop-filter: blur(20px) saturate(1.8);
 }
 
-/* An image's frame, with a hairline drawn over the image's edge. */
 @utility image-edge {
   position: relative;
   &::after {
@@ -132,7 +122,6 @@
   padding-inline: var(--gutter);
 }
 
-/* Counts and sizes line up in columns. */
 @utility num {
   font-variant-numeric: tabular-nums;
 }

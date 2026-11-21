@@ -7,7 +7,6 @@ import { PNG } from "pngjs";
 import type { Page } from "playwright";
 import { appUrl, clientFor } from "./browser";
 
-/** A page whose canvas, which fills it under the floating top bar and tools, is 1976 by 900 pixels. */
 export const canvasViewport = { width: 1976, height: 900 };
 
 type Listed = FunctionReturnType<typeof api.canvas.open>["items"][number];
@@ -131,8 +130,6 @@ export const waitForCanvas = async (page: Page, count: number) => {
   await settle(page);
 };
 
-// The save tray floats over the canvas and shows each saved file's own picture, which a search for
-// an image's color would find too. A screenshot that measures the canvas leaves it out.
 const canvasOnly = '[data-testid="save-tray"] { visibility: hidden !important; }';
 
 export const screenshot = async (page: Page, name?: string) => {

@@ -3,7 +3,6 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { cn } from "cn";
 import { Icon } from "./icon";
 
-/** A floating surface that scales in from its trigger. Menus and popovers share it. */
 const popupClass =
   "origin-(--transform-origin) rounded-[18px] bg-surface text-ink shadow-float-lg outline-none transition-[scale,opacity] duration-150 ease-out data-ending-style:scale-[0.97] data-ending-style:opacity-0 data-starting-style:scale-[0.97] data-starting-style:opacity-0";
 
@@ -64,7 +63,6 @@ function MenuSubmenuTrigger({ className, ...props }: MenuPrimitive.SubmenuTrigge
   );
 }
 
-/** A choice of one. The chosen item carries a tick at its end. */
 function MenuRadioItem({
   className,
   children,

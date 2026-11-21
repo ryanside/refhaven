@@ -118,7 +118,6 @@ export function CanvasView({
 }: {
   collectionId: Id<"collections">;
   name: string;
-  /** The collection's title, in the middle of the top bar. */
   title: ReactNode;
 }) {
   const [store] = useState(createSceneStore);
@@ -144,9 +143,6 @@ export function CanvasView({
         return;
       }
       if (store.loadSnapshot(opened.success)) {
-        // The store fits its first snapshot to the whole view. The chrome floats over its top and
-        // bottom, so the first view is fitted again into the part the chrome leaves open, before
-        // anything reads the camera.
         if (!framed.current) {
           framed.current = true;
           fitToView(store);
@@ -439,8 +435,6 @@ export function CanvasView({
   const placeAt = useCallback<PlaceAt>(
     (at) => {
       const box = host.current!.getBoundingClientRect();
-      // A drop on the chrome over the canvas, such as its tools, starts at the center of the view,
-      // as a paste does.
       const under = at === null ? null : document.elementFromPoint(at.x, at.y);
       const onCanvas =
         at !== null &&

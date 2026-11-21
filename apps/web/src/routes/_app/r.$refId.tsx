@@ -78,7 +78,6 @@ function ImageNotFound() {
   );
 }
 
-/** The list the page steps through, and its place in it. */
 type Steps = {
   readonly origin: Origin;
   readonly order: ReadonlyArray<Id<"refs">>;
@@ -86,10 +85,6 @@ type Steps = {
   readonly next: Id<"refs"> | undefined;
 };
 
-/**
- * Where the page of `refId` came from and its neighbors there: the list it was opened from, or
- * the library's first page when it was opened by its link.
- */
 function useSteps(refId: Id<"refs">): Steps {
   const opened = openedFrom(refId);
   const library = usePaginatedQuery(refs.public.library.list, opened ? "skip" : {}, galleryPage);
@@ -107,11 +102,9 @@ function RefPage() {
   const refId = Route.useParams().refId as Id<"refs">;
   const steps = useSteps(refId);
   const { previous, next } = steps;
-  // The neighbors' details and display copies load ahead, so a step shows its image at once.
   useQuery(refs.public.ref.get, previous ? { refId: previous } : "skip");
   useQuery(refs.public.ref.get, next ? { refId: next } : "skip");
   const details = useQuery(refs.public.ref.get, { refId });
-  // An image that is not found, or not the user's, is never signed.
   const found = QueryResult.isSuccess(details);
   const shown = useMemo(
     () => (found ? [refId, ...(previous ? [previous] : []), ...(next ? [next] : [])] : []),
@@ -139,7 +132,6 @@ function RefPage() {
   });
 }
 
-/** Loads each image into the browser's cache, as the page's own image asks for it. */
 function usePreload(urls: ReadonlyArray<string | undefined>) {
   const key = urls.join(" ");
   useEffect(() => {
@@ -151,7 +143,6 @@ function usePreload(urls: ReadonlyArray<string | undefined>) {
   }, [key]);
 }
 
-/** Steps to a neighbor in place of this page, so going back still leaves for the list. */
 function useStep(steps: Steps) {
   const navigate = useNavigate();
   return (refId: Id<"refs"> | undefined) => {
@@ -161,7 +152,6 @@ function useStep(steps: Steps) {
   };
 }
 
-/** Back to where the page was opened from: the list itself when it opened this page. */
 function useLeave(refId: Id<"refs">, origin: Origin) {
   const router = useRouter();
   const navigate = useNavigate();
@@ -182,10 +172,6 @@ const originLink = (origin: Origin) =>
       ? ({ to: "/trash" } as const)
       : ({ to: "/library" } as const);
 
-/**
- * ← and → step through the list, and Escape goes back to it, unless a field or an open menu has
- * the keys.
- */
 function useStepKeys(refId: Id<"refs">, steps: Steps) {
   const step = useStep(steps);
   const leave = useLeave(refId, steps.origin);
@@ -214,10 +200,8 @@ function useStepKeys(refId: Id<"refs">, steps: Steps) {
   }, []);
 }
 
-/** "Library / name", or the trash or the collection the page was opened from. */
 function Breadcrumb({ origin, fileName }: { origin: Origin; fileName: string }) {
   return (
-    // A narrow window has no room for it beside the menu and the account. The panel names the image.
     <nav
       aria-label="Breadcrumb"
       className={cn(pillClass, "min-w-0 gap-0.5 pr-4 pl-1.5 narrow:hidden")}
@@ -238,7 +222,6 @@ function Breadcrumb({ origin, fileName }: { origin: Origin; fileName: string }) 
   );
 }
 
-/** A round button 24 px outside an edge of the image that steps to a neighbor. */
 function StepButton({ side, onClick }: { side: "previous" | "next"; onClick: () => void }) {
   const label = side === "previous" ? "Previous image" : "Next image";
   return (
@@ -413,10 +396,6 @@ function Section({
   );
 }
 
-/**
- * How a field's last save went: a tick that fades after two seconds, or the reason it was refused.
- * The reason is an alert, so a screen reader hears it.
- */
 function useSaveState() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -456,7 +435,6 @@ const saveButton = (label: string, visible: boolean) => (
   </Button>
 );
 
-/** The name as the panel's title. Rename turns it into a field: Enter saves, Escape cancels. */
 function NameField({ refId, fileName }: { refId: Id<"refs">; fileName: string }) {
   const update = useMutation(refs.public.ref.update);
   const [draft, setDraft] = useState<string | null>(null);
@@ -521,14 +499,12 @@ function NameField({ refId, fileName }: { refId: Id<"refs">; fileName: string })
   );
 }
 
-/** The note: saved when the field is left, with Mod+Enter, or with its Save button. */
 function NoteField({ refId, note }: { refId: Id<"refs">; note: string | null }) {
   const update = useMutation(refs.public.ref.update);
   const id = useId();
   const [value, setValue] = useState(note ?? "");
   const state = useSaveState();
   const dirty = value !== (note ?? "");
-  // A note changed elsewhere, as in another tab, replaces the field's text unless it was edited.
   const shown = useRef(note ?? "");
   useEffect(() => {
     setValue((current) => (current === shown.current ? (note ?? "") : current));
@@ -543,7 +519,6 @@ function NoteField({ refId, note }: { refId: Id<"refs">; note: string | null }) 
     }
     const failure = failureTag(await update({ refId, note: decoded.value }));
     state.done(failure);
-    // The field shows the note as saved, so spaces that cleared it leave an empty field.
     if (failure === null) setValue(decoded.value ?? "");
   };
 
@@ -572,7 +547,6 @@ function NoteField({ refId, note }: { refId: Id<"refs">; note: string | null }) 
           }}
           className={cn(
             fieldClass,
-            // Room for Save at the foot only while there is a change to save.
             "field-sizing-content min-h-[88px] resize-none py-2.5 leading-[21px]",
             dirty && "pb-10",
           )}
@@ -586,7 +560,6 @@ function NoteField({ refId, note }: { refId: Id<"refs">; note: string | null }) 
 
 const shownLink = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
-/** Where the image came from: a link once set, which Edit turns back into a field. */
 function SourceField({ refId, sourceUrl }: { refId: Id<"refs">; sourceUrl: string | null }) {
   const update = useMutation(refs.public.ref.update);
   const id = useId();
@@ -664,7 +637,6 @@ function SourceField({ refId, sourceUrl }: { refId: Id<"refs">; sourceUrl: strin
   );
 }
 
-/** Each tag as a chip that opens the library filtered by it, with ×, and a field that adds one. */
 function Tags({ refId, tags }: { refId: Id<"refs">; tags: ReadonlyArray<string> }) {
   const id = useId();
   const [name, setName] = useState("");
@@ -739,7 +711,6 @@ function Tags({ refId, tags }: { refId: Id<"refs">; tags: ReadonlyArray<string> 
   );
 }
 
-/** A collection the image is in: its pile, its name as the link, and how many images it holds. */
 function CollectionRow({ collectionId, name }: { collectionId: Id<"collections">; name: string }) {
   const cover = useCollectionCover(collectionId);
   return (

@@ -6,7 +6,6 @@ const SheetTrigger = Dialog.Trigger;
 const SheetClose = Dialog.Close;
 const SheetTitle = Dialog.Title;
 
-/** A panel that slides in from the left over a scrim. */
 function SheetContent({ className, ...props }: Dialog.Popup.Props) {
   return (
     <Dialog.Portal>

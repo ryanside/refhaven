@@ -1,4 +1,3 @@
-/** refhaven's mark: a rounded block with an arch cut from its foot, like a doorway. */
 export function Mark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={className}>

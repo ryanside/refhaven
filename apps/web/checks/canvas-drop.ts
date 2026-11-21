@@ -268,7 +268,6 @@ try {
   const itemsBefore = (await main.open()).items.length;
   view = await pageView(page);
   const viewCenter = toWorld(view, centerOf(view.box));
-  // The tools float over the canvas. A drop on them is not aimed at a point of the canvas.
   const dockBox = (await page.getByTestId("canvas-dock").boundingBox())!;
   const onDock = centerOf(dockBox);
   await send(page, "drop", [gray.carried], '[data-testid="canvas-dock"]', onDock);
