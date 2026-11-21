@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { arrange, captionHeight } from "./masonry";
+import { arrange, captionHeight, tallest } from "./masonry";
 
 // The sizes of a library of design references, newest first: screenshots, posters, and photos.
 const library = [
@@ -34,12 +34,13 @@ const columnEnds = (boxes: ReturnType<typeof arrange>["boxes"]) => {
   return [...ends.values()];
 };
 
-test("the columns of a gallery of three rows or more end level", () => {
-  for (const sizes of [library, library.slice(0, 13), library.slice(2)]) {
+test("each image goes to the column that ends highest, so no column runs a whole tile past another", () => {
+  for (const sizes of [library, library.slice(0, 7), library.slice(2)]) {
     const { boxes, height } = arrange(sizes, pageWidth);
     const ends = columnEnds(boxes);
+    const tallestTile = Math.max(...boxes.map((box) => box.imageHeight + captionHeight + 24));
 
-    expect(Math.max(...ends) - Math.min(...ends)).toBeLessThanOrEqual(8);
+    expect(Math.max(...ends) - Math.min(...ends)).toBeLessThanOrEqual(tallestTile);
     expect(Math.max(...ends)).toBeCloseTo(height);
   }
 });
@@ -55,13 +56,13 @@ test("the newest images fill the top row from the left, and every image fits the
   for (const box of boxes) expect(box.left + box.width).toBeLessThanOrEqual(pageWidth + 0.01);
 });
 
-test("an image is cut or widened by at most a fifth to level the columns", () => {
-  const { boxes } = arrange(library, pageWidth);
+test("every image is drawn whole at its own aspect ratio, and only a very tall one is cut", () => {
+  const { boxes } = arrange([...library, { width: 1000, height: 4000 }], pageWidth);
 
   boxes.forEach((box, index) => {
-    const natural = box.width * Math.min(2.5, library[index]!.height / library[index]!.width);
-    expect(box.imageHeight / natural).toBeGreaterThanOrEqual(0.8);
-    expect(box.imageHeight / natural).toBeLessThanOrEqual(1.25);
+    const { width, height } =
+      index < library.length ? library[index]! : { width: 1000, height: 4000 };
+    expect(box.imageHeight).toBeCloseTo(box.width * Math.min(tallest, height / width));
   });
 });
 
