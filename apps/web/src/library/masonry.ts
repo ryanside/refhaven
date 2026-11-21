@@ -7,7 +7,7 @@ export type Box = {
 };
 
 /** The space between columns. */
-export const columnGap = 12;
+const columnGap = 12;
 /** From a caption to the next image below it. */
 const rowGap = 24;
 /** Under each image: a 6 px gap and one 18 px line of caption. */
@@ -72,6 +72,7 @@ const levelEnd = (columns: ReadonlyArray<Column>) => {
  * fit takes one column fewer when that ends more level.
  */
 export function arrange(sizes: ReadonlyArray<{ width: number; height: number }>, width: number) {
+  if (sizes.length === 0 || width <= 0) return { boxes: [], height: 0 };
   const most = Math.max(2, Math.floor((width + columnGap) / (narrowestColumn + columnGap)));
   const layouts = [most, most - 1]
     .filter((count) => count >= 2)
@@ -102,5 +103,5 @@ export function arrange(sizes: ReadonlyArray<{ width: number; height: number }>,
     }
     height = Math.max(height, top - rowGap);
   });
-  return { boxes, height: sizes.length === 0 ? 0 : height };
+  return { boxes, height };
 }
