@@ -53,9 +53,17 @@ const shownTags = (page: Page) =>
     .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-tag")).join());
 const alert = (page: Page, text: string) => page.getByRole("alert").filter({ hasText: text });
 
-/** Fills a field and submits its form. */
+/** The button that turns a shown value back into its field. */
+const editButtons: Record<string, string> = { Name: "Rename", Source: "Edit source" };
+
+/** Fills a field, opening it first when its value is shown instead, and submits its form. */
 const submit = async (page: Page, label: string, button: string, value: string) => {
-  await page.getByLabel(label, { exact: true }).fill(value);
+  const field = page.getByLabel(label, { exact: true });
+  const edit = editButtons[label];
+  if (edit && !(await field.isVisible())) {
+    await page.getByRole("button", { name: edit, exact: true }).click();
+  }
+  await field.fill(value);
   await page.getByRole("button", { name: button, exact: true }).click();
 };
 
@@ -121,7 +129,10 @@ try {
     await submit(page, "Name", "Save name", "renamed.png");
     await alert(page, "A name is").waitFor({ state: "detached" });
   }
-  await page.getByRole("link", { name: "Library", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Library", exact: true })
+    .click();
   await card(page, large).waitFor();
   assert(
     (await card(page, large).locator("p").textContent()) === "renamed.png",
@@ -174,6 +185,8 @@ try {
   for (const bad of ["javascript:alert(1)", "data:text/html,x", "ftp://example.com", "not a url"]) {
     await submit(page, "Source", "Save source", bad);
     await alert(page, "A source is an http or https link").waitFor();
+    // Escape leaves the field, which shows the saved source as its link again.
+    await page.getByLabel("Source", { exact: true }).press("Escape");
     assert(
       (await refRow(large))?.sourceUrl === source &&
         (await sourceLink.getAttribute("href")) === source,
@@ -266,7 +279,7 @@ try {
 
   // The page renews its session while it runs, and a client takes the token it holds now.
   owner = await clientFor(page);
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Move to trash", exact: true }).click();
   await page.getByRole("button", { name: "Restore", exact: true }).waitFor();
   const trashed = await owner.query(api.ref.get, { refId: large });
   const editsInTrash = {
@@ -280,13 +293,13 @@ try {
     typeof trashed.deletedAt === "number" &&
       (await page.getByText("This image is in the trash.").count()) === 1 &&
       Object.values(editsInTrash).every((result) => result === "RefNotFound"),
-    `Delete on the page moves the image to the trash and shows Restore, get still answers, and update, addTags, and removeTags fail with RefNotFound: ${JSON.stringify(editsInTrash)}`,
+    `Move to trash on the page moves the image to the trash and shows Restore, get still answers, and update, addTags, and removeTags fail with RefNotFound: ${JSON.stringify(editsInTrash)}`,
   );
   await page.goto(`${appUrl}/trash`);
   await card(page, large).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${large}`);
   await page.getByRole("button", { name: "Restore", exact: true }).click();
-  await page.getByRole("button", { name: "Delete", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Move to trash", exact: true }).waitFor();
   const restored = await owner.query(api.ref.get, { refId: large });
   assert(
     restored.deletedAt === null &&

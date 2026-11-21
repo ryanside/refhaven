@@ -32,6 +32,7 @@ import { thumbHashToDataURL } from "thumbhash";
 import { NewCollectionForm } from "@/collections/new-collection";
 import { Pile, useCollectionCover } from "@/collections/pile";
 import { useRefUrls } from "@/library/use-ref-urls";
+import { rememberOpened, useOrigin } from "@/library/origin";
 import { useCollections } from "@/shell/collections-menu";
 
 export type Item = {
@@ -132,6 +133,7 @@ function Tile({
   box: { left: number; top: number; width: number; imageHeight: number };
 }) {
   const [stem, extension] = splitName(item.fileName);
+  const origin = useOrigin();
   return (
     <li
       data-ref-id={item.refId}
@@ -141,6 +143,7 @@ function Tile({
       <Link
         to="/r/$refId"
         params={{ refId: item.refId }}
+        onClick={() => rememberOpened(item.refId, origin)}
         className="relative block overflow-hidden rounded-[6px] bg-sunken"
         style={{ height: box.imageHeight }}
       >
@@ -217,26 +220,41 @@ function useToggleMembership(refId: Id<"refs">) {
     void (member ? removeRefs : addRefs)({ collectionId, refIds: [refId] });
 }
 
-/** Add to a collection: each collection as a toggle, and a new one at the foot. */
-function CollectionPicker({ refId }: { refId: Id<"refs"> }) {
+/**
+ * Add to a collection: each collection as a toggle, and a new one at the foot. `trigger` is the
+ * button that opens it, the glass one of a tile unless given.
+ */
+export function CollectionPicker({
+  refId,
+  trigger,
+  align = "end",
+}: {
+  refId: Id<"refs">;
+  trigger?: React.ReactElement;
+  align?: "start" | "end";
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip label="Add to a collection">
-        <PopoverTrigger
-          render={
-            <Button
-              variant="glass"
-              size="icon"
-              aria-label="Add to a collection"
-              className={glassButton}
-            />
-          }
-        >
-          <Icon icon={FolderAddIcon} size={16} />
-        </PopoverTrigger>
-      </Tooltip>
-      <PopoverContent align="end" className="flex w-[280px] flex-col p-1.5">
+      {trigger ? (
+        <PopoverTrigger render={trigger} />
+      ) : (
+        <Tooltip label="Add to a collection">
+          <PopoverTrigger
+            render={
+              <Button
+                variant="glass"
+                size="icon"
+                aria-label="Add to a collection"
+                className={glassButton}
+              />
+            }
+          >
+            <Icon icon={FolderAddIcon} size={16} />
+          </PopoverTrigger>
+        </Tooltip>
+      )}
+      <PopoverContent align={align} className="flex w-[280px] flex-col p-1.5">
         {open ? <PickerBody refId={refId} /> : null}
       </PopoverContent>
     </Popover>

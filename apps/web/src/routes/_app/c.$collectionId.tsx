@@ -28,6 +28,7 @@ import {
   useFiltered,
 } from "@/library/filters";
 import { Gallery, type Removal, galleryPage } from "@/library/gallery";
+import { OriginContext } from "@/library/origin";
 import { AddImagesButton, SaveScope } from "@/library/save-images";
 import { NotFound } from "@/shell/not-found";
 import { toast } from "@/shell/toast";
@@ -197,19 +198,21 @@ function CollectionGallery({
         </EmptyDropZone>
       ) : (
         <main className="px-gutter pt-[84px] pb-28">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
-            <SearchField filters={filters} variant="inline" />
-            <div className="min-w-0 flex-1">
-              <TagChips filters={filters} />
+          <OriginContext value={{ collectionId, name }}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+              <SearchField filters={filters} variant="inline" />
+              <div className="min-w-0 flex-1">
+                <TagChips filters={filters} />
+              </div>
             </div>
-          </div>
-          {isFiltered(filters) ? (
-            <Filtered filters={filters} collectionId={collectionId} removal={removal} />
-          ) : (
-            <div className="mt-5">
-              <Gallery items={members} removal={removal} />
-            </div>
-          )}
+            {isFiltered(filters) ? (
+              <Filtered filters={filters} collectionId={collectionId} removal={removal} />
+            ) : (
+              <div className="mt-5">
+                <Gallery items={members} removal={removal} />
+              </div>
+            )}
+          </OriginContext>
         </main>
       )}
     </SaveScope>

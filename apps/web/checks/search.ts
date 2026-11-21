@@ -323,6 +323,7 @@ try {
     await page.getByLabel(label, { exact: true }).fill(value);
     await page.getByRole("button", { name: button, exact: true }).click();
   };
+  await page.getByRole("button", { name: "Rename", exact: true }).click();
   await submit("Name", "Save name", "pier-morning.png");
   await page.getByRole("heading", { name: "pier-morning.png" }).waitFor();
   await submit("Note", "Save note", "Painted for the coral glow.");

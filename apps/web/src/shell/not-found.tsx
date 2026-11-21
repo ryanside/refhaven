@@ -1,5 +1,6 @@
 import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
-import { Button } from "@refhaven/ui/components/button";
+import { buttonVariants } from "@refhaven/ui/components/button";
+import { cn } from "@refhaven/ui/lib/utils";
 import { Icon } from "@refhaven/ui/components/icon";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -26,16 +27,13 @@ export function NotFound({ title, children }: { title: string; children: ReactNo
           <p className="mt-2 max-w-[44ch] text-[15px] leading-[22px] text-pretty text-ink-2">
             {children}
           </p>
-          <Button
-            variant="secondary"
-            size="lg"
-            className="mt-7"
-            nativeButton={false}
-            render={<Link to="/library" />}
+          <Link
+            to="/library"
+            className={cn(buttonVariants({ variant: "secondary", size: "lg" }), "mt-7")}
           >
             <Icon icon={ArrowLeft02Icon} size={18} />
             Back to Library
-          </Button>
+          </Link>
         </div>
       </main>
     </>
