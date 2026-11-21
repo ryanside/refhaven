@@ -336,7 +336,8 @@ try {
 
   await selected(1);
   calls = applied.length;
-  await page.getByLabel("Note color").selectOption("blue");
+  await page.getByRole("button", { name: "Note color" }).click();
+  await page.getByRole("radio", { name: "Blue" }).click();
   note = (await until(noteIn, (found) => found?.color === "blue", "the color to save"))!;
   await until(
     () => inkOn(page, view, note, ink.blue),
@@ -479,7 +480,8 @@ try {
 
   await page.keyboard.press("Escape");
   await selected(0);
-  await page.getByLabel("Note color").selectOption("red");
+  await page.getByRole("button", { name: "Note color" }).click();
+  await page.getByRole("radio", { name: "Red" }).click();
   await page.getByRole("button", { name: "Add note" }).click();
   await editor.waitFor();
   await page.keyboard.type("A red label");

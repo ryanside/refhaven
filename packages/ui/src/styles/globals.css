@@ -48,7 +48,8 @@
   --surface: #1b1b19;
   --sunken: #171716;
   --hover: #272725;
-  --canvas: #161615;
+  /* Lighter than the page, and far enough from a black note's ink to tell them apart. */
+  --canvas: #282826;
   --ink: #f4f4f0;
   --ink-2: #a9a9a3;
   --ink-3: #8a8a84;

@@ -49,6 +49,8 @@ const { watch: watchConsole, assertClean: assertCleanConsole } = consoleWatch();
 
 const colorOf = (item: Item, refs: ReadonlyMap<string, Rgb>) => refs.get(refOf(item))!;
 
+const round = ({ x, y }: Point): Point => ({ x: Math.round(x), y: Math.round(y) });
+
 const drag = async (page: Page, from: Point, by: Point) => {
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
@@ -248,7 +250,9 @@ try {
   );
 
   const before = await main.open();
-  await drag(page, toPage(view, red), { x: 120, y: 60 });
+  // Chrome carries a pointer's position as a 32-bit float, so the drag starts on a whole pixel and
+  // its 120 and 60 px reach the page exactly.
+  await drag(page, round(toPage(view, red)), { x: 120, y: 60 });
   await until(
     () => main.open(),
     (s) => s.rev === before.rev + 1,

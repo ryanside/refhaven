@@ -7,7 +7,7 @@ import { PNG } from "pngjs";
 import type { Page } from "playwright";
 import { appUrl, clientFor } from "./browser";
 
-/** A page wide enough for a canvas of 1400 by about 840 pixels, beside the sidebar and the canvas's panel, and under the page's bar. */
+/** A page whose canvas, which fills it under the floating top bar and tools, is 1976 by 900 pixels. */
 export const canvasViewport = { width: 1976, height: 900 };
 
 type Listed = FunctionReturnType<typeof api.canvas.open>["items"][number];
