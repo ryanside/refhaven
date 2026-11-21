@@ -1,19 +1,36 @@
 import type { Id } from "@refhaven/backend/id";
 import { createContext, useContext } from "react";
 
-/** The collection whose gallery a tile is shown in, if any. */
-export type Origin = { readonly collectionId: Id<"collections">; readonly name: string };
+/** The list a tile is shown in: the library, the trash, or a collection's gallery. */
+export type Origin =
+  | { readonly kind: "library" }
+  | { readonly kind: "trash" }
+  | {
+      readonly kind: "collection";
+      readonly collectionId: Id<"collections">;
+      readonly name: string;
+    };
 
-export const OriginContext = createContext<Origin | null>(null);
+export const libraryOrigin: Origin = { kind: "library" };
 
-/** The gallery an image's page was opened from, so its breadcrumb can lead back there. */
-let opened: { readonly refId: Id<"refs">; readonly origin: Origin | null } | null = null;
+export const OriginContext = createContext<Origin>(libraryOrigin);
 
 export const useOrigin = () => useContext(OriginContext);
 
-export const rememberOpened = (refId: Id<"refs">, origin: Origin | null) => {
-  opened = { refId, origin };
+/** Where an image's page was opened from, and that list's images in order. */
+export type Opened = { readonly origin: Origin; readonly order: ReadonlyArray<Id<"refs">> };
+
+let opened: (Opened & { readonly refId: Id<"refs"> }) | null = null;
+
+/** Notes that the page of `refId` opens from `origin`, whose images are `order`. */
+export const rememberOpened = (
+  refId: Id<"refs">,
+  origin: Origin,
+  order: ReadonlyArray<Id<"refs">>,
+) => {
+  opened = { refId, origin, order };
 };
 
-/** The collection the page of `refId` was opened from, or null for the library. */
-export const openedFrom = (refId: Id<"refs">) => (opened?.refId === refId ? opened.origin : null);
+/** Where the page of `refId` was opened from, or null when it was not opened from a list. */
+export const openedFrom = (refId: Id<"refs">): Opened | null =>
+  opened?.refId === refId ? opened : null;

@@ -34,6 +34,8 @@ import { Pile, useCollectionCover } from "@/collections/pile";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { rememberOpened, useOrigin } from "@/library/origin";
 import { useCollections } from "@/shell/collections-menu";
+import { type Box, arrange } from "@/library/masonry";
+import { ShownName } from "@/library/name";
 import { RetryingImg } from "@/library/retrying-img";
 
 export type Item = {
@@ -54,19 +56,6 @@ export type Removal = {
   readonly run: (refId: Id<"refs">) => void;
 };
 
-const gap = 12;
-const narrowestColumn = 220;
-/** The caption under each image: a 6 px gap and one 18 px line, with room for the ⋯ button. */
-const captionHeight = 30;
-/** A very tall image is cut to this many times its width, from the top. */
-const tallest = 2.5;
-
-/** The file name without its extension, which the grid leaves out of sight. */
-const splitName = (fileName: string) => {
-  const dot = fileName.lastIndexOf(".");
-  return dot > 0 ? [fileName.slice(0, dot), fileName.slice(dot)] : [fileName, ""];
-};
-
 function useWidth() {
   const element = useRef<HTMLUListElement>(null);
   const [width, setWidth] = useState(0);
@@ -80,40 +69,25 @@ function useWidth() {
   return [element, width] as const;
 }
 
-/**
- * Images in columns, each at its own aspect ratio. Each goes to the shortest column, so the newest
- * stay at the top left and the page reads newest first, as the cards' order does.
- */
+/** Images in columns that end level, each near its own aspect ratio, newest at the top left. */
 export function Masonry({ items, removal }: { items: ReadonlyArray<Item>; removal: Removal }) {
   const [list, width] = useWidth();
   const refIds = useMemo(() => items.map((item) => item.refId), [items]);
   const urls = useRefUrls(refIds, "thumbnail");
-  const columns = Math.max(2, Math.floor((width + gap) / (narrowestColumn + gap)));
-  const columnWidth = (width - gap * (columns - 1)) / columns;
-  const tops: Array<number> = Array.from({ length: columns }, () => 0);
-  const placed = items.map((item) => {
-    const column = tops.indexOf(Math.min(...tops));
-    const imageHeight = columnWidth * Math.min(tallest, item.height / item.width);
-    const top = tops[column]!;
-    tops[column] = top + imageHeight + captionHeight + gap;
-    return { item, left: column * (columnWidth + gap), top, imageHeight };
-  });
+  const { boxes, height } = useMemo(() => arrange(items, width), [items, width]);
 
   return (
-    <ul
-      ref={list}
-      className="relative"
-      style={{ height: items.length === 0 ? 0 : Math.max(...tops) - gap }}
-    >
+    <ul ref={list} className="relative" style={{ height }}>
       {width === 0
         ? null
-        : placed.map(({ item, left, top, imageHeight }) => (
+        : items.map((item, index) => (
             <Tile
               key={item.refId}
               item={item}
               url={urls.get(item.refId)?.url}
               removal={removal}
-              box={{ left, top, width: columnWidth, imageHeight }}
+              box={boxes[index]!}
+              order={refIds}
             />
           ))}
     </ul>
@@ -127,13 +101,15 @@ function Tile({
   url,
   removal,
   box,
+  order,
 }: {
   item: Item;
   url: string | undefined;
   removal: Removal;
-  box: { left: number; top: number; width: number; imageHeight: number };
+  box: Box;
+  /** The gallery's images in order, which the image's page steps through. */
+  order: ReadonlyArray<Id<"refs">>;
 }) {
-  const [stem, extension] = splitName(item.fileName);
   const origin = useOrigin();
   return (
     <li
@@ -144,15 +120,11 @@ function Tile({
       <Link
         to="/r/$refId"
         params={{ refId: item.refId }}
-        onClick={() => rememberOpened(item.refId, origin)}
-        className="relative block overflow-hidden rounded-[6px] bg-sunken"
+        onClick={() => rememberOpened(item.refId, origin, order)}
+        className="image-edge block overflow-hidden rounded-[6px] bg-sunken"
         style={{ height: box.imageHeight }}
       >
         <Thumbnail item={item} url={url} />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_0_0_1px_var(--edge)]"
-        />
       </Link>
       <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity duration-150 ease-out group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 has-data-popup-open:opacity-100 [@media(hover:none)]:opacity-100">
         <CollectionPicker refId={item.refId} />
@@ -168,10 +140,9 @@ function Tile({
           </Button>
         </Tooltip>
       </div>
-      <div className="flex h-[30px] items-center gap-1 pt-1.5">
+      <div className="flex h-[18px] items-center gap-1 mt-1.5">
         <p className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-ink-2">
-          {stem}
-          <span className="sr-only">{extension}</span>
+          <ShownName fileName={item.fileName} />
         </p>
         <TileMenu item={item} removal={removal} />
       </div>
@@ -200,7 +171,8 @@ function Thumbnail({ item, url }: { item: Item; url: string | undefined }) {
       height={item.height}
       draggable={false}
       onLoad={() => setLoaded(true)}
-      style={loaded ? undefined : { backgroundImage: placeholder, backgroundSize: "100% 100%" }}
+      style={loaded ? undefined : { backgroundImage: placeholder, backgroundSize: "cover" }}
+      // An image cut to fit its tile keeps its top, as a page scrolled to its start does.
       className="size-full object-cover object-top"
     />
   );
@@ -352,7 +324,7 @@ function TileMenu({ item, removal }: { item: Item; removal: Removal }) {
             variant="ghost"
             size="icon-sm"
             aria-label={`More for ${item.fileName}`}
-            className="-mr-1 size-6 opacity-0 transition-opacity duration-150 group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 data-popup-open:opacity-100 [@media(hover:none)]:opacity-100"
+            className="-my-[3px] -mr-1 size-6 opacity-0 transition-opacity duration-150 group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 data-popup-open:opacity-100 [@media(hover:none)]:opacity-100"
           />
         }
       >

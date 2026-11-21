@@ -195,8 +195,8 @@ function CollectionGallery({
         </EmptyDropZone>
       ) : (
         <main className="px-gutter pt-[84px] pb-28">
-          <OriginContext value={{ collectionId, name }}>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+          <OriginContext value={{ kind: "collection", collectionId, name }}>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5">
               <SearchField filters={filters} variant="inline" />
               <div className="min-w-0 flex-1">
                 <TagChips filters={filters} />

@@ -9,9 +9,15 @@ import { FadeRow } from "@/library/fade-row";
 import { Pile, countLabel, useCollectionCover } from "@/collections/pile";
 import { useCollections } from "@/shell/collections-menu";
 
+/** Each place on the shelf: a 108 by 76 picture, then a title with one muted line under it. */
+const footprint =
+  "relative flex h-24 shrink-0 items-center gap-3.5 rounded-[20px] pr-6 pl-1 transition-colors duration-150 hover:bg-sunken has-focus-visible:bg-sunken";
+const titleClass = "text-[14px] leading-5 font-[580] tracking-[-0.012em]";
+const lineClass = "text-[13px] leading-[18px] text-ink-2 num";
+
 /**
  * The library's shelf: each collection as a pile of its images with its name and count, oldest
- * first, then a dashed print that makes a new one. It scrolls sideways once it is wider than the
+ * first, then New collection in the same footprint. It scrolls sideways once it is wider than the
  * page, and fades at the edge it scrolls toward.
  */
 export function Shelf() {
@@ -30,9 +36,7 @@ export function Shelf() {
           {collections.map(({ collectionId, name }) => (
             <ShelfItem key={collectionId} collectionId={collectionId} name={name} />
           ))}
-          <li className="flex h-24 shrink-0 items-center gap-2 rounded-[20px] pr-3 pl-2">
-            <NewPrint />
-          </li>
+          <NewShelfItem />
         </ul>
       </FadeRow>
     </section>
@@ -42,42 +46,59 @@ export function Shelf() {
 function ShelfItem({ collectionId, name }: { collectionId: Id<"collections">; name: string }) {
   const cover = useCollectionCover(collectionId);
   return (
-    <li className="relative flex h-24 shrink-0 items-center gap-3.5 rounded-[20px] pr-6 pl-1 transition-colors duration-150 hover:bg-sunken has-focus-visible:bg-sunken">
+    <li className={footprint}>
       <Pile prints={cover.cover} />
       <div className="flex min-w-0 flex-col">
         <Link
           to="/c/$collectionId"
           params={{ collectionId }}
           data-collection-id={collectionId}
-          className="max-w-56 truncate text-[14px] font-[580] tracking-[-0.012em] outline-none after:absolute after:inset-0 after:rounded-[20px] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ink"
+          className={cn(
+            titleClass,
+            "max-w-56 truncate outline-none after:absolute after:inset-0 after:rounded-[20px] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ink",
+          )}
         >
           {name}
         </Link>
-        <span className={cn("text-[13px] text-ink-2 num", !cover.loaded && "invisible")}>
-          {countLabel(cover)}
-        </span>
+        <span className={cn(lineClass, !cover.loaded && "invisible")}>{countLabel(cover)}</span>
       </div>
     </li>
   );
 }
 
-/** A dashed print beside a field: name a collection and Create. */
-function NewPrint() {
-  const field = useRef<HTMLDivElement>(null);
+/**
+ * A dashed print where a pile would be, and a title that is the field naming a new collection.
+ * A click anywhere on it goes to the field.
+ */
+function NewShelfItem() {
+  const item = useRef<HTMLLIElement>(null);
   return (
-    <>
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-hidden
-        onClick={() => field.current?.querySelector("input")?.focus()}
-        className="grid h-[66px] w-[50px] shrink-0 place-items-center rounded-[3px] border-[1.5px] border-dashed border-ink-4 text-ink-3 transition-colors duration-150 hover:border-ink-3 hover:text-ink-2"
-      >
-        <Icon icon={PlusSignIcon} size={16} />
-      </button>
-      <div ref={field}>
-        <NewCollectionForm className="w-56" fieldClassName="-ml-1" />
-      </div>
-    </>
+    <li
+      ref={item}
+      onClick={(event) => {
+        if (!(event.target instanceof Element) || !event.target.closest("button, input")) {
+          item.current?.querySelector("input")?.focus();
+        }
+      }}
+      className={cn(
+        footprint,
+        "cursor-text focus-within:bg-sunken focus-within:shadow-[inset_0_0_0_1.5px_var(--ink)]",
+      )}
+    >
+      <span aria-hidden className="grid h-[76px] w-[108px] shrink-0 place-items-center">
+        <span className="grid h-[68px] w-[52px] place-items-center rounded-[3px] border-[1.5px] border-dashed border-ink-4 text-ink-3">
+          <Icon icon={PlusSignIcon} size={16} />
+        </span>
+      </span>
+      <NewCollectionForm
+        note="Name it to start"
+        className="w-52 gap-0 [&_button]:-my-[5px] [&>p]:px-0"
+        fieldClassName={cn(
+          titleClass,
+          "h-5 rounded-none bg-transparent px-0 placeholder:font-[580] placeholder:text-ink focus:bg-transparent focus:shadow-none",
+        )}
+        noteClassName={lineClass}
+      />
+    </li>
   );
 }

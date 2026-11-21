@@ -80,7 +80,8 @@ function RefPage() {
 
 /** "Library / name", or the collection's name when its gallery opened this page. */
 function Breadcrumb({ refId, fileName }: { refId: Id<"refs">; fileName: string }) {
-  const [from] = useState(() => openedFrom(refId));
+  const [opened] = useState(() => openedFrom(refId)?.origin);
+  const from = opened?.kind === "collection" ? opened : null;
   const crumbClass =
     "flex h-8 max-w-48 shrink-0 items-center truncate rounded-full px-3 font-[520] text-ink-2 hover:bg-hover hover:text-ink";
   return (

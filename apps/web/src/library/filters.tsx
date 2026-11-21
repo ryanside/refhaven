@@ -21,7 +21,8 @@ const typing = (target: EventTarget | null) =>
 
 /**
  * Search, which writes the page's `q`. `/` focuses it from anywhere on the page, Escape empties it,
- * and so does its ×. `bar` is the glass pill of the top bar, `inline` a sunken field on the page.
+ * and so does its ×. `bar` is the glass pill of the top bar, `inline` an outlined field on the page,
+ * as tall as the tag chips beside it.
  */
 export function SearchField({
   filters,
@@ -82,10 +83,10 @@ export function SearchField({
         "flex shrink-0 items-center gap-2.5 text-ink-3 transition-shadow duration-150",
         variant === "bar"
           ? "glass h-11 w-[min(440px,34vw)] rounded-full pr-2 pl-4 shadow-float focus-within:shadow-[var(--float),inset_0_0_0_1.5px_var(--ink)]"
-          : "h-10 w-[min(320px,100%)] rounded-full bg-sunken pr-1.5 pl-3.5 focus-within:bg-surface focus-within:shadow-[inset_0_0_0_1.5px_var(--ink)]",
+          : "h-8 w-[min(320px,100%)] gap-2 rounded-full bg-page pr-1.5 pl-3 shadow-[inset_0_0_0_1px_var(--line-2)] focus-within:shadow-[inset_0_0_0_1.5px_var(--ink)]",
       )}
     >
-      <Icon icon={Search01Icon} size={18} />
+      <Icon icon={Search01Icon} size={variant === "bar" ? 18 : 16} />
       <input
         ref={field}
         aria-label="Search"
@@ -102,20 +103,26 @@ export function SearchField({
           event.preventDefault();
           clear();
         }}
-        className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-3 [&::-webkit-search-cancel-button]:hidden"
+        className={cn(
+          "min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-3 [&::-webkit-search-cancel-button]:hidden",
+          variant === "bar" ? "text-[15px]" : "text-[14px]",
+        )}
       />
       {text !== "" ? (
         <button
           type="button"
           aria-label="Clear search"
           onClick={clear}
-          className="grid size-7 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-hover hover:text-ink"
+          className={cn(
+            "grid shrink-0 place-items-center rounded-full text-ink-3 hover:bg-hover hover:text-ink",
+            variant === "bar" ? "size-7" : "size-6",
+          )}
         >
           <Icon icon={Cancel01Icon} size={14} />
         </button>
-      ) : variant === "bar" ? (
-        <Kbd className="mr-1.5">/</Kbd>
-      ) : null}
+      ) : (
+        <Kbd className={variant === "bar" ? "mr-1.5" : "mr-0.5"}>/</Kbd>
+      )}
     </label>
   );
 }
@@ -143,7 +150,8 @@ export function TagChips({ filters }: { filters: Filters }) {
       aria-current={current ? "page" : undefined}
       className={cn(
         chipVariants({ tone: current ? "active" : "quiet" }),
-        current && name !== undefined ? "pr-1.5 pl-3" : "px-3",
+        "h-8",
+        current && name !== undefined ? "pr-2 pl-3.5" : "px-3.5",
       )}
     >
       {label}

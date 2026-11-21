@@ -24,6 +24,8 @@ export function NewCollectionForm({
   label = "New collection",
   className,
   fieldClassName,
+  note,
+  noteClassName,
   autoFocus,
   created,
   cancel,
@@ -31,6 +33,9 @@ export function NewCollectionForm({
   label?: string;
   className?: string;
   fieldClassName?: string;
+  /** A line under the field, which a refused name's reason takes the place of. */
+  note?: string;
+  noteClassName?: string;
   autoFocus?: boolean;
   created?: (collectionId: Id<"collections">) => void;
   cancel?: () => void;
@@ -83,6 +88,8 @@ export function NewCollectionForm({
         <p role="alert" className="px-3 text-[12px] text-bad">
           {error}
         </p>
+      ) : note ? (
+        <p className={cn("px-3", noteClassName)}>{note}</p>
       ) : null}
     </form>
   );
