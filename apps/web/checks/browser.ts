@@ -107,6 +107,12 @@ export const pngOf = async (page: Page, color: string, width: number, height = w
     "base64",
   );
 
+/** The card of the image named `fileName`, whose link the image names with its whole file name. */
+export const cardNamed = (page: Page, fileName: string) =>
+  page
+    .locator("[data-ref-id]")
+    .filter({ has: page.getByRole("link", { name: fileName, exact: true }) });
+
 export const outcome = (call: Promise<unknown>) =>
   call.then(
     () => "accepted",

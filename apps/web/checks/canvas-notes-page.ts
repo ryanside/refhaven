@@ -6,6 +6,7 @@ import type { Page } from "playwright";
 import {
   appUrl,
   assert,
+  cardNamed,
   consoleWatch,
   openPageWithPasskeyDevice,
   signInWithPasskey,
@@ -150,10 +151,7 @@ try {
     .nth(1)
     .waitFor({ timeout: 60_000 });
   const refIdOf = async (name: string) =>
-    (await page
-      .locator("[data-ref-id]")
-      .filter({ hasText: `${name}.png` })
-      .getAttribute("data-ref-id")) as Id<"refs">;
+    (await cardNamed(page, `${name}.png`).getAttribute("data-ref-id")) as Id<"refs">;
   const yellowRef = await refIdOf("yellow");
   const tealRef = await refIdOf("teal");
 

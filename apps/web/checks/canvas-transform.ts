@@ -9,7 +9,13 @@ import {
   minFrameEdge,
 } from "@refhaven/scene";
 import type { Page } from "playwright";
-import { assert, consoleWatch, openPageWithPasskeyDevice, signInWithPasskey } from "./browser";
+import {
+  assert,
+  cardNamed,
+  consoleWatch,
+  openPageWithPasskeyDevice,
+  signInWithPasskey,
+} from "./browser";
 import {
   canvasViewport,
   type Item,
@@ -158,7 +164,7 @@ try {
     .nth(1)
     .waitFor({ timeout: 60_000 });
   const refIdOf = async (name: string) =>
-    (await page.locator("[data-ref-id]").filter({ hasText: name }).getAttribute("data-ref-id"))!;
+    (await cardNamed(page, name).getAttribute("data-ref-id"))!;
   const redRef = await refIdOf(red.name);
   const blueRef = await refIdOf(blue.name);
 

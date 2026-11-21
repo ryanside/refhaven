@@ -36,7 +36,7 @@ import { useRefUrls } from "@/library/use-ref-urls";
 import { rememberOpened, useOrigin } from "@/library/origin";
 import { useCollections } from "@/shell/collections-menu";
 import { type Box, arrange } from "@/library/masonry";
-import { ShownName } from "@/library/name";
+import { shownName } from "@/library/name";
 import { RetryingImg } from "@/library/retrying-img";
 
 export type Item = {
@@ -135,7 +135,7 @@ function Tile({
       </div>
       <div className="flex h-[18px] items-center gap-1 mt-1.5">
         <p className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-ink-2">
-          <ShownName fileName={item.fileName} />
+          {shownName(item.fileName)}
         </p>
         <TileMenu item={item} removal={removal} />
       </div>

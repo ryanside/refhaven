@@ -9,7 +9,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { thumbHashBackground } from "@/library/gallery";
 import { galleryPage } from "@/library/page";
-import { ShownName } from "@/library/name";
+import { shownName } from "@/library/name";
 import { rememberOpened } from "@/library/origin";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { TopBar } from "@/shell/top-bar";
@@ -134,7 +134,7 @@ function TrashCard({
       <div className="mt-2 flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] leading-[18px] font-[520]">
-            <ShownName fileName={item.fileName} />
+            {shownName(item.fileName)}
           </p>
           <span className="block text-[12px] leading-4 text-ink-2 num">
             {days === 1 ? "1 day left" : `${days} days left`}

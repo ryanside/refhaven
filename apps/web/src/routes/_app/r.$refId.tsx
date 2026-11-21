@@ -38,7 +38,7 @@ import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "rea
 import { Pile, shortCount, useCollectionCover } from "@/collections/pile";
 import { CollectionPicker } from "@/library/gallery";
 import { galleryPage } from "@/library/page";
-import { ShownName } from "@/library/name";
+import { shownName } from "@/library/name";
 import { type Origin, libraryOrigin, openedFrom, rememberOpened } from "@/library/origin";
 import { useRefUrls } from "@/library/use-ref-urls";
 import { NotFound } from "@/shell/not-found";
@@ -224,7 +224,7 @@ function Breadcrumb({ origin, fileName }: { origin: Origin; fileName: string }) 
         /
       </span>
       <span aria-current="page" className="max-w-[28vw] min-w-0 truncate pl-1.5 font-[580]">
-        <ShownName fileName={fileName} />
+        {shownName(fileName)}
       </span>
     </nav>
   );
@@ -456,7 +456,7 @@ function NameField({ refId, fileName }: { refId: Id<"refs">; fileName: string })
     return (
       <div className="flex items-start gap-2">
         <h1 className="min-w-0 flex-1 text-[20px] leading-7 font-[620] tracking-[-0.022em] break-words">
-          <ShownName fileName={fileName} />
+          {shownName(fileName)}
         </h1>
         <Tooltip label="Rename">
           <Button

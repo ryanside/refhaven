@@ -17,7 +17,10 @@ const refused = "refused";
 const leftAlone = "left alone";
 
 const outcomes = (page: Page) => page.locator('[role="status"] li');
-const cardNames = (page: Page) => page.locator("[data-ref-id] p").allTextContents();
+const cardNames = (page: Page) =>
+  page
+    .locator("[data-ref-id] img")
+    .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).alt));
 const outcomeOf = async (page: Page, name: string) => {
   const line = outcomes(page).filter({ hasText: `${name}:` });
   await line.waitFor();

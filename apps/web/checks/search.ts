@@ -41,13 +41,13 @@ const found = async (client: ConvexHttpClient, filter: Filter) =>
     .sort()
     .join();
 
-/** The file names on the page's cards, sorted. */
+/** The file names the page's cards give their images, sorted. */
 const shown = (page: Page) =>
   cards(page)
-    .locator("p")
-    .evaluateAll((names) =>
-      names
-        .map((name) => name.textContent)
+    .locator("img")
+    .evaluateAll((images) =>
+      images
+        .map((image) => (image as HTMLImageElement).alt)
         .sort()
         .join(),
     );
@@ -323,7 +323,7 @@ try {
   };
   await page.getByRole("button", { name: "Rename", exact: true }).click();
   await submit("Name", "Save name", "pier-morning.png");
-  await page.getByRole("heading", { name: "pier-morning.png" }).waitFor();
+  await page.getByRole("heading", { name: "pier-morning", exact: true }).waitFor();
   await submit("Note", "Save note", "Painted for the coral glow.");
   await page.getByRole("button", { name: "Remove the tag seascape" }).click();
   await page.locator('[data-tag="seascape"]').waitFor({ state: "detached" });

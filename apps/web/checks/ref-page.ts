@@ -88,7 +88,7 @@ try {
   await card(page, large).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${large}`);
   const image = page.locator("main img");
-  await page.getByRole("heading", { name: "large.png" }).waitFor();
+  await page.getByRole("heading", { name: "large", exact: true }).waitFor();
   await imagesLoaded(page);
   const shown = await image.evaluate((element: HTMLImageElement) => ({
     width: element.naturalWidth,
@@ -103,17 +103,18 @@ try {
   const blobId = (await refRow(large))?.blobs.original;
   const blob = (await rows("blobs")).find((row) => row._id === blobId);
   assert(
-    (await page.getByText("3000 × 2000 px").count()) === 1 &&
+    (await page.getByText("large.png", { exact: true }).count()) === 1 &&
+      (await page.getByText("3000 × 2000 px").count()) === 1 &&
       (await page.getByText("image/png", { exact: true }).count()) === 1 &&
       (await original.getAttribute("target")) === "_blank" &&
       new URL((await original.getAttribute("href"))!).pathname.endsWith(
         `/o/${blob?.sha256}/${blob?.upload}`,
       ),
-    "the page shows the pixel size and the type, and a link that opens the original in a new tab",
+    "the page shows the whole file name, the pixel size, and the type, and a link that opens the original in a new tab",
   );
 
   await submit(page, "Name", "Save name", "  renamed.png ");
-  await page.getByRole("heading", { name: "renamed.png" }).waitFor();
+  await page.getByRole("heading", { name: "renamed", exact: true }).waitFor();
   for (const [label, fileName] of [
     ["an empty name", ""],
     ["a name of 256 characters", "x".repeat(256)],
@@ -133,13 +134,14 @@ try {
     .click();
   await card(page, large).waitFor();
   assert(
-    (await card(page, large).locator("p").textContent()) === "renamed.png",
+    (await card(page, large).locator("p").textContent()) === "renamed" &&
+      (await card(page, large).locator("img").getAttribute("alt")) === "renamed.png",
     "renaming on the page shows the trimmed new name on the page and on the library's card",
   );
 
   await card(page, small).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${small}`);
-  await page.getByRole("heading", { name: "small.png" }).waitFor();
+  await page.getByRole("heading", { name: "small", exact: true }).waitFor();
   const crumbFromLibrary = await page
     .getByRole("navigation", { name: "Breadcrumb" })
     .getByRole("link")
@@ -147,7 +149,7 @@ try {
   const previousAtFirst = await page.getByRole("button", { name: "Previous image" }).count();
   await page.keyboard.press("ArrowRight");
   await page.waitForURL(`${appUrl}/r/${large}`);
-  await page.getByRole("heading", { name: "renamed.png" }).waitFor();
+  await page.getByRole("heading", { name: "renamed", exact: true }).waitFor();
   const nextAtLast = await page.getByRole("button", { name: "Next image" }).count();
   await page.keyboard.press("ArrowRight");
   await Bun.sleep(300);
@@ -298,7 +300,7 @@ try {
   await page.getByRole("link", { name: "Gallery" }).click();
   await card(page, large).locator("img").click();
   await page.waitForURL(`${appUrl}/r/${large}`);
-  await page.getByRole("heading", { name: "renamed.png" }).waitFor();
+  await page.getByRole("heading", { name: "renamed", exact: true }).waitFor();
   const crumbFromBoard = await page
     .getByRole("navigation", { name: "Breadcrumb" })
     .getByRole("link")
@@ -442,7 +444,7 @@ try {
   await second.page.goto(`${appUrl}/r/${large}`);
   await second.page.getByText("Image not found.").waitFor();
   assert(
-    (await second.page.getByText("renamed.png").count()) === 0,
+    (await second.page.getByText("renamed").count()) === 0,
     "the first user's image page shows the second user only Image not found.",
   );
 

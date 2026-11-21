@@ -4,6 +4,7 @@ import { ConvexHttpClient } from "convex/browser";
 import type { Page } from "playwright";
 import {
   assert,
+  cardNamed,
   clientFor,
   convexUrl,
   openPageWithPasskeyDevice,
@@ -23,6 +24,11 @@ const bytesAt = async (url: string) => new Uint8Array(await (await fetch(url)).a
 
 const cards = (page: Page) => page.locator("[data-ref-id]");
 const outcomes = (page: Page) => page.locator('[role="status"] li');
+/** The whole file names the cards' images give their links, in order. */
+const imageNames = (page: Page) =>
+  cards(page)
+    .locator("img")
+    .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).alt).join());
 const stamp = Date.now().toString(36);
 
 const anonymous = new ConvexHttpClient(convexUrl());
@@ -61,8 +67,9 @@ try {
     await page.screenshot({ path: `${process.env.EVIDENCE}/01-saved.png`, fullPage: true });
   }
   assert(
-    (await cards(page).locator("p").allTextContents()).join() === "small.png,large.png",
-    `two saved images show in the library, newest first, and both load: ${await outcomes(page).allTextContents()}`,
+    (await cards(page).locator("p").allTextContents()).join() === "small,large" &&
+      (await imageNames(page)) === "small.png,large.png",
+    `two saved images show in the library, newest first, each captioned by its name without the extension and named by its whole file name, and both load: ${await outcomes(page).allTextContents()}`,
   );
 
   const workspaceId = uploads[0]!.split("/")[2];
@@ -89,8 +96,7 @@ try {
   );
 
   const naturalSize = (name: string) =>
-    cards(page)
-      .filter({ hasText: name })
+    cardNamed(page, name)
       .locator("img")
       .evaluate((image: HTMLImageElement) => `${image.naturalWidth}x${image.naturalHeight}`);
   const largeShown = await naturalSize("large.png");
@@ -104,10 +110,7 @@ try {
     `the grid shows the 300 px image at its own size: ${smallShown}`,
   );
 
-  const smallUrl = await cards(page)
-    .filter({ hasText: "small.png" })
-    .locator("img")
-    .getAttribute("src");
+  const smallUrl = await cardNamed(page, "small.png").locator("img").getAttribute("src");
   assert(
     sha256(await bytesAt(smallUrl!)) === sha256(small),
     "an image with no thumbnail serves its original bytes unchanged in the grid",
@@ -343,9 +346,10 @@ try {
       buffer: await pngOf(page, "rgb(90, 90, 90)", 30),
     },
   ]);
-  await page.locator("[data-ref-id]").filter({ hasText: "outer spaces.png" }).waitFor();
+  await cardNamed(page, "outer spaces.png").waitFor();
   assert(
-    (await page.locator("[data-ref-id] p").first().textContent()) === "outer spaces.png",
+    (await cards(page).first().locator("img").getAttribute("alt")) === "outer spaces.png" &&
+      (await cards(page).first().locator("p").textContent()) === "outer spaces",
     "a file whose name has outer spaces is saved under the trimmed name",
   );
 

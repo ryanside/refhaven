@@ -5,6 +5,7 @@ import type { Page, Route } from "playwright";
 import {
   appUrl,
   assert,
+  cardNamed,
   consoleWatch,
   openPageWithPasskeyDevice,
   signInWithPasskey,
@@ -100,9 +101,7 @@ try {
     .waitFor({ timeout: 60_000 });
   const refIds: Array<string> = [];
   for (const { name } of images) {
-    refIds.push(
-      (await page.locator("[data-ref-id]").filter({ hasText: name }).getAttribute("data-ref-id"))!,
-    );
+    refIds.push((await cardNamed(page, name).getAttribute("data-ref-id"))!);
   }
   const refColors = new Map(images.map(({ color }, index) => [refIds[index]!, color as Rgb]));
 
@@ -515,10 +514,7 @@ try {
       `FAIL the collection's page saves ${yellow.name}: ${await savedLine.textContent()}`,
     );
   }
-  const yellowRefId = (await page
-    .locator("[data-ref-id]")
-    .filter({ hasText: yellow.name })
-    .getAttribute("data-ref-id"))!;
+  const yellowRefId = (await cardNamed(page, yellow.name).getAttribute("data-ref-id"))!;
   refColors.set(yellowRefId, yellow.color);
   await page.getByRole("link", { name: "Canvas" }).click();
   await page.waitForURL(`${appUrl}/c/${board}?view=canvas`);

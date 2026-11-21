@@ -4,6 +4,7 @@ import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import type { Page } from "playwright";
 import {
   assert,
+  cardNamed,
   clientFor,
   openPageWithPasskeyDevice,
   outcome,
@@ -37,8 +38,7 @@ const save = async (page: Page, names: ReadonlyArray<string>) => {
     .waitFor();
   return Promise.all(
     names.map(
-      async (name) =>
-        (await cards(page).filter({ hasText: name }).getAttribute("data-ref-id")) as Id<"refs">,
+      async (name) => (await cardNamed(page, name).getAttribute("data-ref-id")) as Id<"refs">,
     ),
   );
 };
