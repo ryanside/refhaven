@@ -63,7 +63,7 @@ export function Toaster() {
                 action.run();
                 dismiss(shown.id);
               }}
-              className="h-8 rounded-full px-3 font-[580] text-page outline-offset-0 hover:bg-[color-mix(in_srgb,var(--page)_14%,transparent)]"
+              className="h-8 rounded-full px-3 font-[580] text-page outline-offset-0 focus-visible:outline-page hover:bg-[color-mix(in_srgb,var(--page)_14%,transparent)]"
             >
               {action.label}
             </button>

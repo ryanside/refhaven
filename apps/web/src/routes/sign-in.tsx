@@ -49,7 +49,7 @@ function SignIn() {
             Save the images you want to look at again, and arrange them your way.
           </p>
           <form
-            className="mt-10 flex w-full max-w-[520px] items-center gap-2 rounded-[34px] bg-surface py-2.5 pr-2.5 pl-[26px] text-left shadow-float-lg max-sm:flex-col max-sm:items-stretch max-sm:rounded-[28px] max-sm:p-3 max-sm:pl-3"
+            className="mt-10 flex w-full max-w-[520px] items-center gap-2 rounded-[34px] bg-surface py-2.5 pr-2.5 pl-[26px] text-left shadow-float-lg has-[input:focus]:shadow-[var(--float-lg),inset_0_0_0_1.5px_var(--ink)] max-sm:flex-col max-sm:items-stretch max-sm:rounded-[28px] max-sm:p-3 max-sm:pl-3"
             onSubmit={async (event) => {
               event.preventDefault();
               setError(null);

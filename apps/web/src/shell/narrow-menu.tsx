@@ -22,7 +22,7 @@ import { CollectionFinder } from "@/shell/collections-menu";
 import { Mark } from "@/shell/mark";
 
 const sheetLinkClass =
-  "flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-[540] text-ink-2 outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover aria-[current=page]:bg-hover aria-[current=page]:text-ink [&_svg]:text-ink-3";
+  "flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-[540] text-ink-2 -outline-offset-2 hover:bg-hover hover:text-ink aria-[current=page]:bg-hover aria-[current=page]:text-ink [&_svg]:text-ink-3";
 
 export function NarrowMenu() {
   const [open, setOpen] = useState(false);

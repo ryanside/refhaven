@@ -15,7 +15,7 @@
   --canvas: #f1f1ee;
   --ink: #171715;
   --ink-2: #62625d;
-  --ink-3: #94948e;
+  --ink-3: #6c6c67;
   --ink-4: #c9c9c3;
   --line: rgb(23 23 21 / 0.08);
   --line-2: rgb(23 23 21 / 0.14);
@@ -46,7 +46,7 @@
   --canvas: #282826;
   --ink: #f4f4f0;
   --ink-2: #a9a9a3;
-  --ink-3: #8a8a84;
+  --ink-3: #93938d;
   --ink-4: #484844;
   --line: rgb(255 255 255 / 0.08);
   --line-2: rgb(255 255 255 / 0.14);
@@ -68,6 +68,8 @@
 .dark .on-canvas {
   --glass: rgb(48 48 46 / 0.94);
   --surface: #30302e;
+  --ink-3: #9a9a94;
+  --bad: #f6746a;
   --float: 0 0 0 1px rgb(255 255 255 / 0.08), 0 8px 24px -6px rgb(0 0 0 / 0.55);
   --float-lg: 0 0 0 1px rgb(255 255 255 / 0.08), 0 18px 44px -10px rgb(0 0 0 / 0.7);
 }
@@ -178,6 +180,7 @@
   *::after {
     transition-property: opacity !important;
     animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
   }
 }

@@ -198,7 +198,7 @@ function ZoomLevel({
             key={label}
             type="button"
             onClick={run}
-            className="flex h-9 w-full items-center rounded-[11px] px-2.5 text-left text-[14px] font-[480] num outline-none hover:bg-hover focus-visible:bg-hover"
+            className="flex h-9 w-full items-center rounded-[11px] px-2.5 text-left text-[14px] font-[480] num -outline-offset-2 hover:bg-hover"
           >
             {label}
           </button>

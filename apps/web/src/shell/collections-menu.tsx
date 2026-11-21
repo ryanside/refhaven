@@ -117,7 +117,7 @@ function CollectionRow({ collectionId, name, close }: Collection & { close: () =
   return (
     <li
       className={cn(
-        "relative flex h-12 items-center gap-2.5 rounded-[11px] pr-3 pl-1 hover:bg-hover has-focus-visible:bg-hover",
+        "relative flex h-12 items-center gap-2.5 rounded-[11px] pr-3 pl-1 hover:bg-hover",
         current && "bg-hover",
       )}
     >
@@ -127,7 +127,7 @@ function CollectionRow({ collectionId, name, close }: Collection & { close: () =
         params={{ collectionId }}
         data-collection-id={collectionId}
         onClick={close}
-        className="min-w-0 flex-1 truncate text-[14px] font-[540] outline-none after:absolute after:inset-0 after:rounded-[11px]"
+        className="min-w-0 flex-1 truncate text-[14px] font-[540] outline-none after:absolute after:inset-0 after:rounded-[11px] focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ink"
       >
         {name}
       </Link>

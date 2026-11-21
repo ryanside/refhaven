@@ -72,6 +72,68 @@ try {
     `two saved images show in the library, newest first, each captioned by its name without the extension and named by its whole file name, and both load: ${await outcomes(page).allTextContents()}`,
   );
 
+  // Tab to a control and read the ring it shows.
+  const ringOn = async (name: string) => {
+    for (let presses = 0; presses < 40; presses++) {
+      await page.keyboard.press("Tab");
+      const ring = await page.evaluate((name) => {
+        const focused = document.activeElement as HTMLElement | null;
+        if (
+          !focused ||
+          (focused.getAttribute("aria-label") ?? focused.textContent?.trim()) !== name
+        ) {
+          return null;
+        }
+        // The ring's band fades in, so read it where it ends.
+        for (const animation of focused.getAnimations()) animation.finish();
+        const style = getComputedStyle(focused);
+        return {
+          visible: focused.matches(":focus-visible"),
+          outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`,
+          shadow: style.boxShadow,
+        };
+      }, name);
+      if (ring) return ring;
+    }
+    throw new Error(`FAIL Tab never reaches ${name}`);
+  };
+  const addRing = await ringOn("Add images");
+  const trashRing = await ringOn("Move to trash");
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  const ink = "solid 2px rgb(23, 23, 21)";
+  assert(
+    addRing.visible &&
+      addRing.outline === ink &&
+      trashRing.visible &&
+      trashRing.outline === ink &&
+      trashRing.shadow.includes("rgb(255, 255, 255) 0px 0px 0px 4px"),
+    `a button reached with Tab shows a 2 px ring of ink, and a glass button over an image shows it on a band of the page's color: ${JSON.stringify([addRing, trashRing])}`,
+  );
+
+  // The faintest text color, used for counts, labels, and placeholders, against each background
+  // it sits on.
+  const faintest = await page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement);
+    const luminance = (name: string) => {
+      const hex = root.getPropertyValue(name).trim().slice(1);
+      const [r, g, b] = [0, 2, 4].map((at) => {
+        const c = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const text = luminance("--ink-3");
+    return Math.min(
+      ...["--page", "--surface", "--sunken", "--hover"].map(
+        (background) => (luminance(background) + 0.05) / (text + 0.05),
+      ),
+    );
+  });
+  assert(
+    faintest >= 4.5,
+    `the faintest text color has a contrast of at least 4.5:1 on the page, a surface, a sunken field, and a hover: ${faintest.toFixed(2)}`,
+  );
+
   const workspaceId = uploads[0]!.split("/")[2];
   /** The upload's ID, which ends the path of an original. */
   const uploadIn = (hash: string) =>

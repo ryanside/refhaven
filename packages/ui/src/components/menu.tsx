@@ -7,7 +7,7 @@ const popupClass =
   "origin-(--transform-origin) rounded-[18px] bg-surface text-ink shadow-float-lg outline-none transition-[scale,opacity] duration-150 ease-out data-ending-style:scale-[0.97] data-ending-style:opacity-0 data-starting-style:scale-[0.97] data-starting-style:opacity-0";
 
 const itemClass =
-  "flex h-9 cursor-default items-center gap-2.5 rounded-[11px] px-2.5 text-[14px] font-[480] text-ink outline-none select-none data-disabled:opacity-40 data-highlighted:bg-hover [&_svg]:shrink-0 [&_svg]:text-ink-2";
+  "flex h-9 cursor-default items-center gap-2.5 rounded-[11px] px-2.5 text-[14px] font-[480] text-ink -outline-offset-2 select-none data-disabled:opacity-40 data-highlighted:bg-hover [&_svg]:shrink-0 [&_svg]:text-ink-2";
 
 const Menu = MenuPrimitive.Root;
 const MenuTrigger = MenuPrimitive.Trigger;

@@ -284,7 +284,7 @@ function PickerRow({
       type="button"
       aria-pressed={member}
       onClick={toggle}
-      className="flex h-11 w-full items-center gap-2.5 rounded-[11px] pr-2.5 pl-1 text-left text-[14px] font-[520] outline-none hover:bg-hover focus-visible:bg-hover"
+      className="flex h-11 w-full items-center gap-2.5 rounded-[11px] pr-2.5 pl-1 text-left text-[14px] font-[520] -outline-offset-2 hover:bg-hover"
     >
       <Pile prints={cover.cover} scale={0.38} className="-my-1" />
       <span className="min-w-0 flex-1 truncate">{name}</span>

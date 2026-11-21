@@ -2,9 +2,12 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "cn";
 
-/** `primary` is the one main action of a view, and `glass` floats over images. */
+/**
+ * `primary` is the one main action of a view, and `glass` floats over images, so its focus ring
+ * sits on a band of the page's color to keep its contrast over any picture.
+ */
 const buttonVariants = cva(
-  "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full font-[540] whitespace-nowrap outline-none select-none transition-[background-color,color,box-shadow,scale,opacity] duration-150 ease-out active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full font-[540] whitespace-nowrap select-none transition-[background-color,color,box-shadow,scale,opacity] duration-150 ease-out active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -12,7 +15,8 @@ const buttonVariants = cva(
         secondary:
           "bg-surface text-ink shadow-[inset_0_0_0_1px_var(--line-2)] hover:bg-sunken aria-expanded:bg-sunken",
         ghost: "text-ink-2 hover:bg-hover hover:text-ink aria-expanded:bg-hover aria-expanded:text-ink",
-        glass: "glass text-ink shadow-float hover:bg-surface",
+        glass:
+          "glass text-ink shadow-float hover:bg-surface focus-visible:shadow-[0_0_0_4px_var(--page)] focus-visible:outline-offset-0",
       },
       size: {
         sm: "h-[30px] gap-1.5 px-3 text-[13px] has-[>svg:first-child]:pl-2.5",
